@@ -254,12 +254,41 @@ async function run() {
     window = await waitFor(() => BrowserWindow.getAllWindows()[0], 45_000, 'the application window');
     enter('the interface is up');
     record('ok', `window created (${BrowserWindow.getAllWindows().length} window(s))`);
-    // A first launch after a fresh install is slower than any other launch: the executable and
-    // its unpacked native modules are being read from disk for the first time and an unsigned
-    // binary is being scanned on execution. Measured on a Windows runner it exceeded 30s, which
-    // is a fact about cold start, not a defect - so it is measured rather than timed out on.
+    // Watch the load, not just the outcome. A window that exists and never becomes visible is
+    // either still loading or failed to load, and those need different answers - so every
+    // signal the renderer gives is recorded as it happens.
+    for (const event of ['did-start-loading', 'did-finish-load', 'dom-ready']) {
+      window.webContents.on(event, () => record('info', `renderer event: ${event}`));
+    }
+    window.webContents.on('did-fail-load', (_event, code, description, url) => {
+      fail(`the renderer failed to load: ${code} ${description} (${url})`);
+    });
+    window.webContents.on('render-process-gone', (_event, details) => {
+      fail(`the renderer process died: ${details.reason} (exit ${details.exitCode})`);
+    });
+
+    // A first launch after a fresh install is slower than any other: the executable and its
+    // unpacked native modules are read from disk for the first time, and an unsigned binary is
+    // scanned on execution. Measured on a Windows runner it has exceeded two minutes, so this
+    // waits with a running commentary rather than failing silently at the end.
     const visibleFrom = Date.now();
-    await waitFor(() => window.isVisible(), 120_000, 'the window to become visible');
+    let visible = window.isVisible();
+    while (!visible && Date.now() - visibleFrom < 180_000) {
+      await sleep(1_000);
+      if (window.isDestroyed()) throw new Error('the window was destroyed before it appeared');
+      visible = window.isVisible();
+      const elapsed = Date.now() - visibleFrom;
+      if (elapsed % 15_000 < 1_000) {
+        let readyState = '(unavailable)';
+        try {
+          readyState = await window.webContents.executeJavaScript('document.readyState');
+        } catch (error) {
+          readyState = `unavailable: ${error instanceof Error ? error.message : String(error)}`;
+        }
+        record('info', `${Math.round(elapsed / 1000)}s: visible=${visible} loading=${window.webContents.isLoading()} readyState=${readyState} url=${window.webContents.getURL().slice(-40)}`);
+      }
+    }
+    if (!visible) throw new Error('timed out after 180s waiting for the window to become visible');
     record('ok', `window visible after ${Date.now() - visibleFrom}ms: ${window.getBounds().width}×${window.getBounds().height}${window.isMinimized() ? ' (minimised)' : ''}`);
 
     // The renderer must load from the asar, not from a development server or a missing file.
