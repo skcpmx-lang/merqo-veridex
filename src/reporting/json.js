@@ -75,6 +75,7 @@ export function renderJson(report) {
       }))
     })),
     manualResults: report.manualResults,
+    privacy: report.privacy ?? null,
     issues: report.issues,
     providers: report.providerLog,
     limitations: {

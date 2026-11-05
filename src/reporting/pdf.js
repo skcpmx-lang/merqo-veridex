@@ -323,6 +323,30 @@ export async function renderPdf(report, options = {}) {
     }
   }
 
+  // ── Privacy and data handling ───────────────────────────────────────────────
+  if (report.privacy) {
+    ensureSpace(60);
+    doc.y += 10;
+    heading(doc, 'Privacy and data handling', contentWidth);
+    doc.font(FONTS.regular).fontSize(7.5).fillColor(COLOURS.ink).text(report.privacy.statement, PAGE.margin, doc.y, { width: contentWidth });
+    doc.y += 6;
+    if (report.privacy.categories.length > 0) {
+      for (const category of report.privacy.categories) {
+        ensureSpace(14);
+        doc.font(FONTS.bold).fontSize(7).fillColor(COLOURS.ink).text(`${category.label}: `, PAGE.margin + 4, doc.y, { width: contentWidth - 8, continued: true });
+        doc.font(FONTS.regular).fillColor(COLOURS.inkSoft).text(`${category.count} field(s) withheld (${category.keys.join(', ')})`);
+        doc.y += 1;
+      }
+    }
+    ensureSpace(20);
+    doc.font(FONTS.italic).fontSize(7).fillColor(COLOURS.inkSoft).text(
+      `Network access ${report.privacy.guard?.networkAccessEnabled ? 'enabled' : 'disabled'}.${report.privacy.guard ? ` ${report.privacy.guard.statement}` : ''} This report was produced offline; no diagnostic data was transmitted from the device it describes.`,
+      PAGE.margin,
+      doc.y + 2,
+      { width: contentWidth }
+    );
+  }
+
   // ── Provider log ────────────────────────────────────────────────────────────
   if (report.providerLog.length > 0) {
     ensureSpace(80);

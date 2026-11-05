@@ -11,7 +11,7 @@
  */
 
 import { Status, severityRank, statusLabel } from '../core/status.js';
-import { SENSITIVE_KEYS } from '../core/logger.js';
+import { summariseRedactions, redactField, REDACTION_PLACEHOLDER } from '../security/privacy.js';
 
 export const REPORT_SCHEMA_VERSION = '1.0';
 export const REPORT_KIND = Object.freeze({
@@ -21,48 +21,12 @@ export const REPORT_KIND = Object.freeze({
   CERTIFICATE: 'certificate'
 });
 
-/** Fields whose values are personal or device-identifying. */
-export const PRIVACY_SENSITIVE = Object.freeze([
-  'serialnumber',
-  'serial',
-  'boardserial',
-  'bi serial',
-  'bioss erial',
-  'macaddress',
-  'ipaddress',
-  'hostname',
-  'registereduser',
-  'username',
-  'deviceid',
-  'windowsproductid'
-]);
-
 /**
- * @param {string} key
- * @returns {boolean}
+ * Privacy policy lives in src/security/privacy.js, which is also the module the
+ * settings schema points at. It is re-exported here so report code has a single
+ * import site, while the *policy* still has exactly one owner.
  */
-export function isPrivateField(key) {
-  const normalised = String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (SENSITIVE_KEYS.some((sensitive) => normalised.includes(sensitive.replace(/[^a-z0-9]/g, '')) && sensitive.length > 3)) return true;
-  return PRIVACY_SENSITIVE.some((sensitive) => normalised.includes(sensitive.replace(/[^a-z0-9]/g, '')));
-}
-
-/**
- * Redact a value for a report.
- * @param {import('../core/field.js').FieldValue} field
- * @param {string} key
- * @param {boolean} includeSensitive
- */
-export function redactField(field, key, includeSensitive) {
-  if (!field) return field;
-  if (includeSensitive || !isPrivateField(key)) return field;
-  if (field.value === null || field.value === undefined) return field;
-  return Object.freeze({
-    ...field,
-    value: '[redacted]',
-    notes: Object.freeze([...(field.notes ?? []), 'Redacted because "include serial numbers and addresses in reports" is switched off in Privacy settings.'])
-  });
-}
+export { PRIVACY_SENSITIVE, PRIVACY_CATEGORIES, isPrivateField, redactField, REDACTION_PLACEHOLDER } from '../security/privacy.js';
 
 /**
  * Report identity. The ID is derived from the run start time plus a short random
@@ -150,7 +114,7 @@ export function fieldsToRows(fields, options = {}) {
       confidence: field?.confidence ?? 'NONE',
       error: field?.error ?? null,
       notes: [...(field?.notes ?? [])],
-      redacted: field?.value === '[redacted]'
+      redacted: field?.value === REDACTION_PLACEHOLDER
     };
   });
   return rows.sort((a, b) => {
@@ -282,7 +246,8 @@ export function buildReport(input = {}) {
   // reported rather than silently dropped.
   for (const [id, fields] of Object.entries(modules)) {
     if (SECTION_ORDER.some((definition) => definition.id === id)) continue;
-    sections.push({ id, title: humaniseKey(id), status: aggregateStatus(fields).status, rows: fieldsToRows(fields, { includeSensitive }), note: aggregateStatus(fields).note });
+    const title = input.sectionTitles?.[id] ?? humaniseKey(id);
+    sections.push({ id, title, status: aggregateStatus(fields).status, rows: fieldsToRows(fields, { includeSensitive }), note: aggregateStatus(fields).note });
   }
 
   const manualResults = (input.manualResults ?? []).map((result) => ({
@@ -324,6 +289,20 @@ export function buildReport(input = {}) {
     report.manualResults = [];
     report.coverage = computeCoverage(sections, []);
   }
+
+  // Redaction summary: the reader must be able to tell "withheld" from "absent".
+  const privacyPolicy = {
+    includeSensitive,
+    allowNetwork: Boolean(input.privacy?.allowNetwork),
+    persistHistory: input.privacy?.persistHistory !== false
+  };
+  // Summarised from the *source* module maps, not from the rendered rows: the
+  // rows already carry the placeholder, so counting them would always report zero.
+  report.privacy = {
+    ...summariseRedactions(Object.values(modules), privacyPolicy),
+    screenedSections: sections.length,
+    guard: input.privacy?.guard ?? null
+  };
 
   return report;
 }

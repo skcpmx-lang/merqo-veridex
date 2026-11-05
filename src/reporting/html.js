@@ -133,6 +133,30 @@ export function renderHtml(report, options = {}) {
     </section>`
       : '';
 
+  const privacy = report.privacy ?? null;
+  const privacyHtml = !privacy
+    ? ''
+    : `<section class="section privacy">
+  <h2>Privacy and data handling</h2>
+  <p>${escapeHtml(privacy.statement)}</p>
+  ${
+    privacy.categories.length
+      ? `<table class="fields"><tbody>${privacy.categories
+          .map(
+            (category) =>
+              `<tr><td class="label">${escapeHtml(category.label)}</td><td class="value">${category.count} field(s) withheld<span class="src">${escapeHtml(category.keys.join(', '))}</span></td></tr>`
+          )
+          .join('')}</tbody></table>`
+      : ''
+  }
+  ${
+    privacy.guard
+      ? `<p>Network access: ${privacy.guard.networkAccessEnabled ? 'enabled' : 'disabled'}. ${escapeHtml(privacy.guard.statement)}</p>`
+      : ''
+  }
+  <p class="disclaimer">This report was generated offline. No diagnostic data was transmitted from the device it describes.</p>
+</section>`;
+
   const providerHtml = report.providerLog.length
     ? `
     <section class="section providers">
@@ -286,6 +310,7 @@ ${
 <h1>Detailed findings</h1>
 ${sectionHtml}
 ${manualHtml}
+${privacyHtml}
 ${issuesHtml}
 ${providerHtml}
 ${options.certificateHtml ?? ''}

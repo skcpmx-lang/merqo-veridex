@@ -15,7 +15,7 @@
  */
 
 import { Status } from '../core/status.js';
-import { Section, section, failed, permissionRequired } from '../core/field.js';
+import { section, failed, permissionRequired } from '../core/field.js';
 import { resolveField } from './merge.js';
 import { capability, requiresAdmin } from '../platform/permissions.js';
 
