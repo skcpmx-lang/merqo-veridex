@@ -123,7 +123,12 @@ export function mapBitlocker(csvOutput, elevated) {
   const rows = text.split(/\r?\n/).filter((line) => line.includes(','));
   if (rows.length < 2) return { bitlocker: unavailable('manage-bde produced no volume rows', source) };
 
+  // manage-bde prints its banner on stderr *and succeeds*, because a machine without the
+  // BitLocker feature installed is not an error to it. A real host returned exit 2147942487
+  // with a clean banner and no rows. That is "no volumes to report", not "the security state
+  // of this machine is unknown".
   const header = parseCsvLine(rows[0]);
+  if (header.length < 2) return { bitlocker: unavailable('manage-bde produced no parseable volume table — the BitLocker feature may not be installed on this edition', source) };
   const volumes = rows.slice(1).map((line) => {
     const values = parseCsvLine(line);
     /** @type {Record<string,string>} */
@@ -264,9 +269,16 @@ export function registerSecurity(registry) {
         Object.assign(fields, mapBitlocker('', false));
       } else {
         const bde = await runReadOnly(ctx.runner, 'manage-bde', ['-status', '-csv'], { timeoutMs: 30_000 });
-        Object.assign(fields, bde.ok
-          ? mapBitlocker(bde.stdout, true)
-          : { bitlocker: failed(`manage-bde exited ${bde.code}${toolOutputClause(bde)}`, 'cim-win32.security') });
+        if (bde.ok) {
+          Object.assign(fields, mapBitlocker(bde.stdout, true));
+        } else {
+          // A failed manage-bde is not by itself evidence of a security problem, and it is
+          // not ERROR: it means this machine's volume encryption state could not be read.
+          const cause = failureToStatus({ error: bde.stderr, accessDenied: /access is denied|requires elevation|0x80070005/i.test(bde.stderr ?? '') });
+          Object.assign(fields, cause.kind === 'permission'
+            ? { bitlocker: permissionRequired(`BitLocker status could not be read: ${cause.reason}`, 'cim-win32.security') }
+            : { bitlocker: unavailable(`manage-bde exited ${bde.code}${toolOutputClause(bde)}. The BitLocker state of this machine is unknown.`, 'cim-win32.security') });
+        }
       }
 
       return fields;

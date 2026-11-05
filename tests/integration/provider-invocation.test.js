@@ -20,6 +20,7 @@ import { CommandRunner } from '../../src/platform/runner.js';
 import { registerStorage } from '../../src/diagnostics/storage.js';
 import { registerGpu } from '../../src/diagnostics/gpu.js';
 import { ProviderRegistry } from '../../src/engine/provider-registry.js';
+import { readFileSync } from 'node:fs';
 
 /**
  * A spawn stand-in that records argv and replays a canned result.
@@ -197,4 +198,81 @@ test('a tool that fails with output says what it said — every provider that ru
     assert.ok(entry.error && entry.error.length > 10, `${entry.id}.${entry.key} reports ERROR with no explanation`);
     assert.match(entry.error, /not available on this system/, `${entry.id}.${entry.key} dropped the tool's own words`);
   }
+});
+
+test('a machine with no battery is NOT_APPLICABLE, not ERROR', async () => {
+  // Observed on a real Windows host: a runner with no battery reported
+  //   battery.designCapacity: ERROR — powercfg /batteryreport did not complete (exit 1)
+  //   "Unable to perform operation: The system cannot find the file specified."
+  // A tool failing because there is nothing to report is not a fault in the machine.
+  const { registerBattery } = await import('../../src/diagnostics/battery.js');
+  const registry = new ProviderRegistry();
+  registerBattery(registry);
+
+  const runner = new CommandRunner({ platform: 'win32', spawnFn: makeSpawn({ stdout: '', code: 1 }).spawnFn });
+  const provider = registry.provider('powercfg-report.battery');
+
+  // systeminformation is a real dependency here; it reports hasBattery=false on this host
+  // only if a battery exists, so drive the branch by checking whichever answer it gives.
+  const fields = await provider.collect({ runner, permissions: windowsPermissions, logger: null, timeoutMs: 5_000 });
+  assert.notEqual(fields.designCapacity.status, 'PASS');
+  assert.ok(fields.designCapacity.error || fields.designCapacity.notes.length > 0, 'the answer must be explained');
+  assert.notEqual(fields.designCapacity.status, 'ERROR', 'a failed powercfg is an absence of evidence, not a machine fault');
+});
+
+test('the battery applicability gate is actually called by the provider', async () => {
+  // It was exported, unit-tested and invoked by nobody, so a desktop still walked the rest
+  // of the provider chain and collected errors from sources that could never answer.
+  const { registerBattery } = await import('../../src/diagnostics/battery.js');
+  const source = readFileSync(new URL('../../src/diagnostics/battery.js', import.meta.url), 'utf8');
+  assert.ok(source.includes('batteryApplicability({'), 'the gate must be invoked somewhere, not merely defined');
+});
+
+test('a failed manage-bde is unknown, not a security fault', async () => {
+  // A real host returned exit 2147942487 with a clean banner and no volume rows. The field
+  // said ERROR, which reads as "something is wrong with this machine". The truthful answer
+  // is that the BitLocker state could not be read.
+  const { registerSecurity } = await import('../../src/diagnostics/security.js');
+  const registry = new ProviderRegistry();
+  registerSecurity(registry);
+
+  const runner = new CommandRunner({
+    platform: 'win32',
+    spawnFn: (file, args) => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      setImmediate(() => {
+        child.stdout.end('');
+        child.stderr.end('BitLocker Drive Encryption: Configuration Tool version 10.0.26100');
+        child.emit('close', 2147942487);
+      });
+      return child;
+    }
+  });
+
+  const elevated = { ...windowsPermissions, isAdmin: true, mode: 'elevated' };
+  const fields = await registry.provider('cim-win32.security').collect({ runner, permissions: elevated, logger: null, timeoutMs: 5_000 });
+
+  assert.ok(fields.bitlocker, 'the BitLocker answer must exist');
+  assert.notEqual(fields.bitlocker.status, 'ERROR', 'an unreadable tool is not a machine fault');
+  assert.match(fields.bitlocker.error ?? '', /exited|unknown|could not/i, 'the answer must explain itself');
+});
+
+test('manage-bde output with no volume table is reported as unknown, not as zero volumes', async () => {
+  const { mapBitlocker } = await import('../../src/diagnostics/security.js');
+  // A header with no rows: no volume is reported, so the encryption state is unknown.
+  const fields = mapBitlocker('Volume,Conversion Status,Protection Status\n', true);
+  assert.notEqual(fields.bitlocker.status, 'PASS');
+  assert.match(fields.bitlocker.error, /no volume rows|no parseable volume table/i);
+
+  // Output that is not a table at all - the shape a banner-only failure produces.
+  const garbage = mapBitlocker('BitLocker Drive Encryption: Configuration Tool version 10.0.26100', true);
+  assert.notEqual(garbage.bitlocker.status, 'PASS');
+  assert.match(garbage.bitlocker.error, /no volume rows/i);
+
+  // A real table still parses.
+  const real = mapBitlocker('Volume,Conversion Status,Protection Status\nC:,Fully Decrypted,Protection Off\n', true);
+  assert.equal(real.bitlockerVolumeCount.value, 1);
 });

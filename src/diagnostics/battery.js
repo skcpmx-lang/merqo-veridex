@@ -393,7 +393,15 @@ export function registerBattery(registry) {
         const cause = failureToStatus(battery);
         return { present: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.battery' }) : failed(battery.error, 'cim-win32.battery') };
       }
-      return mapWin32Battery(battery.rows[0]);
+      const fields = mapWin32Battery(battery.rows[0]);
+      // `batteryApplicability` existed, was unit-tested, and was called by nobody. Without
+      // it, a desktop still walked the rest of the provider chain and collected failures
+      // from sources that could never succeed on a machine with no battery.
+      if (battery.rows.length === 0) {
+        const applicability = batteryApplicability({ hasBattery: false });
+        if (applicability) fields.present = applicability;
+      }
+      return fields;
     }
   });
 
@@ -438,10 +446,25 @@ export function registerBattery(registry) {
       if (!ctx.runner.isWindows) {
         return { designCapacity: unsupported('powercfg is a Windows tool and is not available on this platform', 'powercfg-report.battery') };
       }
+      // Ask Windows whether there is a battery before asking for a battery report. Without
+      // this, a desktop - or a virtual machine - is reported as ERROR because a tool it does
+      // not need failed. Observed on a real host: "powercfg /batteryreport did not complete
+      // (exit 1) — Unable to perform operation: The system cannot find the file specified."
+      const batteryState = await loadSystemInformation();
+      if (batteryState.ok) {
+        const hardware = await Promise.resolve().then(() => batteryState.si.battery()).catch(() => null);
+        if (hardware && bool(hardware.hasBattery) === false) {
+          return { designCapacity: notApplicable('This machine reports no battery, so there is no battery report to read. Nothing here is a fault.', 'powercfg-report.battery') };
+        }
+      }
+
       const target = `${process.env.TEMP ?? process.env.TMP ?? '.'}\\veridex-battery-${Date.now()}.xml`;
       const run = await runReadOnly(ctx.runner, 'powercfg', ['/batteryreport', '/XML', '/OUTPUT', target], { timeoutMs: Math.max(ctx.timeoutMs, 30_000) });
       if (!run.ok) {
-        return { designCapacity: failed(`powercfg /batteryreport did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`})${toolOutputClause(run)}`, 'powercfg-report') };
+        // The report is a convenience: it carries design/full-charge capacities and a
+        // history, all of which other providers also attempt. A tool that fails is an
+        // absence of evidence, not a fault in the machine.
+        return { designCapacity: unavailable(`powercfg /batteryreport did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`})${toolOutputClause(run)}`, 'powercfg-report.battery') };
       }
       try {
         const { readFile, unlink } = await import('node:fs/promises');
