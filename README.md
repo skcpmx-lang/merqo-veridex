@@ -3,7 +3,7 @@
 **Advanced all-in-one Windows PC & laptop diagnostics.**
 Local. Read-only. Offline by construction. Honest about what it could not measure.
 
-> **Status: not yet released.** The code is substantially complete and 405 automated tests
+> **Status: not yet released.** The code is substantially complete and 411 automated tests
 > cover the logic, but **VERIDEX has never run on real Windows hardware.** No requirement
 > is marked verified. See [Project status](docs/PROJECT_STATUS.md) and
 > [Test status](docs/TEST_STATUS.md) before treating anything here as working.
@@ -63,7 +63,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 405 tests
+npm test            # 411 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```
@@ -92,6 +92,7 @@ Requires Node ≥ 20.11.0 for development. End users need nothing but the instal
 | [Requirements](docs/REQUIREMENTS.md) | All 130 requirements with per-item status |
 | [Release notes](docs/RELEASE_NOTES.md) | Why there is no release yet |
 | [CI/CD](docs/GITHUB_ACTIONS.md) | The two workflows and their current state |
+| [Release verification](docs/RELEASE_VERIFICATION.md) | The pre-release checklist, currently unstarted |
 
 ## Testing
 

@@ -18,7 +18,7 @@ is the narrative summary of it.
 | Tested (automated) | 75 |
 | Implemented, untested | 11 |
 | Not started | 44 |
-| Automated tests | 405, all passing |
+| Automated tests | 411, all passing |
 | Source | 54 modules, ~16,500 lines |
 | Build | configured, **never produced** |
 
@@ -62,6 +62,8 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
 - Two complete themes with measured contrast; five accents with light-mode pairs.
 - Strict CSP, no remote assets, reduced-motion support.
 - Honest empty states: pages whose actions are not wired say so in plain words.
+- History list wired to the store, with three distinct states (loading, empty, unreadable)
+  and withheld scores preserved rather than rendered as zero.
 
 ### Tooling
 - `scripts/check.mjs` static gate: 0 errors.
@@ -96,7 +98,7 @@ This is the largest category and the reason no requirement says VER.
 | Windows inventory depth | 5 | servicing detail, update history, activation state |
 | Benchmark variants | 3 | memory, GPU, broader workloads |
 | Driver inventory depth | 3 | signing state, version comparison across machines |
-| Report history | 3 | list, compare, delete |
+| Report history | 2 | compare in the interface, delete |
 | Compatibility | 2 | vendor matrix, build-specific constraints |
 | Notifications, search, shortcuts, layout, animation | 8 | interface surface |
 | Audit, architecture, CI/CD, icon, about | 7 | repository and release plumbing |
@@ -137,10 +139,11 @@ In the order that reduces the largest honesty gap first:
    Linux-side testing substitutes for it.
 2. **Run it on a real machine** and record `verifiedOn` evidence per requirement. This is
    the only path to any requirement being VER.
-3. **Wire the four interface actions** with no handler behind them: report saving, history
-   list, monitoring, performance results.
+3. **Wire the remaining interface actions**: live monitoring and performance results.
+   Report saving and the history list are now connected.
 4. **Run the configured Windows CI** and record the result in `docs/TEST_STATUS.md`.
-5. **Write `docs/RELEASE_VERIFICATION.md`** and complete it for the first release.
+5. **Complete `docs/RELEASE_VERIFICATION.md`** — the checklist is written and every box is
+   unticked, which is the accurate state.
 
 Nothing above is a commitment to a date.
 

@@ -166,3 +166,156 @@ test('the stylesheet loads no remote font or asset', async () => {
   assert.ok(!/fonts\.googleapis|fonts\.gstatic/.test(css));
   assert.match(css, /prefers-reduced-motion/, 'reduced motion must be respected');
 });
+
+/**
+ * Live-mode tests: a fake bridge is injected so the controller takes its real path
+ * rather than the preview path. This is the only way to verify the pages that are
+ * genuinely wired, because in preview mode they correctly refuse to show data.
+ */
+async function bootWithBridge(answers) {
+  const html = await readFile(path.join(ROOT, 'src/renderer/index.html'), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: false });
+  const { window } = dom;
+
+  const calls = [];
+  window.veridex = {
+    invoke: Object.freeze({
+      // A callable object, because the bridge checks `typeof invoke === 'object'` and
+      // the controller calls `invoke(channel, ...)`.
+      ...Object.fromEntries(
+        Object.keys(answers).map((channel) => [
+          channel,
+          async (...args) => {
+            calls.push({ channel, args });
+            const answer = answers[channel];
+            return typeof answer === 'function' ? answer(...args) : answer;
+          }
+        ])
+      )
+    }),
+    on: () => () => {},
+    channels: { invoke: Object.keys(answers), events: [] }
+  };
+
+  const previous = { window: globalThis.window, document: globalThis.document, veridex: globalThis.veridex };
+  globalThis.window = window;
+  globalThis.document = window.document;
+  globalThis.HTMLElement = window.HTMLElement;
+  globalThis.Node = window.Node;
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  globalThis.veridex = window.veridex;
+
+  await import(`../../src/renderer/app.js?boot=${Date.now()}&bridge=1`);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  return {
+    window,
+    document: window.document,
+    calls,
+    restore: () => {
+      if (previous.window) globalThis.window = previous.window;
+      if (previous.document) globalThis.document = previous.document;
+      if (previous.veridex === undefined) delete globalThis.veridex;
+      else globalThis.veridex = previous.veridex;
+      window.close();
+    }
+  };
+}
+
+const run = (id, score, extra = {}) => ({
+  id,
+  finishedAt: '2026-03-04T09:15:00.000Z',
+  assessment: { score, rating: score === null ? 'Unrated' : 'Good', coveragePercent: 13.2, ...extra },
+  coverage: { fields: 15 },
+  issues: { errors: [], warnings: [] }
+});
+
+const baseAnswers = (history) => ({
+  'app:info': { ok: true, data: { name: 'VERIDEX', version: '1.0.0', platform: 'win32', brand: 'MERQO' } },
+  'app:settings': { ok: true, data: { values: {}, specs: [] } },
+  'app:guardSummary': { ok: true, data: { networkAttemptsBlocked: 0, unsafeCommandsBlocked: 0 } },
+  'scan:state': { ok: true, data: { running: false, finished: null } },
+  'manual:suites': { ok: true, data: { suites: [] } },
+  'manual:coverage': { ok: true, data: { coverage: {}, progress: {}, issues: [] } },
+  'history:list': history
+});
+
+test('the history page lists stored runs with their real scores', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  const { document, restore } = await bootWithBridge(baseAnswers({ ok: true, data: { entries: [run('VX-1', 87), run('VX-2', null)] } }));
+  try {
+    const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
+    nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    const text = document.body.textContent;
+    assert.match(text, /87/, 'a real score must be shown');
+    assert.match(text, /Good/);
+    assert.match(text, /VX-1/);
+    assert.match(text, /13\.2% coverage/);
+    assert.equal(document.querySelectorAll('.vx-rows .vx-row').length, 2, 'one row per stored run');
+  } finally {
+    restore();
+  }
+});
+
+test('a withheld score reads as withheld in history, never as 0', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  const gated = run('VX-3', null, { gated: true, gatingNote: 'Only 13.2% could be measured.' });
+  const { document, restore } = await bootWithBridge(baseAnswers({ ok: true, data: { entries: [gated] } }));
+  try {
+    const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
+    nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    // Scope to the history rows: the shell elsewhere legitimately contains numerals
+    // (task counts, coverage of zero), so a whole-body check would be meaningless.
+    const rows = document.querySelectorAll('.vx-rows .vx-row');
+    assert.equal(rows.length, 1);
+    const rowText = rows[0].textContent;
+    assert.match(rowText, /Score withheld/);
+    assert.ok(!/\b0\b/.test(rowText), `a withheld score must not carry a numeric score: "${rowText}"`);
+  } finally {
+    restore();
+  }
+});
+
+test('an empty history says so rather than showing a blank area', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  const { document, restore } = await bootWithBridge(baseAnswers({ ok: true, data: { entries: [] } }));
+  try {
+    const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
+    nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    assert.match(document.body.textContent, /No runs stored yet/);
+  } finally {
+    restore();
+  }
+});
+
+test('a failed history read is reported, not disguised as "no runs"', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  const { document, restore } = await bootWithBridge(
+    baseAnswers({ ok: false, error: { code: 'disk', message: 'The history file is unreadable.' } })
+  );
+  try {
+    const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
+    nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    const text = document.body.textContent;
+    assert.match(text, /History could not be read/);
+    assert.match(text, /unreadable/);
+    assert.ok(!/No runs stored yet/.test(text), 'a read failure must not look like an empty history');
+  } finally {
+    restore();
+  }
+});
+
+test('with a live bridge the preview banner is gone and scanning is possible', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  const { document, restore } = await bootWithBridge(baseAnswers({ ok: true, data: { entries: [] } }));
+  try {
+    assert.ok(!/Design preview/i.test(document.body.textContent ?? ''), 'live mode must not claim to be a preview');
+    const start = document.getElementById('vx-start-scan');
+    assert.ok(start, 'the scan button must exist');
+    assert.equal(start.disabled, false, 'with a main process attached the scan must be startable');
+  } finally {
+    restore();
+  }
+});

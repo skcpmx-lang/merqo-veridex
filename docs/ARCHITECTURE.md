@@ -187,7 +187,9 @@ produced it, so an old report can never be mistaken for a less redacted one.
 ## 5. The renderer
 
 `src/renderer/app.js` is a single page controller with **15 pages**. It renders only what
-the main process hands it; it never infers a value. Where a feature is not wired yet
+the main process hands it; it never infers a value. The history page reads stored runs
+through `history:list` and keeps three states distinct — loading, empty and unreadable —
+because collapsing them would report a failed read as "no data". Where a feature is not wired yet
 (performance, monitor, history, report saving), the page says so in plain words rather
 than showing an empty shell or invented sample data.
 

@@ -48,6 +48,8 @@ const state = {
   suites: null,
   manual: null,
   manualLoading: false,
+  history: null,
+  historyLoading: false,
   guard: null
 };
 
@@ -597,9 +599,122 @@ pages.reports = () => {
 pages.history = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
+
   const card = el('div', { class: 'vx-card' });
   card.append(el('h2', { class: 'vx-card__title', text: 'Run history' }));
-  card.append(emptyState('History is not wired to this page yet', 'The history store and the run-to-run comparison engine are implemented and tested. This list view is not connected yet, so it does not pretend to show stored runs.'));
+
+  const entries = state.history?.entries;
+
+  if (entries === null || entries === undefined) {
+    // Three states that must not look alike: still loading, loaded and empty, and
+    // could not load. Showing "no runs stored" for a failed read would be a lie about
+    // the user's own data.
+    if (state.history?.error) {
+      card.append(
+        callout({
+          tone: 'bad',
+          title: 'History could not be read',
+          body: state.history.error
+        })
+      );
+    } else if (client.live) {
+      card.append(el('p', { class: 'vx-dim', text: 'Reading stored runs…' }));
+      if (!state.historyLoading) {
+        state.historyLoading = true;
+        void loadHistory();
+      }
+    } else {
+      card.append(
+        emptyState(
+          'History needs the main process',
+          'Stored runs live on this machine and are read by the main process. This window is a design preview, so there is no history to show.'
+        )
+      );
+    }
+    wrapper.append(card);
+    return wrapper;
+  }
+
+  if (entries.length === 0) {
+    card.append(
+      emptyState(
+        'No runs stored yet',
+        'A run is recorded only after a scan finishes, and only if history is enabled in Settings. Nothing has been stored on this machine.'
+      )
+    );
+    wrapper.append(card);
+    return wrapper;
+  }
+
+  // The application renders dense key/value data as .vx-rows rows rather than an HTML
+  // table; the stylesheet has no table rules, so using <table> here would have rendered
+  // as unstyled text. One run per row, newest first (the store returns newest first).
+  const rows = el('div', { class: 'vx-rows' });
+
+  for (const entry of entries) {
+    const assessment = entry.assessment ?? {};
+    const score = typeof assessment.score === 'number' ? assessment.score : null;
+    const coverage = typeof assessment.coveragePercent === 'number' ? assessment.coveragePercent : null;
+    const fieldCount = entry.coverage?.fields ?? entry.fieldCount ?? null;
+    const errors = entry.issues?.errors?.length ?? 0;
+    const warnings = entry.issues?.warnings?.length ?? 0;
+
+    const row = el('div', { class: 'vx-row' });
+
+    // A withheld score stays withheld in the list. Rendering it as 0 would look like a
+    // catastrophic result; rendering it as a dash would look like missing data. The
+    // title carries the reason the run withheld it.
+    const scoreText =
+      score !== null
+        ? String(score)
+        : assessment.gated
+          ? 'Score withheld'
+          : 'Unrated';
+
+    const label = el('div', {
+      class: 'vx-row__label',
+      children: [
+        el('span', { text: entry.finishedAt ? formatTimestamp(entry.finishedAt) : 'Unknown time' }),
+        el('span', { class: 'vx-row__source', text: ` ${entry.id ?? ''}` })
+      ]
+    });
+
+    const value = el('div', { class: 'vx-row__value' });
+    value.append(
+      el('span', {
+        class: 'vx-row__text',
+        text: `${scoreText}${score !== null ? ` · ${assessment.rating ?? 'Unrated'}` : ''}`,
+        attrs: { title: assessment.gatingNote ?? '' }
+      })
+    );
+    value.append(
+      el('span', {
+        class: 'vx-dim',
+        text: `${coverage === null ? 'coverage unknown' : `${coverage}% coverage`}, ${fieldCount === null ? 'field count unknown' : `${fieldCount} field${fieldCount === 1 ? '' : 's'}`}`
+      })
+    );
+    if (errors > 0 || warnings > 0) {
+      value.append(
+        el('span', {
+          class: 'vx-row__note',
+          text: `${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}`
+        })
+      );
+    }
+
+    row.append(label, value);
+    rows.append(row);
+  }
+
+  card.append(rows);
+
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: `${entries.length} stored run${entries.length === 1 ? '' : 's'}. History is kept on this machine only, pruned by the retention setting, and never uploaded.`
+    })
+  );
+
   wrapper.append(card);
   return wrapper;
 };
@@ -839,6 +954,24 @@ async function loadManual() {
   // Only re-render when there is something new to show. Re-rendering on a failed
   // load is what produced the loop described above.
   if ((suites.ok || coverage.ok) && state.page === 'manual') render();
+}
+
+async function loadHistory() {
+  // Same rule as loadManual: never re-render from inside a failed load, or the page
+  // renders, requests, renders again. The flag is cleared on both paths.
+  try {
+    const result = await client.invoke('history:list');
+    if (result.ok) {
+      state.history = { entries: result.data?.entries ?? [] };
+    } else {
+      state.history = { entries: null, error: result.error?.message ?? 'The history store could not be read.' };
+    }
+  } catch (error) {
+    state.history = { entries: null, error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    state.historyLoading = false;
+  }
+  if (state.page === 'history') render();
 }
 
 async function loadGuard() {

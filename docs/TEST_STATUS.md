@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 405 · pass 405 · fail 0
+tests 411 · pass 411 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -69,7 +69,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
 | `tests/integration/providers.test.js` | 6 | every registered provider executes and explains itself |
 | `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
-| `tests/integration/renderer.test.js` | 8 | all 15 pages render under jsdom |
+| `tests/integration/renderer.test.js` | 13 | all 15 pages render under jsdom; live-mode pages with a fake bridge |
 | `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults |
 | `tests/integration/workflow.test.js` | 7 | CI workflows reference scripts that exist; tests gate publishing |
