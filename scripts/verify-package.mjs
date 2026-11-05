@@ -56,7 +56,7 @@ function record(level, message) {
  * Parse the small amount of PE structure needed to answer "is this a Windows executable".
  * @param {Buffer} buffer
  */
-function readPe(buffer) {
+export function readPe(buffer) {
   if (buffer.length < 0x40 || buffer.readUInt16LE(0) !== 0x5a4d) return { ok: false, reason: 'no MZ header' };
   const peOffset = buffer.readUInt32LE(0x3c);
   if (peOffset + 24 > buffer.length) return { ok: false, reason: 'PE header offset is past the end of the file' };
@@ -74,23 +74,48 @@ function readPe(buffer) {
   };
 }
 
-/** Read the fixed-size strings from a PE version-info block by hex-searching for them. */
-function readVersionStrings(buffer) {
-  const utf16 = buffer.toString('utf16le');
-  const grab = (key) => {
-    const index = utf16.indexOf(key);
-    if (index === -1) return null;
-    // Strings in a VS_VERSIONINFO block are NUL-terminated UTF-16; take a bounded window.
-    const window = utf16.slice(index + key.length, index + key.length + 200);
-    const match = /^[\u0000-\u001f]*(.+?)\u0000/.exec(window);
-    return match ? match[1].trim() : null;
-  };
+/**
+ * Read the strings from a PE VS_VERSIONINFO block.
+ *
+ * VS_VERSIONINFO stores `Key\0` followed by an aligned UTF-16LE value, so the text after a
+ * key is NOT the value - the value sits after padding. A naive "search the UTF-16 text for
+ * ProductVersion and take what follows" produced nonsense on the real build: it reported
+ * "FileDescription" as the product version, because that is the next key that happened to
+ * follow. Parse the structure properly: key, then align to 4, then the value.
+ *
+ * @param {Buffer} buffer
+ * @returns {Record<string, string|null>}
+ */
+export function readVersionStrings(buffer) {
+  const wanted = ['CompanyName', 'FileDescription', 'FileVersion', 'ProductName', 'ProductVersion', 'OriginalFilename'];
+  const found = {};
+
+  // Locate each key as UTF-16LE, then read the value that follows its padding.
+  for (const key of wanted) {
+    const needle = Buffer.from(`${key}\u0000`, 'utf16le');
+    let index = buffer.indexOf(needle);
+    let value = null;
+    while (index !== -1 && value === null) {
+      // Everything after the NUL terminator is a sequence of aligned UTF-16 values.
+      let cursor = index + needle.length;
+      // Read the next non-empty UTF-16 string, skipping alignment padding.
+      cursor += (4 - (cursor % 4)) % 4;
+      let end = cursor;
+      while (end + 1 < buffer.length && !(buffer[end] === 0 && buffer[end + 1] === 0)) end += 2;
+      const candidate = buffer.subarray(cursor, end).toString('utf16le');
+      if (candidate && /^[\x20-\x7e]+$/.test(candidate) && candidate !== key) value = candidate;
+      index = buffer.indexOf(needle, index + 1);
+    }
+    found[key] = value;
+  }
+
   return {
-    productName: grab('ProductName'),
-    productVersion: grab('ProductVersion'),
-    fileVersion: grab('FileVersion'),
-    companyName: grab('CompanyName'),
-    originalFilename: grab('OriginalFilename')
+    productName: found.ProductName ?? null,
+    productVersion: found.ProductVersion ?? null,
+    fileVersion: found.FileVersion ?? null,
+    fileDescription: found.FileDescription ?? null,
+    companyName: found.CompanyName ?? null,
+    originalFilename: found.OriginalFilename ?? null
   };
 }
 
@@ -127,6 +152,11 @@ function flattenTree(tree, prefix = '') {
   return out;
 }
 
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await run();
+}
+
+async function run() {
 console.log('VERIDEX package validation');
 console.log(`  inspecting ${PACKAGE_DIR}`);
 
@@ -149,7 +179,11 @@ if (!existsSync(PACKAGE_DIR)) {
       record('info', `version metadata: ${JSON.stringify(version)}`);
       const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
       if (!version.productVersion) record('fail', 'the executable carries no ProductVersion — Windows shows a blank version in Properties and Apps & features');
-      else if (!version.productVersion.includes(pkg.version)) record('fail', `the executable says ${version.productVersion} but package.json says ${pkg.version}`);
+      else if (!/^\d+\.\d+\.\d+/.test(version.productVersion)) record('fail', `ProductVersion "${version.productVersion}" is not a version number`);
+      else if (!version.productVersion.startsWith(pkg.version)) record('fail', `the executable says ${version.productVersion} but package.json says ${pkg.version}`);
+      if (version.fileDescription && /[a-z]\s[a-z]/i.test(version.fileDescription) === false && version.fileDescription.length > 40) {
+        record('warn', `FileDescription looks unlike a description: "${version.fileDescription}"`);
+      }
       if (version.productName && version.productName !== 'VERIDEX') record('warn', `ProductName is "${version.productName}"`);
     }
   }
@@ -244,3 +278,4 @@ if (IN_ACTIONS) {
 }
 
 if (problems.length > 0) process.exitCode = 1;
+}
