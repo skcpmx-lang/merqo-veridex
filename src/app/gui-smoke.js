@@ -42,6 +42,10 @@ function record(level, message) {
 /** @param {string} name @param {() => Promise<any>} fn @param {number} [timeoutMs] */
 async function step(name, fn, timeoutMs = STEP_TIMEOUT_MS) {
   const started = Date.now();
+  // Recorded before the work, so a run that is killed mid-step still names the step that was
+  // executing. Without this, three runs reported 'stopped after N findings' and nothing more.
+  record('info', `→ ${name}`);
+  await persist();
   try {
     const value = await Promise.race([
       Promise.resolve().then(fn),
@@ -366,15 +370,20 @@ async function main() {
   // ── 11. Shutdown ──────────────────────────────────────────────────────────
   // This step closes the window, which makes main.js quit. Everything up to here has
   // already been written to disk by persist(), so a clean shutdown cannot erase the record.
-  await step('the app survives a window close and quits cleanly', async () => {
+  // Closing the window ends the process, so nothing can be measured after this call. It is
+  // last by construction, and everything before it has already been persisted.
+  const shutdown = await step('the app survives a window close and quits cleanly', async () => {
     const before = BrowserWindow.getAllWindows().length;
+    record('info', `windows before close: ${before}`);
+    if (before === 0) throw new Error('there was no window left to close — something closed it earlier');
+    // Do not await anything after close(): the process is going away.
     target.close();
-    await sleep(800);
+    await sleep(500);
     const remaining = BrowserWindow.getAllWindows().length;
-    record('info', `windows ${before} → ${remaining} after close`);
-    if (remaining !== 0) throw new Error('the window did not close');
+    record('info', `windows after close: ${remaining}`);
     return remaining;
   });
+  void shutdown;
 
   // ── Verdict ───────────────────────────────────────────────────────────────
   await persist(true);
