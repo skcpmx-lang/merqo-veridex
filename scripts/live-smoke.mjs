@@ -49,7 +49,7 @@ const VALID_STATUSES = new Set(Object.values(Status));
 const findings = [];
 const problems = [];
 /** Headline numbers, filled in as the run progresses so they can be reported together. */
-const resultSummary = { permissions: 'unknown', fields: 0, modules: 0, providers: 0, assessment: 'none', statuses: '' };
+const resultSummary = { permissions: 'unknown', fields: 0, modules: 0, providers: 0, assessment: 'none', statuses: '', errors: [] };
 
 const IN_ACTIONS = process.env.GITHUB_ACTIONS === 'true';
 
@@ -184,6 +184,9 @@ async function main() {
         if ([Status.PASS, Status.WARNING, Status.FAIL].includes(value.status) && (value.value === null || value.value === undefined)) {
           record('fail', `${moduleId}.${key}: claims ${value.status} with no value`);
         }
+        if (value.status === Status.ERROR) {
+          resultSummary.errors.push(`${moduleId}.${key}: ${value.error ?? '(no message)'}`);
+        }
         if ([Status.UNAVAILABLE, Status.UNSUPPORTED, Status.ERROR, Status.PERMISSION_REQUIRED].includes(value.status)) {
           const explained = (value.error && String(value.error).length > 3) || (value.notes ?? []).some((note) => String(note).length > 3);
           if (!explained) record('fail', `${moduleId}.${key}: ${value.status} with no explanation — the user would see a blank cell with no reason`);
@@ -303,6 +306,11 @@ async function main() {
     const icon = problems.length > 0 ? 'failure' : 'notice';
     console.log(`::${icon} title=live-smoke::${cmdEscape(headline)}`);
     if (resultSummary.statuses) console.log(`::notice title=live-smoke statuses::${cmdEscape(resultSummary.statuses)}`);
+    // An ERROR on a real machine is a claim the product makes about itself: "something went
+    // wrong". Name each one, so it can be judged rather than counted.
+    if (resultSummary.errors.length > 0) {
+      console.log(`::warning title=live-smoke errors::${cmdEscape(resultSummary.errors.join(' ;; ').slice(0, 3_000))}`);
+    }
   }
 
   if (process.env.GITHUB_STEP_SUMMARY) {
