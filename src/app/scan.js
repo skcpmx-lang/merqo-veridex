@@ -159,7 +159,6 @@ export async function runScan(options = {}) {
       const store = new HistoryStore({ file: options.historyFile ?? null, ...history.storeOptions, logger });
       if (options.historyFile) await store.load();
       scan.historyEntry = await store.add?.({
-        id: undefined,
         startedAt,
         finishedAt,
         assessment,

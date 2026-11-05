@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 411 · pass 411 · fail 0
+tests 418 · pass 418 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -60,6 +60,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/report.test.js` | 34 | model → json/html/pdf/csv/certificate |
 | `tests/unit/security.test.js` | 15 | forbidden commands, consent, network guard |
 | `tests/unit/permissions.test.js` | 16 | elevation detection, capability gating, blocked matrix |
+| `tests/unit/history-store.test.js` | 7 | persistence, id generation, retention, quarantine, comparison |
 | `tests/unit/platform.test.js` | 16 | CIM error classification, registry, shared plumbing |
 | `tests/unit/smart.test.js` | 18 | ATA SMART and NVMe health log parsing |
 | `tests/unit/stress.test.js` | 16 | stress guard, elapsed time, transitions |
@@ -129,7 +130,13 @@ Four checks were added specifically because their absence had hidden bugs:
 3. **`security.test.js`** — the forbidden-command table had **no test at all** despite
    being the product's central guarantee. Writing it found that `diskpart /s script`
    was permitted while `diskpart` + `clean` was refused.
-4. **`docs.test.js`** — verifies that paths named in documentation exist. It found 47
+4. **`history-store.test.js`** — the store had no tests at all. Writing them found that
+   every entry was saved **without an id** and then discarded on load, so the history
+   file never accumulated a single run. Nothing errored and nothing warned; the only
+   symptom was a list that stayed empty. The cause was a spread order in `add()`:
+   `{ id: entry.id ?? makeId(), ...entry }` lets a caller's `id: undefined` overwrite
+   the generated id.
+5. **`docs.test.js`** — verifies that paths named in documentation exist. It found 47
    entries in `requirements.json` citing files nobody had written, while the requirement
    auditor reported a clean bill of health. The auditor now validates implementation,
    documentation and test references for every status, not only for TS claims.

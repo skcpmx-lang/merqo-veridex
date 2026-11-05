@@ -18,7 +18,7 @@ is the narrative summary of it.
 | Tested (automated) | 75 |
 | Implemented, untested | 11 |
 | Not started | 44 |
-| Automated tests | 411, all passing |
+| Automated tests | 418, all passing |
 | Source | 54 modules, ~16,500 lines |
 | Build | configured, **never produced** |
 
@@ -125,6 +125,7 @@ class of bug.
 | A dead duplicate dxdiag provider existed alongside the live one | Tier test after rename | Removed |
 | `diskpart /s script` was permitted while `diskpart` + `clean` was refused | Writing the guard's first tests | New forbidden rule |
 | The manual page called its own loader from its render function, freezing the window | Booting the renderer under jsdom | Loading guard |
+| History entries were saved with no id and silently discarded on every load, so stored runs never accumulated | Writing the first history-store tests | Spread order fixed; skipping now warns |
 
 The pattern: **unit tests covered pure functions, and nothing executed the wiring.** The
 provider, tier and documentation tests now do.

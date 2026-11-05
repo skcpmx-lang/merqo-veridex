@@ -58,7 +58,19 @@ export class HistoryStore {
       const parsed = JSON.parse(text);
       const entries = Array.isArray(parsed) ? parsed : parsed?.entries;
       if (!Array.isArray(entries)) throw new Error('history payload is not an array');
-      this.entries = entries.filter((entry) => entry && typeof entry.id === 'string');
+      const kept = entries.filter((entry) => entry && typeof entry.id === 'string');
+      const dropped = entries.length - kept.length;
+      this.entries = kept;
+      if (dropped > 0) {
+        // Entries without an id cannot be addressed, compared or deleted, so they are
+        // not loaded — but the loss must be reported rather than disappearing.
+        await this.logger?.warn('history entries without an id were skipped', {
+          scope: 'history',
+          dropped,
+          kept: kept.length,
+          note: 'An entry without an id cannot be shown, compared or removed.'
+        });
+      }
       await this.logger?.debug('history loaded', { scope: 'history', count: this.entries.length });
     } catch (error) {
       const code = /** @type {NodeJS.ErrnoException} */ (error).code;
@@ -87,8 +99,13 @@ export class HistoryStore {
    * @returns {Promise<HistoryEntry>}
    */
   async add(entry) {
+    // The generated id is spread LAST on purpose. Written the other way round —
+    // `{ id: entry.id ?? makeId(), ...entry }` — a caller passing `id: undefined`
+    // (which scan.js did) overwrites the generated id with undefined, the entry is
+    // saved without an id, and load() then discards it because it only keeps entries
+    // with a string id. The result was history that silently never accumulated.
     /** @type {HistoryEntry} */
-    const record = { id: entry.id ?? makeId(), ...entry };
+    const record = { ...entry, id: entry.id ?? makeId() };
     this.entries.unshift(record);
     this.#prune();
     await this.save();
