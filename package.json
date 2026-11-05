@@ -27,7 +27,8 @@
     "verify:artifacts": "node scripts/verify-artifacts.mjs"
   },
   "dependencies": {
-    "pdfkit": "^0.17.2"
+    "pdfkit": "^0.17.2",
+    "systeminformation": "^5.33.19"
   },
   "devDependencies": {
     "electron": "^45.2.3",
