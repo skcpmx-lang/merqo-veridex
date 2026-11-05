@@ -116,9 +116,14 @@ test('the UI never claims a benchmark or monitor is running when it is not', { s
     assert.match(text, /explicit consent/);
     assert.match(text, /not comparable to other benchmark tools/);
 
+    // The monitor page is wired now, but in preview mode it must still refuse: there is
+    // no main process to sample from, so it says so instead of showing gauges at zero.
     document.querySelector('.vx-nav__item[data-page="monitor"]').click();
     await new Promise((resolve) => setTimeout(resolve, 30));
-    assert.match(document.querySelector('.vx-content').textContent, /not wired to this page yet/);
+    const monitorText = document.querySelector('.vx-content').textContent;
+    assert.match(monitorText, /needs the main process/);
+    assert.ok(!/Sampling is not running/.test(monitorText), 'preview mode must not imply sampling could be started');
+    assert.ok(!/\d+\s*°C/.test(monitorText), 'no temperature may be shown in preview mode');
   } finally {
     restore();
   }
@@ -341,6 +346,145 @@ test('with a live bridge the preview banner is gone and scanning is possible', {
     const start = document.getElementById('vx-start-scan');
     assert.ok(start, 'the scan button must exist');
     assert.equal(start.disabled, false, 'with a main process attached the scan must be startable');
+  } finally {
+    restore();
+  }
+});
+
+test('the monitor page starts sampling, shows unavailable sensors honestly, and can stop', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  const sensors = [
+    { id: 'cpu.load', label: 'CPU utilisation', unit: '%' },
+    { id: 'cpu.temp', label: 'CPU temperature', unit: '°C' }
+  ];
+  const sample = {
+    at: '2026-03-04T09:15:00.000Z',
+    samples: 1,
+    readings: {
+      'cpu.load': { value: 12.5, source: 'systeminformation.currentLoad', status: 'PASS', reason: null },
+      'cpu.temp': { value: null, source: null, status: 'UNAVAILABLE', reason: 'ACPI thermal zones need administrative rights' }
+    },
+    series: {}
+  };
+
+  const answers = {
+    ...baseAnswers({ ok: true, data: { entries: [] } }),
+    'monitor:start': { ok: true, data: { started: true, intervalMs: 1500, elevated: false, sensors, note: 'Sampling every 1.5 seconds as a standard user.' } },
+    'monitor:stop': { ok: true, data: { stopped: true, wasRunning: true } }
+  };
+  const { document, restore } = await bootWithBridge(answers);
+  try {
+    document.querySelector('.vx-nav__item[data-page="monitor"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    // Before starting: say that nothing is sampling.
+    assert.match(document.querySelector('.vx-content').textContent, /Sampling is not running/);
+
+    const startButton = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Start sampling'));
+    assert.ok(startButton, 'a start control must exist');
+    startButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    // After starting but before the first sample: waiting, not running blind.
+    assert.match(document.querySelector('.vx-content').textContent, /Waiting for the first sample/);
+  } finally {
+    restore();
+  }
+});
+
+test('a live sample renders values and explains an unavailable sensor', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  // The event subscription is the part that cannot be exercised through invoke alone, so
+  // this drives the listener directly the way the main process would.
+  const sensors = [
+    { id: 'cpu.load', label: 'CPU utilisation', unit: '%' },
+    { id: 'cpu.temp', label: 'CPU temperature', unit: '°C' }
+  ];
+  const listeners = new Map();
+  const html = await readFile(path.join(ROOT, 'src/renderer/index.html'), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only', pretendToBeVisual: false });
+  const { window } = dom;
+
+  window.veridex = {
+    invoke: {
+      'app:info': async () => ({ ok: true, data: { name: 'VERIDEX', version: '1.0.0', platform: 'win32' } }),
+      'app:settings': async () => ({ ok: true, data: { values: {}, specs: [] } }),
+      'app:guardSummary': async () => ({ ok: true, data: {} }),
+      'scan:state': async () => ({ ok: true, data: { running: false, finished: null } }),
+      'manual:suites': async () => ({ ok: true, data: { suites: [] } }),
+      'manual:coverage': async () => ({ ok: true, data: {} }),
+      'history:list': async () => ({ ok: true, data: { entries: [] } }),
+      'monitor:start': async () => ({ ok: true, data: { started: true, sensors, note: 'Sampling.' } })
+    },
+    on: (channel, listener) => {
+      listeners.set(channel, listener);
+      return () => listeners.delete(channel);
+    },
+    channels: { invoke: [], events: [] }
+  };
+
+  const previous = { window: globalThis.window, document: globalThis.document, veridex: globalThis.veridex };
+  globalThis.window = window;
+  globalThis.document = window.document;
+  globalThis.HTMLElement = window.HTMLElement;
+  globalThis.Node = window.Node;
+  globalThis.veridex = window.veridex;
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+
+  try {
+    await import(`../../src/renderer/app.js?boot=${Date.now()}&monitor=1`);
+    await new Promise((resolve) => setTimeout(resolve, 180));
+
+    window.document.querySelector('.vx-nav__item[data-page="monitor"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const startButton = [...window.document.querySelectorAll('button')].find((b) => b.textContent.includes('Start sampling'));
+    startButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const emit = listeners.get('monitor:sample');
+    assert.ok(emit, 'the controller must subscribe to monitor:sample');
+    emit({
+      at: '2026-03-04T09:15:00.000Z',
+      samples: 3,
+      readings: {
+        'cpu.load': { value: 12.5, source: 'systeminformation.currentLoad', status: 'PASS', reason: null },
+        'cpu.temp': { value: null, source: null, status: 'UNAVAILABLE', reason: 'ACPI thermal zones need administrative rights' }
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const text = window.document.querySelector('.vx-content').textContent;
+    assert.match(text, /12\.5 %/, 'the live value must be shown with its unit');
+    assert.match(text, /systeminformation\.currentLoad/, 'the source must be shown');
+    assert.match(text, /CPU temperature/, 'an unavailable sensor is still listed');
+    assert.match(text, /Unavailable/);
+    assert.match(text, /ACPI thermal zones need administrative rights/, 'the reason must be shown, not just a dash');
+    assert.match(text, /3 samples taken/);
+    assert.ok(!/0 °C/.test(text), 'an unavailable temperature must never render as zero');
+  } finally {
+    if (previous.window) globalThis.window = previous.window;
+    if (previous.document) globalThis.document = previous.document;
+    if (previous.veridex === undefined) delete globalThis.veridex;
+    else globalThis.veridex = previous.veridex;
+    window.close();
+  }
+});
+
+test('a refused monitor start is reported rather than shown as running', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  const answers = {
+    ...baseAnswers({ ok: true, data: { entries: [] } }),
+    'monitor:start': { ok: false, error: { code: 'monitor', message: 'Sensor sampling could not start: no runner.' } }
+  };
+  const { document, restore } = await bootWithBridge(answers);
+  try {
+    document.querySelector('.vx-nav__item[data-page="monitor"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Start sampling')).click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const text = document.querySelector('.vx-content').textContent;
+    assert.match(text, /Sampling stopped/);
+    assert.match(text, /could not start/);
+    assert.ok(!/Waiting for the first sample/.test(text), 'a failed start must not look like a pending one');
   } finally {
     restore();
   }

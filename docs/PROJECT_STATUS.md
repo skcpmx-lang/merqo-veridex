@@ -18,7 +18,7 @@ is the narrative summary of it.
 | Tested (automated) | 75 |
 | Implemented, untested | 11 |
 | Not started | 44 |
-| Automated tests | 419, all passing |
+| Automated tests | 422, all passing |
 | Source | 54 modules, ~16,500 lines |
 | Build | configured, **never produced** |
 
@@ -64,6 +64,8 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
 - Honest empty states: pages whose actions are not wired say so in plain words.
 - History list wired to the store, with three distinct states (loading, empty, unreadable)
   and withheld scores preserved rather than rendered as zero.
+- Live monitoring wired to a real `Monitor` in the main process, which previously
+  answered `{ started: true }` without starting anything.
 
 ### Tooling
 - `scripts/check.mjs` static gate: 0 errors.
@@ -140,8 +142,8 @@ In the order that reduces the largest honesty gap first:
    Linux-side testing substitutes for it.
 2. **Run it on a real machine** and record `verifiedOn` evidence per requirement. This is
    the only path to any requirement being VER.
-3. **Wire the remaining interface actions**: live monitoring and performance results.
-   Report saving and the history list are now connected.
+3. **Wire the remaining interface action**: embedding performance results.
+   Report saving, the history list and live monitoring are now connected.
 4. **Run the configured Windows CI** and record the result in `docs/TEST_STATUS.md`.
 5. **Complete `docs/RELEASE_VERIFICATION.md`** — the checklist is written and every box is
    unticked, which is the accurate state.

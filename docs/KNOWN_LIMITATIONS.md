@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 419
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 422
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -192,13 +192,17 @@ SHA-256 in `SHA256SUMS.txt` against the published value before running the insta
 The renderer is complete and tested, but a few actions have no main-process handler
 behind them:
 
-- live monitoring on the Monitor page (sampling has no main-process driver yet)
 - embedding performance results from the Performance page
 
 The **history list is now wired**: it reads stored runs through `history:list` and shows
 each run's real score, rating and coverage. It distinguishes three states that used to be
 one — still reading, genuinely empty, and unreadable — because a failed read that renders
 as "no runs stored" is a lie about the user's own data.
+
+**Live monitoring is now wired**: the main process owns a real `Monitor` and pushes
+samples on the event channel. Starting it genuinely starts sampling, a refused start is
+reported as a failure rather than as success, sensors the machine does not expose are
+listed as unavailable with their reason, and sampling stops when the window closes.
 
 Each of these pages says so in plain language rather than showing an empty shell or
 sample data. `docs/PROJECT_STATUS.md` tracks them.

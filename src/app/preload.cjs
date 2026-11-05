@@ -45,6 +45,7 @@ const EVENTS = [
   'scan:progress',
   'scan:finished',
   'monitor:sample',
+  'monitor:stopped',
   'settings:changed',
   'app:error'
 ];

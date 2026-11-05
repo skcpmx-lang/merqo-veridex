@@ -50,6 +50,7 @@ const state = {
   manualLoading: false,
   history: null,
   historyLoading: false,
+  monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
   guard: null
 };
 
@@ -542,14 +543,90 @@ pages.performance = () => {
 pages.monitor = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
+
   const card = el('div', { class: 'vx-card' });
   card.append(el('h2', { class: 'vx-card__title', text: 'Live sensors' }));
+
+  if (!client.live) {
+    card.append(
+      emptyState(
+        'Live sampling needs the main process',
+        'Sensors are read by the main process, which owns the runner and the read-only guard. This window is a design preview, so there is nothing to sample and nothing is shown.'
+      )
+    );
+    wrapper.append(card);
+    return wrapper;
+  }
+
+  const controls = el('div', { style: { display: 'flex', gap: 'var(--vx-space-sm)', flexWrap: 'wrap' } });
+  const start = button({
+    label: state.monitor.starting ? 'Starting…' : 'Start sampling',
+    variant: 'primary',
+    onClick: () => startMonitor(),
+    disabled: state.monitor.running || state.monitor.starting
+  });
+  const stop = button({
+    label: 'Stop sampling',
+    variant: 'ghost',
+    onClick: () => stopMonitor(),
+    disabled: !state.monitor.running
+  });
+  controls.append(start, stop);
+  card.append(controls);
+
+  if (state.monitor.note) card.append(el('p', { class: 'vx-dim', text: state.monitor.note }));
+
+  if (state.monitor.error) {
+    card.append(callout({ tone: 'bad', title: 'Sampling stopped', body: state.monitor.error }));
+  }
+
+  const sample = state.monitor.sample;
+  if (!sample) {
+    // Two different situations: never started, and started but no sample yet. Saying
+    // "waiting for the first sample" when nothing is running would look like a hang.
+    card.append(
+      emptyState(
+        state.monitor.running ? 'Waiting for the first sample' : 'Sampling is not running',
+        state.monitor.running
+          ? 'Readings appear as soon as the first poll returns, roughly 1.5 seconds after starting.'
+          : 'Start sampling to read live sensors. Nothing is sampled until you ask for it, so an idle window is not measuring anything.'
+      )
+    );
+    wrapper.append(card);
+    return wrapper;
+  }
+
+  const sensors = state.monitor.sensors ?? [];
+  const readings = sample.readings ?? {};
+  const rows = el('div', { class: 'vx-rows' });
+  for (const sensor of sensors) {
+    const reading = readings[sensor.id];
+    if (!reading) continue;
+    const row = el('div', { class: 'vx-row' });
+    row.append(el('div', { class: 'vx-row__label', text: sensor.label }));
+
+    const value = el('div', { class: 'vx-row__value' });
+    if (reading.value === null || reading.value === undefined) {
+      // A sensor the machine does not expose says so. Rendering a dash alone would be
+      // ambiguous; rendering 0 would be wrong.
+      value.append(el('span', { class: 'vx-dim', text: 'Unavailable' }));
+      if (reading.reason) value.append(el('span', { class: 'vx-row__note', text: reading.reason }));
+    } else {
+      value.append(el('span', { class: 'vx-row__text', text: `${reading.value}${sensor.unit ? ` ${sensor.unit}` : ''}` }));
+      if (reading.source) value.append(el('span', { class: 'vx-row__source', text: reading.source }));
+    }
+    row.append(value);
+    rows.append(row);
+  }
+  card.append(rows);
+
   card.append(
-    emptyState(
-      'Live sampling is not wired to this page yet',
-      'The monitoring engine, ring buffers and statistics are implemented and tested. The graph view is not connected, so this page does not claim to be showing temperatures it is not reading.'
-    )
+    el('p', {
+      class: 'vx-dim',
+      text: `${sample.samples} sample${sample.samples === 1 ? '' : 's'} taken. Latest at ${formatTimestamp(sample.at)}. Sampling stops when you leave it running and close the window.`
+    })
   );
+
   wrapper.append(card);
   return wrapper;
 };
@@ -956,6 +1033,36 @@ async function loadManual() {
   if ((suites.ok || coverage.ok) && state.page === 'manual') render();
 }
 
+async function startMonitor() {
+  if (!client.live || state.monitor.running) return;
+  state.monitor.starting = true;
+  state.monitor.error = null;
+  render();
+
+  const result = await client.invoke('monitor:start');
+  state.monitor.starting = false;
+
+  if (!result.ok) {
+    // "Started" is only reported when it genuinely started; a refusal is shown as one.
+    state.monitor.running = false;
+    state.monitor.error = result.error?.message ?? 'Sampling could not be started.';
+  } else {
+    state.monitor.running = true;
+    state.monitor.sensors = result.data?.sensors ?? [];
+    state.monitor.note = result.data?.note ?? null;
+    state.monitor.sample = null;
+  }
+  if (state.page === 'monitor') render();
+}
+
+async function stopMonitor() {
+  if (!client.live) return;
+  await client.invoke('monitor:stop');
+  state.monitor.running = false;
+  state.monitor.note = 'Sampling stopped. The readings above are no longer live.';
+  if (state.page === 'monitor') render();
+}
+
 async function loadHistory() {
   // Same rule as loadManual: never re-render from inside a failed load, or the page
   // renders, requests, renders again. The flag is cleared on both paths.
@@ -1004,6 +1111,18 @@ function subscribe() {
     await loadSettings();
     applyTheme(state.settings?.ui);
     render();
+  });
+
+  client.on('monitor:sample', (payload) => {
+    state.monitor.sample = payload;
+    state.monitor.running = true;
+    if (state.page === 'monitor') render();
+  });
+
+  client.on('monitor:stopped', (payload) => {
+    state.monitor.running = false;
+    state.monitor.error = payload?.reason ?? null;
+    if (state.page === 'monitor') render();
   });
 
   client.on('app:error', (payload) => {

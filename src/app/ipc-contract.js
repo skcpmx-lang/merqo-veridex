@@ -49,6 +49,7 @@ export const EVENTS = Object.freeze({
   'scan:progress': 'One task finished, with its section.',
   'scan:finished': 'The sweep ended, with a summary.',
   'monitor:sample': 'One live sensor sample.',
+  'monitor:stopped': 'Sampling ended, with the reason if it failed.',
   'settings:changed': 'A setting changed, with the new value.',
   'app:error': 'Something failed in the main process.'
 });

@@ -26,6 +26,9 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { Logger } from '../core/logger.js';
+import { Monitor, SENSORS } from '../monitoring/monitor.js';
+import { detectPermissionState } from '../platform/permissions.js';
+import { CommandRunner } from '../platform/runner.js';
 import { SettingsStore } from '../core/settings.js';
 import {
   CHANNELS, EVENT_CHANNELS, fail, isEvent, isInvokable, ok, validateRequest,
@@ -128,6 +131,13 @@ async function createWindow() {
       ...WINDOW_SECURITY,
       preload: path.join(__dirname, 'preload.cjs')
     }
+  });
+
+  // Sampling must not outlive the window that displays it: a timer running with no
+  // consumer would keep issuing WMI queries forever.
+  window.on('closed', () => {
+    monitor?.stop();
+    monitor = null;
   });
 
   // No navigation, ever. The app is a single local document; any attempt to
@@ -331,8 +341,46 @@ function registerHandlers() {
     return compareEntries(a, b);
   });
 
-  handle('monitor:start', () => ({ started: true, note: 'Sampling is driven by the monitoring module on the renderer side.' }));
-  handle('monitor:stop', () => ({ stopped: true }));
+  // Live monitoring is driven here, in the main process, because sampling needs the
+  // runner and the guard — neither of which exists in the sandboxed renderer. The
+  // previous version replied `{ started: true }` without starting anything, which the
+  // interface would have shown as a running monitor producing no samples forever.
+  handle('monitor:start', async () => {
+    if (monitor) monitor.stop();
+
+    const state = await detectPermissionState(new CommandRunner());
+    monitor = new Monitor({
+      runner: new CommandRunner(),
+      intervalMs: 1500,
+      onSample: (sample) => emit('monitor:sample', sample),
+      onError: (error) => {
+        // A sampling failure ends the session rather than silently skipping ticks: the
+        // interface must not keep showing stale numbers as if they were live.
+        monitor = null;
+        emit('app:error', { scope: 'monitor', message: error.message });
+        emit('monitor:stopped', { reason: error.message });
+      }
+    });
+    monitor.setPrivileged(state.isAdmin);
+    monitor.start();
+
+    return {
+      started: true,
+      intervalMs: monitor.intervalMs,
+      elevated: state.isAdmin,
+      sensors: SENSORS.map(({ id, label, unit }) => ({ id, label, unit })),
+      note: state.isAdmin
+        ? 'Sampling every 1.5 seconds with an elevated token, so privileged sensors are included.'
+        : 'Sampling every 1.5 seconds as a standard user. Temperature and fan sensors usually need elevation, so they may report as unavailable.'
+    };
+  });
+
+  handle('monitor:stop', () => {
+    const wasRunning = Boolean(monitor?.running);
+    monitor?.stop();
+    monitor = null;
+    return { stopped: true, wasRunning };
+  });
 
   handle('shell:openDataFolder', async () => {
     await shell.openPath(dataDir());
@@ -342,6 +390,9 @@ function registerHandlers() {
 
 /** @type {SecurityGuard} */
 let guard;
+
+/** The live-sampling session, or null when nothing is running. */
+let monitor = null;
 
 app.whenReady().then(async () => {
   logger = new Logger({ dir: logDir(), level: 'info' });
