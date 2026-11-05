@@ -34,7 +34,7 @@ tick marks nobody earned is worse than no document.
 | `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `a8377850b828f769f0492071f59758d20d6763ac00e05d72e68ca67baf09c613` |
 | `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `fe7338dca1de85c164195606c0825f6b098341043cf546a58069c9b19d6b9335` |
 
-- the full test suite passes on Windows as well as Linux (423 tests at the time of that build);
+- the full test suite passes on Windows as well as Linux (453 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
@@ -46,8 +46,16 @@ tick marks nobody earned is worse than no document.
 - the installer has **never been run**. Nobody has installed it.
 - the application has **never been launched**. The renderer has been exercised under jsdom
   against a simulated bridge; a real BrowserWindow has never opened on a real desktop.
-- no WMI/CIM, PowerShell, registry, SMART/NVMe, battery or driver call has ever executed on
-  real Windows hardware. The providers have run only against a no-op runner.
+- **partly addressed, and it took a live smoke test to do it.** As first written, this line
+  said no WMI/CIM, PowerShell or registry call had ever executed. That was true, and it was
+  hiding four defects: a zero measurement that crashed the memory task, a provider killed by
+  a budget it had already accounted for, `dxdiag` spawned under a provider id, and a
+  PowerShell script that could not parse. `npm run smoke:live` now exercises the real
+  interfaces on the Windows runner. On run 42027223853 it produced 1095 fields across 15
+  modules, a rated score of 84 at 75% coverage, one remaining ERROR (a genuinely absent
+  `dxdiag`), and zero structural problems. That is evidence about the **diagnostic layer**,
+  on a virtual machine, with synthetic devices — not about a packaged application on a real
+  PC. **No packaged build has ever executed.**
 - UAC elevation has never been exercised.
 - DPI scaling, window resizing and multi-monitor behaviour are untested in a real window.
 - the artifact could not be downloaded in the environment where this document was written

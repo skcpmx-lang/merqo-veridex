@@ -329,6 +329,19 @@ export function registerGpu(registry) {
       // could show it: every fixture asserted on the parsed result, never on the argv.
       const run = await runReadOnly(ctx.runner, 'dxdiag', ['/t', target, '/whql:off'], { timeoutMs: Math.max(ctx.timeoutMs, 45_000) });
       if (!run.ok) {
+        // Only claim absence when we can actually see the filesystem - which means only on a
+        // real Windows host. A missing tool is a property of the installation, not a fault,
+        // and "UNSUPPORTED here" is a different answer from "something went wrong".
+        if (process.platform === 'win32' && run.code !== 0 && !`${run.stdout}${run.stderr}`.trim()) {
+          const { existsSync } = await import('node:fs');
+          const { join } = await import('node:path');
+          const expected = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'dxdiag.exe');
+          if (!existsSync(expected)) {
+            return {
+              directxVersion: unsupported(`dxdiag is not present on this Windows installation (${expected}). The DirectX runtime version cannot be read by this method; nothing else on this machine is affected.`, 'directx-dxdiag.gpu')
+            };
+          }
+        }
         return {
           directxVersion: field(null, {
             status: Status.ERROR,

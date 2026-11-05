@@ -3,8 +3,11 @@
 This document records **what has actually been executed**, per platform and per subsystem.
 It exists so that no compatibility claim in this project rests on intention.
 
-The honest summary: **nothing has been executed on real Windows hardware.** Everything
-below is either build-time evidence from a Windows CI runner or logic verified on Linux.
+The honest summary: **the diagnostic layer has been executed on Windows, but never on real
+consumer hardware, and the packaged application has never been launched.** Since
+`npm run smoke:live` was added, real WMI, PowerShell, registry and systeminformation calls
+run on the Windows CI runner. That moves most subsystems from "never executed" to
+"runner-executed" — a real and useful step, and not the same thing as field-verified.
 
 ---
 
@@ -19,9 +22,10 @@ Every subsystem is at one of four levels. They are not interchangeable.
 | **L2 — Logic-verified** | Parsers, scoring and wiring tested on Linux against recorded or simulated command output |
 | **L1 — Implemented only** | Written, wired, not executed |
 
-**No subsystem in VERIDEX is at L4.** The highest achieved is L3, and only for the build
-and packaging path — a CI runner is a virtual machine with synthetic hardware, and the
-packaged application was never launched on it.
+**No subsystem in VERIDEX is at L4.** The highest achieved is L3: the diagnostic layer now
+runs on a Windows runner against real Windows interfaces, and the packaging path produces a
+real installer. A CI runner is a virtual machine with synthetic hardware, though, and the
+packaged application has never been launched on it.
 
 ---
 
@@ -29,8 +33,8 @@ packaged application was never launched on it.
 
 | Platform | Built | Test suite run | Application launched |
 | --- | --- | --- | --- |
-| Windows Server 2022 x64 (`windows-latest`) | **Yes** — installer + portable | **Yes** — 423 tests pass | **No** |
-| Ubuntu 24.04 x64 (`ubuntu-latest`) | n/a | **Yes** — 423 tests pass | **No** |
+| Windows Server 2022 x64 (`windows-latest`) | **Yes** — installer + portable | **Yes** — 453 tests pass, plus a live smoke test against real WMI/PowerShell/registry | **No** |
+| Ubuntu 24.04 x64 (`ubuntu-latest`) | n/a | **Yes** — 453 tests pass | **No** |
 | Windows 10/11 consumer x64 | No | No | No |
 | Windows on ARM64 | No | No | No |
 | Wine on Linux | No (not installed; repositories unreachable) | No | No |
@@ -47,27 +51,27 @@ about a real PC.
 
 | Subsystem | Interface | Level | What has and has not been shown |
 | --- | --- | --- | --- |
-| Processor | CIM `Win32_Processor` | **L2** | Parser tested against recorded output. Never queried a real CPU. |
+| Processor | CIM `Win32_Processor` | **L3** | Queried a real Windows VM: the CIM call returns rows and the parse produces a model name. Synthetic vCPU, unknown silicon. |
 | CPU model decode | `cpu-model.js` tables | **L2** | Generations, sockets and unknown-name handling tested. Table not validated against current silicon. |
-| Memory | CIM `Win32_PhysicalMemory`, systeminformation | **L2** | Mapping and slot logic tested. Per-module SPD fields never read from hardware. |
-| Motherboard / BIOS | CIM `Win32_BaseBoard`, `Win32_BIOS` | **L2** | Parsing and privacy gating tested. |
-| TPM / Secure Boot | CIM, `Get-Tpm` | **L1/L2** | Gating tested; the privileged read has never executed. |
-| GPU | CIM `Win32_VideoController`, dxdiag, vendor heuristic | **L2** | VRAM sanity handling and heuristic labelling tested. |
+| Memory | CIM `Win32_PhysicalMemory`, systeminformation | **L3** | Real module enumeration ran, and real totals were returned. A VM's SPD is synthetic; per-module fields on consumer DIMMs are still unproven. |
+| Motherboard / BIOS | CIM `Win32_BaseBoard`, `Win32_BIOS` | **L3** | Real queries returned data on the runner (a virtual board). |
+| TPM / Secure Boot | CIM, `Get-Tpm` | **L3** | The privileged read executed on the runner and reported honestly that the provider is unavailable there. |
+| GPU | CIM `Win32_VideoController`, dxdiag, vendor heuristic | **L3** | Real adapter enumeration ran. `dxdiag` is absent on the runner's image, which the provider now reports as `UNSUPPORTED` rather than an error. |
 | Display | CIM, EDID | **L1** | Implemented; no display has been enumerated. |
-| Storage inventory | CIM `Win32_DiskDrive`, systeminformation | **L2** | Enumeration and media-type classification tested. |
-| Storage health (SATA) | ATA SMART | **L2** | Attribute decoding tested against fixtures, including the vendor-specific 190/194 handling. Never read a real drive. |
+| Storage inventory | CIM `Win32_DiskDrive`, systeminformation | **L3** | Real disk enumeration ran on the runner. |
+| Storage health (SATA) | ATA SMART, storage reliability counters | **L3** | The reliability-counter path executes on the runner; the ATA/NVMe `DeviceIoControl` paths need elevation and real disks, and a VM provides neither. |
 | Storage health (NVMe) | NVMe health log | **L2** | Log-page decoding tested. |
-| Battery | `powercfg /batteryreport`, systeminformation | **L2** | Wear arithmetic and the no-battery `NOT_APPLICABLE` path tested. |
+| Battery | `powercfg /batteryreport`, systeminformation | **L3** | The no-battery path is now proven against a machine that genuinely has no battery: it reports `NOT_APPLICABLE`, not an error. Wear arithmetic on a real battery is still unproven. |
 | Thermal sensors | ACPI, systeminformation | **L1** | Implemented; no sensor has ever been read. |
 | Fan speed | CIM `Win32_Fan` | **L1** | Implemented; almost never exposed on consumer boards. |
-| Network adapters | CIM, systeminformation | **L2** | Adapter parsing and socket derivation tested. |
-| Drivers | CIM, `pnputil` | **L2** | Inventory, problem codes and age assessment tested. |
-| Windows servicing | `Get-WindowsOptionalFeature`, `Get-Service` | **L2** | Parsing tested; requires elevation and has never run. |
-| Security posture | Defender, firewall, BitLocker, UAC | **L2** | Field mapping and honest unavailable paths tested. |
+| Network adapters | CIM, systeminformation | **L3** | Real adapter enumeration ran. |
+| Drivers | CIM, `pnputil` | **L3** | Real driver inventory returned on the runner. |
+| Windows servicing | `Get-WindowsOptionalFeature`, `Get-Service` | **L3** | Ran elevated on the runner. This provider was being killed by a 20 s budget it could not meet, and reported ERROR; the budget bug was found this way. |
+| Security posture | Defender, firewall, BitLocker, UAC | **L3** | Ran elevated on the runner. BitLocker is unavailable on that image and now says so instead of reporting an error. |
 | Live monitoring | systeminformation sensors | **L2** | Sampler lifecycle tested with a fake runner; two real samples were taken on **Linux**, not Windows (CPU load 54.5 %, 12 sensors, the rest explained as unavailable). |
 | Benchmarks | CPU, disk | **L2** | Scoring and the write-consent gate tested. Never benchmarked real hardware. |
 | Stress guard | thermal/load limits | **L2** | Guard behaviour tested; never applied to real silicon. |
-| UAC elevation | `detectPermissionState` | **L2** | Both probes and the fallback tested with stubs. **Never prompted for real.** |
+| UAC elevation | `detectPermissionState` | **L3** | The elevation probe ran for real on the runner and correctly detected an elevated session. **The UAC prompt itself has still never appeared.** |
 | Read-only guard | `FORBIDDEN_COMMANDS` | **L2** | 16 destructive lines refused, 11 read-only permitted, tested. |
 | Keyboard, mouse, touchpad, audio, microphone, camera, ports | — | **L1** | Requirement R-16-01 (vendor-agnostic detection) and the input-device modules are **not started**. The manual checklist covers some of this by asking the user to look. |
 | Packaged application | Electron + NSIS | **L3** | Built on Windows; verified as a PE executable with a matching digest. **Never installed or launched.** |
@@ -83,6 +87,30 @@ in `docs/requirements.json` and this document does not claim otherwise.
 The design avoids vendor dependence rather than validating it: CIM first, systeminformation
 second, and a chipset heuristic that is labelled as a heuristic. That is a strategy for
 working across vendors, not evidence that it works on any of them.
+
+---
+
+## 4a. The live smoke run
+
+`npm run smoke:live` is the mechanism behind every L3 in the table above. On run
+`42027223853` (Windows, elevated) it reported:
+
+| Measure | Value |
+| --- | --- |
+| Fields produced | 1095 across 15 modules |
+| PASS / WARNING | 768 / 69 |
+| UNAVAILABLE / NOT_APPLICABLE / UNSUPPORTED | 251 / 4 / 2 |
+| ERROR | 1 — `dxdiag`, genuinely absent from that image |
+| Structural problems | 0 |
+| Assessment | rated, 84, coverage 75 % |
+
+Two things about that table matter more than the numbers. First, the earlier runs of the
+same script found four defects that the test suite could not: a zero measurement that
+crashed the memory task, a provider killed by a budget it had already set, `dxdiag` spawned
+under a provider id, and a PowerShell script that could not parse. Second, a *rated* score
+on a virtual machine says nothing about a real PC — the hardware is synthetic, and the
+devices a consumer machine exposes (a real battery, a real SSD with SMART attributes, a
+discrete GPU) are exactly the ones this run did not see.
 
 ---
 
