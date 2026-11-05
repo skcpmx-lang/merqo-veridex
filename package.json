@@ -2,7 +2,7 @@
   "name": "veridex",
   "productName": "VERIDEX",
   "version": "1.0.0",
-  "description": "VERIDEX — Advanced All-in-One Windows PC & Laptop Hardware Diagnostics and Inspection. A premium product by MERQO.",
+  "description": "VERIDEX \u2014 Advanced All-in-One Windows PC & Laptop Hardware Diagnostics and Inspection. A premium product by MERQO.",
   "author": {
     "name": "Shohan Khan",
     "email": "merqoonline@gmail.com"
@@ -22,8 +22,8 @@
     "audit:requirements": "node scripts/audit-requirements.mjs",
     "check": "node scripts/check.mjs",
     "icon": "node scripts/build-icon.mjs",
-    "build:win": "electron-builder --win nsis portable --x64 --publish never",
-    "build:dir": "electron-builder --dir --win --x64",
+    "build:win": "node scripts/build-icon.mjs && electron-builder --config electron-builder.config.mjs --win nsis portable --x64 --publish never",
+    "build:dir": "node scripts/build-icon.mjs && electron-builder --config electron-builder.config.mjs --dir --win --x64",
     "verify:artifacts": "node scripts/verify-artifacts.mjs"
   },
   "dependencies": {

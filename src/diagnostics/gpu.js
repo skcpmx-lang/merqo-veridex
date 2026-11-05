@@ -296,17 +296,6 @@ export function registerGpu(registry) {
     }
   });
 
-  registry.registerProvider({
-    id: 'dxdiag.gpu',
-    title: 'DirectX Diagnostic Tool report (dxdiag /t)',
-    priority: 3,
-    collect: async (ctx) => {
-      // dxdiag is slow (typically 5–25 s) and must never block the quick scan, so
-      // this provider is only used by the dedicated DirectX task.
-      return { directxVersion: unsupported('The DirectX report is collected only by the dedicated DirectX task', 'dxdiag.gpu') };
-    }
-  });
-
   registry.registerTask({
     id: 'gpu.info',
     module: 'gpu',
@@ -333,14 +322,14 @@ export function registerGpu(registry) {
     priority: 1,
     collect: async (ctx) => {
       const target = `${process.env.TEMP ?? process.env.TMP ?? '.'}\\veridex-dxdiag-${Date.now()}.txt`;
-      if (!ctx.runner.isWindows) return { directxVersion: unsupported('dxdiag is only available on Windows', 'dxdiag.gpu') };
+      if (!ctx.runner.isWindows) return { directxVersion: unsupported('dxdiag is only available on Windows', 'directx-dxdiag.gpu') };
 
-      const run = await runReadOnly(ctx.runner, 'dxdiag.gpu', ['/t', target, '/whql:off'], { timeoutMs: Math.max(ctx.timeoutMs, 45_000) });
+      const run = await runReadOnly(ctx.runner, 'directx-dxdiag.gpu', ['/t', target, '/whql:off'], { timeoutMs: Math.max(ctx.timeoutMs, 45_000) });
       if (!run.ok) {
         return {
           directxVersion: field(null, {
             status: Status.ERROR,
-            source: 'dxdiag.gpu',
+            source: 'directx-dxdiag.gpu',
             error: `dxdiag did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`}). The DirectX tool is slow on some systems; this does not indicate a GPU fault.`
           })
         };
@@ -352,12 +341,12 @@ export function registerGpu(registry) {
         await unlink(target).catch(() => {});
         const parsed = parseDxDiag(text);
         return {
-          directxVersion: parsed.directxVersion ? available(parsed.directxVersion, 'dxdiag.gpu') : unavailable('DirectX version not found in the dxdiag report', 'dxdiag.gpu'),
-          reportedDisplayMemory: parsed.displayMemory ? available(parsed.displayMemory, 'dxdiag.gpu') : unavailable('Display memory not found in the dxdiag report', 'dxdiag.gpu'),
-          monitors: parsed.monitors.length > 0 ? available(parsed.monitors, 'dxdiag.gpu') : unavailable('Monitor names not found in the dxdiag report', 'dxdiag.gpu')
+          directxVersion: parsed.directxVersion ? available(parsed.directxVersion, 'directx-dxdiag.gpu') : unavailable('DirectX version not found in the dxdiag report', 'directx-dxdiag.gpu'),
+          reportedDisplayMemory: parsed.displayMemory ? available(parsed.displayMemory, 'directx-dxdiag.gpu') : unavailable('Display memory not found in the dxdiag report', 'directx-dxdiag.gpu'),
+          monitors: parsed.monitors.length > 0 ? available(parsed.monitors, 'directx-dxdiag.gpu') : unavailable('Monitor names not found in the dxdiag report', 'directx-dxdiag.gpu')
         };
       } catch (error) {
-        return { directxVersion: failed(`dxdiag report could not be read: ${error instanceof Error ? error.message : String(error)}`, 'dxdiag') };
+        return { directxVersion: failed(`dxdiag report could not be read: ${error instanceof Error ? error.message : String(error)}`, 'directx-dxdiag.gpu') };
       }
     }
   });

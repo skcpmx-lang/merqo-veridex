@@ -52,6 +52,11 @@ import { field } from '../core/field.js';
 export const FORBIDDEN_COMMANDS = Object.freeze([
   { id: 'format-volume', pattern: /\bformat(\.com)?\b[\s\S]*\b[a-z]:/i, reason: 'Formatting a volume destroys data.' },
   { id: 'diskpart-clean', pattern: /\bdiskpart\b[\s\S]*\bclean\b|\bclean\s+all\b/i, reason: 'Diskpart clean wipes partition tables.' },
+  // A diskpart script is executed blind: its contents are not visible to the classifier,
+  // so `diskpart /s wipe.txt` was previously allowed while `diskpart` + `clean` was not.
+  // Any scripted diskpart run is refused for that reason. Interactive diskpart is not
+  // something the application starts, so nothing legitimate is lost.
+  { id: 'diskpart-script', pattern: /\bdiskpart\b[\s\S]*\/s\b/i, reason: 'A diskpart script is never run: its contents cannot be inspected before execution, and diskpart can destroy partition tables.' },
   { id: 'mkfs', pattern: /\bmkfs(\.|\s)|\bmke2fs\b/i, reason: 'Creating a filesystem destroys existing data.' },
   { id: 'chkdsk-repair', pattern: /\bchkdsk\b[\s\S]*\s\/f\b|\bchkdsk\b[\s\S]*\s\/r\b/i, reason: 'A repairing chkdsk pass modifies the filesystem. VERIDEX runs read-only checks (/scan) only.' },
   { id: 'sfc-repair', pattern: /\bsfc\b[\s\S]*\/(scannow|scanfile|verifyfile)\b/i, reason: 'A repairing SFC pass modifies system files. VERIDEX runs /VERIFYONLY only.' },
@@ -66,6 +71,11 @@ export const FORBIDDEN_COMMANDS = Object.freeze([
   { id: 'firmware-flash', pattern: /\bflashrom\b|\bafuwin\b|\bwinsat\b.*\breset\b|\bWin32_BIOS.*\bflash\b/i, reason: 'Firmware writes are out of scope and can brick a machine.' },
   { id: 'shutdown', pattern: /\bshutdown\b[\s\S]*\/s\b/i, reason: 'VERIDEX never shuts down the machine it is inspecting.' },
   { id: 'restore-point', pattern: /\brstrui\b|\bcheckpoint-computer\b/i, reason: 'System restore is a modifying operation and is out of scope.' },
+  // The same reasoning applies to an inline script handed to a shell. VERIDEX does run
+  // PowerShell for read-only CIM queries, so this cannot be a blanket refusal of the
+  // shell; it refuses the combination of a shell with a disk/volume-destroying verb,
+  // which is the pattern that would otherwise bypass the rules above.
+  { id: 'shell-destructive', pattern: /\b(powershell|pwsh|cmd)(\.exe)?\b[\s\S]*\b(format-volume|clear-disk|remove-partition|initialize-disk|format\s+[a-z]:)\b/i, reason: 'A shell command that formats or clears a disk is refused however it is spelled.' },
   { id: 'delete-recursive', pattern: /\b(rm|del|erase|rd|rmdir)\b[\s\S]*\s(\/s|-rf|-r|--recursive)\b/i, reason: 'Recursive deletion is out of scope.' },
   { id: 'power-plan-write', pattern: /\bpowercfg\b[\s\S]*(\/change|\/setactive|\/hibernate)\b/i, reason: 'VERIDEX reads power configuration (/query) and does not change it.' },
   { id: 'winsat-modify', pattern: /\bwinsat\b[\s\S]*\b(disk|mem|cpu)\b[\s\S]*\b-(read|write)\b.*\bflush\b/i, reason: 'Winsat assessment writes to the disk and is not part of a read-only diagnostic.' },

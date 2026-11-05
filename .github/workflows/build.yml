@@ -1,0 +1,127 @@
+name: Build and test
+
+# Runs on every push and pull request. Three jobs, in increasing cost:
+#   verify   — fast, portable, no Windows needed (lint/static checks + unit tests)
+#   test     — unit + integration tests on Linux and Windows
+#   package  — a real Windows build of the installer and portable zip, as an artifact
+#
+# The packaging job only runs on `main` or when manually dispatched, because a full
+# Electron build is slow and produces a large artifact.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  verify:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Static checks
+        run: npm run check
+
+      - name: Requirement status is consistent with the repository
+        run: npm run audit:requirements -- --check
+
+  test:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the application icon
+        run: npm run icon
+
+      - name: Unit and integration tests
+        run: npm test
+        shell: bash
+
+      - name: Upload test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            *.log
+            logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package:
+    name: Windows package
+    needs: [verify, test]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the application icon
+        run: npm run icon
+
+      - name: Build installer and portable zip
+        run: npm run build:win
+        env:
+          # An empty CSC_LINK keeps electron-builder from looking for a certificate.
+          # VERIDEX ships unsigned and the release notes say so.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify the artifacts
+        run: npm run verify:artifacts
+
+      - name: Show what was produced
+        run: |
+          Get-ChildItem dist | Select-Object Name, Length
+          Get-Content dist/SHA256SUMS.txt
+        shell: pwsh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veridex-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          retention-days: 30

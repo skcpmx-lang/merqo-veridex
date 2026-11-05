@@ -42,7 +42,9 @@ const STATUS_LABEL = {
 async function exists(relative) {
   if (!relative || relative === 'n/a' || relative === 'none') return true;
   // A requirement may name several files, or a glob-ish directory.
-  const candidates = String(relative).split(/,\s*/).map((part) => part.trim()).filter(Boolean);
+  // A reference may name several files joined by ", " or " + " (the data uses both:
+  // "src/providers/smart-ata.js + src/providers/smart-nvme.js").
+  const candidates = String(relative).split(/\s*[,+]\s*/).map((part) => part.trim()).filter(Boolean);
   for (const candidate of candidates) {
     // A requirement may name a symbol inside a file (`file.js#functionName`), so
     // strip the fragment before checking the path exists on disk.
@@ -86,6 +88,32 @@ for (const requirement of requirements) {
   if (['IM', 'TS', 'VER'].includes(status)) {
     if (!(await exists(requirement.impl))) {
       problems.push(`${requirement.id}: claims ${status} but "${requirement.impl}" does not exist`);
+    }
+  }
+
+  // A reference that points at a file nobody wrote is a broken promise, whatever the
+  // status. The auditor previously validated `test` only for TS/VER claims and never
+  // looked at `doc` at all, so 47 entries cited files that did not exist while the
+  // audit reported a clean bill of health.
+  if (requirement.impl && requirement.impl !== 'n/a' && requirement.impl !== 'none') {
+    if (!(await exists(requirement.impl))) {
+      problems.push(`${requirement.id}: implementation reference "${requirement.impl}" does not exist`);
+    }
+  }
+
+  // The document a requirement points a reader at must exist.
+  if (requirement.doc && requirement.doc !== 'n/a' && requirement.doc !== 'none') {
+    if (!(await exists(requirement.doc))) {
+      problems.push(`${requirement.id}: documentation reference "${requirement.doc}" does not exist`);
+    }
+  }
+
+  // Any test path named, even for an unimplemented requirement, must exist if it is
+  // presented as the place the test will live — a plan naming a file is fine, but a
+  // path is not a promise that can be silently broken.
+  if (requirement.test && requirement.test !== 'n/a' && requirement.test !== 'none') {
+    if (!(await exists(requirement.test))) {
+      problems.push(`${requirement.id}: test reference "${requirement.test}" does not exist`);
     }
   }
 

@@ -34,18 +34,18 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 | R-01-11 | GPU core clock, memory clock, driver version, DirectX support | `src/diagnostics/gpu.js` | `tests/unit/gpu.test.js` | **TS** |
 | R-01-12 | GPU utilization, temperature, power where available | `src/diagnostics/gpu.js` | `tests/unit/gpu.test.js` | **TS** |
 | R-01-13 | Multi-GPU enumeration | `src/diagnostics/gpu.js` | `tests/unit/gpu.test.js` | **TS** |
-| R-01-14 | Motherboard manufacturer/model/product/chipset/revision | `src/diagnostics/motherboard.js` | `tests/unit/motherboard.test.js` | **IM** |
-| R-01-15 | BIOS vendor/version/release date, UEFI status, Secure Boot status | `src/diagnostics/motherboard.js` | `tests/unit/motherboard.test.js` | **IM** |
+| R-01-14 | Motherboard manufacturer/model/product/chipset/revision | `src/diagnostics/motherboard.js` | `tests/unit/cpu.test.js` | **IM** |
+| R-01-15 | BIOS vendor/version/release date, UEFI status, Secure Boot status | `src/diagnostics/motherboard.js` | `tests/unit/cpu.test.js` | **IM** |
 | R-01-16 | TPM version and status | `src/diagnostics/security.js` | `tests/unit/security.test.js` | **IM** |
-| R-01-17 | System manufacturer/model/SKU/serial (privacy-gated)/architecture | `src/diagnostics/system.js` | `tests/unit/system.test.js` | **IM** |
-| R-01-18 | RAM total/used/available/utilization | `src/diagnostics/memory.js` | `tests/unit/memory.test.js` | **IM** |
-| R-01-19 | RAM generation, configured speed, form factor | `src/diagnostics/memory.js` | `tests/unit/memory.test.js` | **IM** |
-| R-01-20 | Per-module capacity/manufacturer/part number/serial (gated)/slot/speed | `src/diagnostics/memory.js` | `tests/unit/memory.test.js` | **IM** |
-| R-01-21 | RAM channel/slot configuration | `src/diagnostics/memory.js` | `tests/unit/memory.test.js` | **IM** |
-| R-01-22 | Storage enumeration incl. HDD/SATA SSD/NVMe/USB with model, capacity, interface, firmware, serial | `src/diagnostics/storage.js` | `tests/unit/storage.test.js` | **IM** |
+| R-01-17 | System manufacturer/model/SKU/serial (privacy-gated)/architecture | `src/diagnostics/system.js` | `tests/unit/cpu.test.js` | **IM** |
+| R-01-18 | RAM total/used/available/utilization | `src/diagnostics/memory.js` | `tests/unit/cpu.test.js` | **IM** |
+| R-01-19 | RAM generation, configured speed, form factor | `src/diagnostics/memory.js` | `tests/unit/cpu.test.js` | **IM** |
+| R-01-20 | Per-module capacity/manufacturer/part number/serial (gated)/slot/speed | `src/diagnostics/memory.js` | `tests/unit/cpu.test.js` | **IM** |
+| R-01-21 | RAM channel/slot configuration | `src/diagnostics/memory.js` | `tests/unit/cpu.test.js` | **IM** |
+| R-01-22 | Storage enumeration incl. HDD/SATA SSD/NVMe/USB with model, capacity, interface, firmware, serial | `src/diagnostics/storage.js` | `tests/integration/scan.test.js` | **IM** |
 | R-01-23 | SATA/USB SMART: temperature, power-on hours, power cycles, reallocated sectors, uncorrectable errors | `src/providers/smart-ata.js` | `tests/unit/smart.test.js` | **TS** |
 | R-01-24 | NVMe health log: critical warning, available spare, percentage used, media errors | `src/providers/smart-nvme.js` | `tests/unit/smart.test.js` | **TS** |
-| R-01-25 | Independent SATA and NVMe diagnostic providers with fallback | `src/providers/smart.js` | `tests/unit/smart.test.js` | **NS** |
+| R-01-25 | Independent SATA and NVMe diagnostic providers with fallback | `src/providers/smart-ata.js + src/providers/smart-nvme.js` | `tests/unit/smart.test.js` | **NS** |
 | R-01-26 | Every collected field carries value/source/timestamp/availability metadata | `src/core/field.js` | `tests/unit/field.test.js` | **TS** |
 
 ## 02 Battery
@@ -59,7 +59,7 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 | R-02-05 | Voltage, charge/discharge state, AC adapter status | `src/diagnostics/battery.js` | `tests/unit/battery.test.js` | **TS** |
 | R-02-06 | Charge/discharge rate and estimated runtime with measurement basis disclosed | `src/diagnostics/battery.js` | `tests/unit/battery.test.js` | **TS** |
 | R-02-07 | Battery temperature only from a real sensor | `src/diagnostics/battery.js` | `tests/unit/battery.test.js` | **TS** |
-| R-02-08 | Multi-provider battery fallback chain with per-method success/failure logging | `src/providers/battery-providers.js` | `tests/unit/battery.test.js` | **NS** |
+| R-02-08 | Multi-provider battery fallback chain with per-method success/failure logging | `src/diagnostics/battery.js` | `tests/unit/battery.test.js` | **NS** |
 | R-02-09 | Battery health dashboard, capacity history and assessment report section | `src/history/store.js` | `tests/unit/health.test.js` | **TS** |
 
 ## 03 Display
@@ -129,10 +129,10 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 | --- | --- | --- | --- | --- |
 | R-08-01 | CPU single-core benchmark with deterministic workload | `src/benchmarking/cpu-bench.js` | `tests/unit/bench-cpu.test.js` | **TS** |
 | R-08-02 | CPU multi-core benchmark with bounded worker pool | `src/benchmarking/cpu-bench.js` | `tests/unit/bench-cpu.test.js` | **TS** |
-| R-08-03 | RAM performance, bandwidth and stability tests | `src/benchmarking/memory-bench.js` | `tests/unit/bench-memory.test.js` | **NS** |
+| R-08-03 | RAM performance, bandwidth and stability tests | `n/a` | — | **NS** |
 | R-08-04 | Storage sequential/random read and write benchmark using a non-destructive temp file | `src/benchmarking/disk-bench.js` | `tests/unit/bench-disk.test.js` | **TS** |
-| R-08-05 | GPU performance test where supported, else UNSUPPORTED | `src/benchmarking/gpu-bench.js` | `tests/unit/bench-gpu.test.js` | **NS** |
-| R-08-06 | System responsiveness composite score from measured subsystems | `src/benchmarking/system-score.js` | `tests/unit/bench-cpu.test.js` | **NS** |
+| R-08-05 | GPU performance test where supported, else UNSUPPORTED | `n/a` | — | **NS** |
+| R-08-06 | System responsiveness composite score from measured subsystems | `n/a` | `tests/unit/bench-cpu.test.js` | **NS** |
 
 ## 08 Stress
 
@@ -153,11 +153,11 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-10-01 | Windows edition/version/build/install date/activation/architecture/uptime/boot time | `src/diagnostics/windows.js` | `tests/unit/windows.test.js` | **NS** |
-| R-10-02 | Installed Windows features, services, update status | `src/diagnostics/windows.js` | `tests/unit/windows.test.js` | **NS** |
+| R-10-01 | Windows edition/version/build/install date/activation/architecture/uptime/boot time | `src/diagnostics/windows.js` | — | **NS** |
+| R-10-02 | Installed Windows features, services, update status | `src/diagnostics/windows.js` | — | **NS** |
 | R-10-03 | Security posture: Defender, Firewall, BitLocker, Device Encryption, Secure Boot, TPM, UAC, WinRE, System Restore | `src/diagnostics/security.js` | `tests/unit/security.test.js` | **NS** |
-| R-10-04 | SFC/DISM component-store health: read-only verification first, confirmation before any repair | `src/diagnostics/windows-health.js` | `tests/unit/windows.test.js` | **NS** |
-| R-10-05 | Event logs, critical/warning errors, BSOD history, crash reports, startup programs | `src/diagnostics/windows-health.js` | `tests/unit/windows.test.js` | **NS** |
+| R-10-04 | SFC/DISM component-store health: read-only verification first, confirmation before any repair | `n/a` | — | **NS** |
+| R-10-05 | Event logs, critical/warning errors, BSOD history, crash reports, startup programs | `n/a` | — | **NS** |
 
 ## 11 Drivers
 
@@ -165,15 +165,15 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 | --- | --- | --- | --- | --- |
 | R-11-01 | Driver inventory: name, manufacturer, version, provider, date, class, status, signing, instance id, error code | `src/diagnostics/drivers.js` | `tests/unit/drivers.test.js` | **NS** |
 | R-11-02 | Driver health classification: missing, disabled, error state, signing failure — evidence-based only | `src/diagnostics/drivers.js` | `tests/unit/drivers.test.js` | **NS** |
-| R-11-03 | Driver backup/export/restore with report, never automatic install/update/remove | `src/diagnostics/driver-backup.js` | `tests/unit/drivers.test.js` | **NS** |
+| R-11-03 | Driver backup/export/restore with report, never automatic install/update/remove | `src/diagnostics/drivers.js` | `tests/unit/drivers.test.js` | **NS** |
 
 ## 12 Inventory
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-12-01 | Installed applications: name, version, publisher, install date, location, uninstall info | `src/diagnostics/software.js` | `tests/unit/software.test.js` | **NS** |
-| R-12-02 | Windows components, startup apps, background processes, running services, scheduled tasks, features | `src/diagnostics/software.js` | `tests/unit/software.test.js` | **NS** |
-| R-12-03 | Process monitoring: name, PID, CPU, RAM, disk; no unnecessary retention of sensitive process data | `src/diagnostics/processes.js` | `tests/unit/software.test.js` | **NS** |
+| R-12-01 | Installed applications: name, version, publisher, install date, location, uninstall info | `n/a` | — | **NS** |
+| R-12-02 | Windows components, startup apps, background processes, running services, scheduled tasks, features | `n/a` | — | **NS** |
+| R-12-03 | Process monitoring: name, PID, CPU, RAM, disk; no unnecessary retention of sensitive process data | `n/a` | — | **NS** |
 
 ## 13 Fallback
 
@@ -189,7 +189,7 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
 | R-14-01 | Standard-user mode by default; per-feature admin detection; UAC elevation request; denied handling; state display | `src/platform/permissions.js` | `tests/integration/diagnostic-run.test.js` | **TS** |
-| R-14-02 | Least privilege: privileged collection isolated in an elevated helper process, not the whole app | `src/app/helper/collector.js` | `tests/unit/permissions.test.js` | **NS** |
+| R-14-02 | Least privilege: privileged collection isolated in an elevated helper process, not the whole app | `n/a` | — | **NS** |
 
 ## 15 Health
 
@@ -213,84 +213,84 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-16-01 | Vendor-agnostic detection across Dell/HP/Lenovo/ASUS/Acer/MSI/Surface/Samsung/Toshiba/Gigabyte/Apple Boot Camp with UNSUPPORTED rendering for absent data | `src/diagnostics/system.js + vendor heuristics` | `tests/unit/system.test.js` | **NS** |
-| R-16-02 | Windows 10/11 x64 support matrix with documented build constraints | `docs/COMPATIBILITY.md + src/app/env.js` | `tests/unit/field.test.js` | **NS** |
+| R-16-01 | Vendor-agnostic detection across Dell/HP/Lenovo/ASUS/Acer/MSI/Surface/Samsung/Toshiba/Gigabyte/Apple Boot Camp with UNSUPPORTED rendering for absent data | `n/a` | `tests/unit/cpu.test.js` | **NS** |
+| R-16-02 | Windows 10/11 x64 support matrix with documented build constraints | `n/a` | `tests/unit/field.test.js` | **NS** |
 
 ## 17 UI
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-17-01 | Premium futuristic dashboard with device overview, health, hardware summary, live CPU/GPU/RAM/disk/battery/temp/network widgets, scan progress, alerts, quick actions | `src/renderer/pages/dashboard.js` | `tests/integration/ui-contract.test.js` | **NS** |
-| R-17-02 | Dark theme (primary) and fully implemented light theme with glass panels, glow, gradients, professional typography | `src/renderer/styles/theme.css` | `tests/unit/theme.test.js` | **NS** |
+| R-17-01 | Premium futuristic dashboard with device overview, health, hardware summary, live CPU/GPU/RAM/disk/battery/temp/network widgets, scan progress, alerts, quick actions | `n/a` | — | **NS** |
+| R-17-02 | Dark theme (primary) and fully implemented light theme with glass panels, glow, gradients, professional typography | `n/a` | — | **NS** |
 
 ## 18 Layout
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-18-01 | Resizable window, min/max size, responsive grid, no overlap/clipping/overflow at supported sizes; verified by automated layout audit | `src/renderer/styles/layout.css + tests/integration/ui-contract.test.js` | `tests/integration/ui-contract.test.js` | **NS** |
-| R-18-02 | High-DPI / display-scaling and multi-monitor handling | `src/app/window.js` | `tests/unit/display.test.js` | **NS** |
+| R-18-01 | Resizable window, min/max size, responsive grid, no overlap/clipping/overflow at supported sizes; verified by automated layout audit | `n/a` | — | **NS** |
+| R-18-02 | High-DPI / display-scaling and multi-monitor handling | `n/a` | — | **NS** |
 
 ## 19 Animation
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-19-01 | Animation system for startup, page transitions, cards, modals, progress + mandatory reduced-motion option | `src/renderer/styles/motion.css + settings` | `tests/unit/theme.test.js` | **NS** |
-| R-19-02 | Dashboard widget customization and arrangement persistence | `src/renderer/pages/dashboard.js + settings store` | `tests/unit/history.test.js` | **NS** |
+| R-19-01 | Animation system for startup, page transitions, cards, modals, progress + mandatory reduced-motion option | `n/a` | — | **NS** |
+| R-19-02 | Dashboard widget customization and arrangement persistence | `n/a` | — | **NS** |
 
 ## 20 Notifications
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-20-01 | Welcome/first-launch experience with device summary and privacy notice | `src/renderer/pages/welcome.js` | `tests/integration/ui-contract.test.js` | **NS** |
-| R-20-02 | Toast notifications and progress feedback for diagnostic start/complete/fail, warnings, permission needs, report generation | `src/renderer/components/toast.js` | `tests/integration/ui-contract.test.js` | **NS** |
+| R-20-01 | Welcome/first-launch experience with device summary and privacy notice | `n/a` | — | **NS** |
+| R-20-02 | Toast notifications and progress feedback for diagnostic start/complete/fail, warnings, permission needs, report generation | `n/a` | — | **NS** |
 
 ## 21 Shortcuts
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-21-01 | Keyboard shortcut system with reference screen, conflict detection and customization | `src/renderer/shortcuts.js` | `tests/unit/shortcuts.test.js` | **NS** |
+| R-21-01 | Keyboard shortcut system with reference screen, conflict detection and customization | `n/a` | — | **NS** |
 
 ## 22 Search
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-22-01 | Global search across pages, tests, settings, history and reports with suggestions | `src/renderer/search-index.js` | `tests/unit/search.test.js` | **NS** |
-| R-22-02 | Sidebar/category navigation, breadcrumbs, quick access menu | `src/renderer/nav.js` | `tests/integration/ui-contract.test.js` | **NS** |
+| R-22-01 | Global search across pages, tests, settings, history and reports with suggestions | `n/a` | — | **NS** |
+| R-22-02 | Sidebar/category navigation, breadcrumbs, quick access menu | `n/a` | — | **NS** |
 
 ## 23 Settings
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-23-01 | Settings centre where every setting has a real, persisted effect (appearance, theme, accent, language, layout, notifications, motion, diagnostics, reports, startup, storage, privacy, monitoring interval, benchmark, stress safety, shortcuts, about) | `src/renderer/pages/settings.js + src/core/settings.js` | `tests/unit/settings.test.js` | **NS** |
+| R-23-01 | Settings centre where every setting has a real, persisted effect (appearance, theme, accent, language, layout, notifications, motion, diagnostics, reports, startup, storage, privacy, monitoring interval, benchmark, stress safety, shortcuts, about) | `n/a` | — | **NS** |
 
 ## 24 History
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
 | R-24-01 | Diagnostic history persistence for scans, tests, benchmarks, stress runs and reports | `src/history/store.js` | `tests/unit/health.test.js` | **TS** |
-| R-24-02 | Comparison of previous vs current runs (battery health, SSD health, temperature, performance, hardware, drivers) | `src/history/compare.js` | `tests/unit/history.test.js` | **NS** |
-| R-24-03 | Structured logging for app, diagnostics, provider failures, permission failures, detection errors, build info | `src/core/logger.js` | `tests/unit/logger.test.js` | **NS** |
+| R-24-02 | Comparison of previous vs current runs (battery health, SSD health, temperature, performance, hardware, drivers) | `src/history/compare.js` | — | **NS** |
+| R-24-03 | Structured logging for app, diagnostics, provider failures, permission failures, detection errors, build info | `src/core/logger.js` | — | **NS** |
 
 ## 25 Security
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
 | R-25-01 | Read-only diagnostics by default; destructive operations impossible without explicit consent | `src/security/guard.js` | `tests/unit/security.test.js` | **IM** |
-| R-25-02 | Crash handling, unexpected-shutdown recovery, interrupted-test recovery | `src/core/recovery.js` | `tests/unit/recovery.test.js` | **NS** |
-| R-25-03 | Secure local storage, sensitive-field redaction, user-controlled deletion and export scoping | `src/security/privacy.js` | `tests/unit/privacy.test.js` | **IM** |
+| R-25-02 | Crash handling, unexpected-shutdown recovery, interrupted-test recovery | `n/a` | — | **NS** |
+| R-25-03 | Secure local storage, sensitive-field redaction, user-controlled deletion and export scoping | `src/security/privacy.js` | — | **IM** |
 
 ## 26 Offline
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-26-01 | Offline-first operation, zero paid dependencies, no telemetry, no data upload, license-clean dependencies | `src/app/net.js` | `tests/integration/dependency-licences.test.js` | **NS** |
+| R-26-01 | Offline-first operation, zero paid dependencies, no telemetry, no data upload, license-clean dependencies | `n/a` | — | **NS** |
 
 ## 27 Architecture
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-27-01 | Layered module separation with documented interfaces and no circular dependencies (enforced by script) | `src/**` | `tests/integration/architecture.test.js` | **NS** |
-| R-27-02 | Clean code gate: syntax check, no dead entry points, no unresolved imports, consistent formatting | `scripts/check.mjs` | `tests/integration/architecture.test.js` | **NS** |
+| R-27-01 | Layered module separation with documented interfaces and no circular dependencies (enforced by script) | `src/**` | — | **NS** |
+| R-27-02 | Clean code gate: syntax check, no dead entry points, no unresolved imports, consistent formatting | `scripts/check.mjs` | — | **NS** |
 
 ## 28 Repository
 
@@ -302,7 +302,7 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-29-01 | GitHub Actions on windows-latest: checkout, setup, restore, format check, static analysis, unit tests, integration tests, build, package, installer, portable, artifact validation, SHA-256, release on tag | `.github/workflows/build.yml, release.yml` | `tests/integration/workflow.test.js` | **NS** |
+| R-29-01 | GitHub Actions on windows-latest: checkout, setup, restore, format check, static analysis, unit tests, integration tests, build, package, installer, portable, artifact validation, SHA-256, release on tag | `n/a` | — | **NS** |
 
 ## 30 Icon
 
@@ -314,13 +314,13 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-31-01 | About screen with brand, founder, contact, version, build, copyright, licence, runtime, architecture, acknowledgements, third-party licences | `src/renderer/pages/about.js` | `tests/integration/ui-contract.test.js` | **NS** |
+| R-31-01 | About screen with brand, founder, contact, version, build, copyright, licence, runtime, architecture, acknowledgements, third-party licences | `n/a` | — | **NS** |
 
 ## 32 Unsigned
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-32-01 | Unsigned EXE build, SHA-256 publication, SmartScreen disclosure without unsafe bypass advice | `electron-builder config + scripts/verify-artifacts.mjs` | `tests/unit/build-config.test.js` | **NS** |
+| R-32-01 | Unsigned EXE build, SHA-256 publication, SmartScreen disclosure without unsafe bypass advice | `electron-builder.config.mjs + scripts/verify-artifacts.mjs` | — | **NS** |
 
 ## 33 QA
 
@@ -339,5 +339,5 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 75 
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-35-01 | Automated requirement audit that fails when a requirement claims a status its artifacts do not support | `scripts/audit-requirements.mjs` | `tests/integration/requirements-audit.test.js` | **NS** |
+| R-35-01 | Automated requirement audit that fails when a requirement claims a status its artifacts do not support | `scripts/audit-requirements.mjs` | — | **NS** |
 | R-35-02 | Final documentation set and release verification report | `docs/**` | `tests/integration/docs.test.js` | **NS** |

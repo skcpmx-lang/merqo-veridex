@@ -37,6 +37,17 @@ export const PROVIDER_TIERS = Object.freeze({
   'powercfg-report': SourceTier.DERIVED,
   'computed': SourceTier.DERIVED,
   'model-table': SourceTier.DERIVED,
+  // dxdiag is a report the OS generates which VERIDEX then parses, so it is derived in
+  // the same way a powercfg report is: one step removed from the live API.
+  'directx-dxdiag': SourceTier.DERIVED,
+  // Windows servicing inventory read through Get-WindowsOptionalFeature / Get-Service /
+  // Get-CimInstance — the same authoritative interfaces as the CIM providers, reached
+  // through PowerShell rather than a WMI query.
+  'system-features': SourceTier.AUTHORITATIVE,
+  // Action provider, not a measurement: it exists to describe and run driver export on
+  // request and contributes no health evidence. Listed explicitly so it does not fall
+  // through to the heuristic default by accident.
+  'driver-export': SourceTier.DERIVED,
   'vendor-heuristic': SourceTier.HEURISTIC,
   'chipset-heuristic': SourceTier.HEURISTIC
 });
