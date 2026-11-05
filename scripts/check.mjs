@@ -52,8 +52,26 @@ async function walk(dir, filter) {
 async function checkModules() {
   const files = await walk(path.join(ROOT, 'src'), (name) => name.endsWith('.js'));
 
+  // Electron entry points cannot be imported outside Electron: the runtime modules
+  // are CommonJS and only resolve inside the packaged app. They are still parsed
+  // (so a syntax error fails the check) but their imports are verified statically
+  // by checkNamedImports instead.
+  const ENTRY_POINTS = new Set(['src/app/main.js']);
+
   for (const file of files) {
-    const relative = path.relative(ROOT, file);
+    const relative = path.relative(ROOT, file).split(path.sep).join('/');
+    if (ENTRY_POINTS.has(relative)) {
+      // Electron entry points cannot be executed here, but they can still be parsed.
+      // `node --check` understands ESM and needs no child-process gymnastics.
+      const { spawnSync } = await import('node:child_process');
+      const parsed = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+      if (parsed.status !== 0) {
+        const message = (parsed.stderr || '').split('\n').filter(Boolean).slice(0, 2).join(' ');
+        report('error', 'modules', `${relative}: syntax error — ${message}`);
+      }
+      notes.push(`parsed (not imported): ${relative}`);
+      continue;
+    }
     try {
       // Importing executes module top-level code. That is intentional here: a
       // module that cannot be imported is a module that cannot ship.
