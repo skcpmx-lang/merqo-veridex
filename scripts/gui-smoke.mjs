@@ -125,15 +125,28 @@ async function execute(electron) {
   }
 
   if (!existsSync(reportPath)) {
+    // Print what the application said. An annotation that only carries a truncated tail has
+    // cost several runs in this project already.
     console.error(`The application exited (${exitCode}) without writing a verdict.`);
-    console.error(stdout.slice(-2_000));
-    emit('error', 'gui-smoke', `the app exited ${exitCode} before reporting. Last output: ${stdout.slice(-400)}`);
+    console.error('--- application output ---');
+    console.error(stdout.slice(-6_000) || '(nothing on stdout)');
+    if (stderr.trim()) console.error('--- application errors ---\n' + stderr.slice(-4_000));
+    const steps = (stdout.match(/^\s+(?:ok|FAIL|WARN)\s+.*$/gm) ?? []).slice(-8).join(' ;; ');
+    emit('error', 'gui-smoke', `the app exited ${exitCode} before reporting. Last steps: ${steps || '(none)'}`);
     process.exitCode = 1;
     return;
   }
 
   /** @type {{problems:string[], findings:Array<{level:string,message:string}>, electron:string, packaged:boolean}} */
-  const verdict = JSON.parse(readFileSync(reportPath, 'utf8'));
+  let verdict;
+  try {
+    verdict = JSON.parse(readFileSync(reportPath, 'utf8'));
+  } catch (error) {
+    console.error(`The verdict could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    emit('error', 'gui-smoke', `the verdict file was unreadable: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+    return;
+  }
   if (verdict.complete === false) {
     // The verdict was written incrementally (so a crash still leaves evidence) but the run
     // never reached its end. Say so, and treat it as a failure.

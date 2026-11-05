@@ -87,7 +87,13 @@ async function persist(final = false) {
   };
   try {
     await mkdir(path.dirname(reportTarget), { recursive: true });
-    await writeFile(reportTarget, JSON.stringify(payload, null, 2), 'utf8');
+    // Written to a sibling and renamed: the launcher polls this file, and reading a
+    // half-written JSON document is how the previous run produced no annotations at all -
+    // the launcher threw on JSON.parse and exited before it reported anything.
+    const temporary = `${reportTarget}.part`;
+    await writeFile(temporary, JSON.stringify(payload, null, 2), 'utf8');
+    const { rename } = await import('node:fs/promises');
+    await rename(temporary, reportTarget);
   } catch (error) {
     console.error(`could not write the verdict: ${error instanceof Error ? error.message : String(error)}`);
   }
