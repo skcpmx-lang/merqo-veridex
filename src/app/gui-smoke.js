@@ -370,22 +370,26 @@ async function main() {
   // ── 11. Shutdown ──────────────────────────────────────────────────────────
   // This step closes the window, which makes main.js quit. Everything up to here has
   // already been written to disk by persist(), so a clean shutdown cannot erase the record.
-  // Closing the window ends the process, so nothing can be measured after this call. It is
-  // last by construction, and everything before it has already been persisted.
-  const shutdown = await step('the app survives a window close and quits cleanly', async () => {
+  // Closing the window ends the process: main.js quits on window-all-closed, so nothing can
+  // be measured after this call and nothing can be written after it either. The verdict is
+  // therefore finalised *before* the close, and the shutdown step records only what it can
+  // observe on the way out.
+  //
+  // This ordering cost four runs to find. Every previous attempt closed the window and then
+  // tried to write, and the process was gone before the write happened.
+  await step('the app closes its window without crashing', async () => {
     const before = BrowserWindow.getAllWindows().length;
     record('info', `windows before close: ${before}`);
     if (before === 0) throw new Error('there was no window left to close — something closed it earlier');
-    // Do not await anything after close(): the process is going away.
+    await persist(true);
     target.close();
-    await sleep(500);
-    const remaining = BrowserWindow.getAllWindows().length;
-    record('info', `windows after close: ${remaining}`);
-    return remaining;
+    await sleep(400);
+    return { before, after: BrowserWindow.getAllWindows().length };
   });
-  void shutdown;
 
   // ── Verdict ───────────────────────────────────────────────────────────────
+  // Already finalised before the close; this is a belt-and-braces write for the case where
+  // the window refused to close and the process is still alive.
   await persist(true);
   console.log('');
   console.log(`${findings.length} finding(s), ${problems.length} problem(s)`);
