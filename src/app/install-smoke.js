@@ -24,6 +24,12 @@ import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from
 import path from 'node:path';
 
 const reportPath = process.env.VERIDEX_INSTALL_SMOKE_REPORT ?? path.join(app.getPath('temp'), 'veridex-install-smoke.json');
+
+// The same checks run for the portable build, which is the same application extracted to a
+// temporary directory by its self-extracting wrapper. Two expectations differ there: a
+// portable build ships no uninstaller and no shortcuts, so their absence is not a failure.
+// Everything about whether the application itself works is identical.
+const variant = process.env.VERIDEX_SMOKE_VARIANT === 'portable' ? 'portable' : 'installed';
 const startedAt = Date.now();
 
 /** @type {{level: 'ok'|'info'|'warn'|'fail', message: string}[]} */
@@ -51,7 +57,7 @@ function fail(message) {
  */
 function persist(complete) {
   const verdict = {
-    kind: 'install-smoke',
+    kind: `${variant}-smoke`,
     app: {
       version: app.getVersion(),
       executable: process.execPath,
@@ -122,18 +128,24 @@ const entries = readdirSync(installDir).slice(0, 12);
 record('info', `install directory contains ${readdirSync(installDir).length} entries, e.g. ${entries.slice(0, 6).join(', ')}`);
 
 const expectedExe = path.join(installDir, 'VERIDEX.exe');
-if (existsSync(expectedExe)) record('ok', 'VERIDEX.exe is in the install directory');
+if (existsSync(expectedExe)) record('ok', 'VERIDEX.exe is present beside the running executable');
+else if (variant === 'portable') record('info', `portable build runs as ${path.basename(process.execPath)} from an extraction directory`);
 else record('warn', `VERIDEX.exe not found by name; running as ${path.basename(process.execPath)}`);
 
 // ── 2. The uninstaller, which is what makes this an installation ─────────────
-const uninstaller = readdirSync(installDir).find((name) => /^Uninstall .*\.exe$/i.test(name));
-if (uninstaller) {
-  const bytes = readFileSync(path.join(installDir, uninstaller), { encoding: null }).length;
-  record('ok', `uninstaller present: ${uninstaller} (${bytes} bytes)`);
+if (variant === 'portable') {
+  const hasUninstaller = readdirSync(installDir).some((name) => /^Uninstall .*\.exe$/i.test(name));
+  record('info', `portable build: uninstaller ${hasUninstaller ? 'present (unexpected)' : 'absent, as designed'}`);
 } else {
-  // This is a failure, not a warning: an application that cannot be removed from Programs and
-  // Features has no business being installed, and the brief requires a proper uninstaller.
-  fail('no Uninstall*.exe in the install directory — the installation cannot be removed normally');
+  const uninstaller = readdirSync(installDir).find((name) => /^Uninstall .*\.exe$/i.test(name));
+  if (uninstaller) {
+    const bytes = readFileSync(path.join(installDir, uninstaller), { encoding: null }).length;
+    record('ok', `uninstaller present: ${uninstaller} (${bytes} bytes)`);
+  } else {
+    // This is a failure, not a warning: an application that cannot be removed from Programs and
+    // Features has no business being installed, and the brief requires a proper uninstaller.
+    fail('no Uninstall*.exe in the install directory — the installation cannot be removed normally');
+  }
 }
 
 // ── 3. The data directory ─────────────────────────────────────────────────────
@@ -142,7 +154,7 @@ if (uninstaller) {
 // shows up.
 const userData = app.getPath('userData');
 record('info', `userData: ${userData}`);
-if (app.getPath('userData').toLowerCase().includes('program files')) {
+if (variant !== 'portable' && app.getPath('userData').toLowerCase().includes('program files')) {
   fail('the data directory is inside Program Files — settings would be unwritable for a standard user');
 }
 writeFileSync(path.join(app.getPath('temp'), 'veridex-install-smoke-probe.txt'), 'probe\n');

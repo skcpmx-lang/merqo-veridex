@@ -74,6 +74,18 @@ function emit(level, title, message) {
   console.log(`::${command}::${text}`);
 }
 
+/**
+ * Record a failure and announce it immediately.
+ * A summary at the end is lost if anything throws in between, which is how a step fails with
+ * no annotation and no explanation - the exact failure mode this project has paid for twice.
+ * @param {string} message
+ */
+function failNow(message) {
+  problems.push(message);
+  console.log(`FAIL  ${message}`);
+  emit('fail', 'install-smoke problem', message);
+}
+
 /** Write the report. Renamed into place so a reader never sees half a document. */
 function writeReport(complete, extra = {}) {
   const report = {
@@ -125,12 +137,23 @@ function run(command, args, options = {}) {
 const installerPath = (() => {
   const explicit = valueOf('--installer', null);
   if (explicit) return path.resolve(explicit);
-  for (const directory of ['release', 'dist', '.']) {
+  // dist/ is where electron-builder writes; release/ is a conventional alternative.
+  for (const directory of ['dist', 'release', '.']) {
     const full = path.join(ROOT, directory);
     if (!existsSync(full)) continue;
     const candidate = readdirSync(full).find((name) => /^VERIDEX-Setup-.*\.exe$/i.test(name));
     if (candidate) return path.join(full, candidate);
   }
+  console.log(`info  no ${'installer'} matched; searched: ${
+    ['dist', 'release', '.']
+      .map((directory) => {
+        const full = path.join(ROOT, directory);
+        if (!existsSync(full)) return `${directory} (absent)`;
+        const exes = readdirSync(full).filter((name) => name.toLowerCase().endsWith('.exe'));
+        return `${directory} (${exes.length ? exes.join(', ') : 'no .exe files'})`;
+      })
+      .join(' | ')
+  }`);
   return null;
 })();
 
@@ -271,10 +294,14 @@ async function main() {
       }
     }
   } catch (error) {
-    fail(error instanceof Error ? error.message : String(error));
+    failNow(`the install check crashed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
   }
 
-  writeReport(true);
+  try {
+    writeReport(true);
+  } catch (reportError) {
+    emit('fail', 'install-smoke', `the report could not be written: ${reportError.message}`);
+  }
   console.log('');
   console.log(`${findings.length} finding(s), ${problems.length} problem(s)`);
   console.log(`report written to ${reportPath}`);
