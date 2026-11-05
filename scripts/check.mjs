@@ -56,7 +56,10 @@ async function checkModules() {
   // are CommonJS and only resolve inside the packaged app. They are still parsed
   // (so a syntax error fails the check) but their imports are verified statically
   // by checkNamedImports instead.
-  const ENTRY_POINTS = new Set(['src/app/main.js']);
+  // Files that cannot be imported outside their runtime: the Electron main process
+  // (CommonJS electron modules) and the renderer controller (needs a DOM). Both are
+  // still syntax-checked, and their imports are verified statically below.
+  const ENTRY_POINTS = new Set(['src/app/main.js', 'src/renderer/app.js']);
 
   for (const file of files) {
     const relative = path.relative(ROOT, file).split(path.sep).join('/');
