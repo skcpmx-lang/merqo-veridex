@@ -3,11 +3,13 @@
 This document records **what has actually been executed**, per platform and per subsystem.
 It exists so that no compatibility claim in this project rests on intention.
 
-The honest summary: **the diagnostic layer has been executed on Windows, but never on real
-consumer hardware, and the packaged application has never been launched.** Since
-`npm run smoke:live` was added, real WMI, PowerShell, registry and systeminformation calls
-run on the Windows CI runner. That moves most subsystems from "never executed" to
-"runner-executed" — a real and useful step, and not the same thing as field-verified.
+The honest summary: **both the diagnostic layer and the packaged application have now been
+executed on Windows — and still never on real consumer hardware.** `npm run smoke:live`
+exercises real WMI, PowerShell, registry and systeminformation calls on the runner, which
+moves most subsystems from "never executed" to "runner-executed". Since the GUI, portable and
+installer harnesses were added, the application itself is launched, driven and removed on that
+runner too: installed silently, started from its installation directory, and uninstalled.
+That is a real and useful step, and it is not the same thing as field-verified.
 
 ---
 
@@ -22,10 +24,11 @@ Every subsystem is at one of four levels. They are not interchangeable.
 | **L2 — Logic-verified** | Parsers, scoring and wiring tested on Linux against recorded or simulated command output |
 | **L1 — Implemented only** | Written, wired, not executed |
 
-**No subsystem in VERIDEX is at L4.** The highest achieved is L3: the diagnostic layer now
-runs on a Windows runner against real Windows interfaces, and the packaging path produces a
-real installer. A CI runner is a virtual machine with synthetic hardware, though, and the
-packaged application has never been launched on it.
+**No subsystem in VERIDEX is at L4.** The highest achieved is L3: the diagnostic layer runs
+on a Windows runner against real Windows interfaces, and the packaging path now produces an
+installer that installs, an installed application that launches and works, and an uninstaller
+that removes it. A CI runner is still a virtual machine with synthetic hardware — no battery,
+no SMART, no discrete GPU — and no person has ever looked at the window.
 
 ---
 
@@ -74,7 +77,7 @@ about a real PC.
 | UAC elevation | `detectPermissionState` | **L3** | The elevation probe ran for real on the runner and correctly detected an elevated session. **The UAC prompt itself has still never appeared.** |
 | Read-only guard | `FORBIDDEN_COMMANDS` | **L2** | 16 destructive lines refused, 11 read-only permitted, tested. |
 | Keyboard, mouse, touchpad, audio, microphone, camera, ports | — | **L1** | Requirement R-16-01 (vendor-agnostic detection) and the input-device modules are **not started**. The manual checklist covers some of this by asking the user to look. |
-| Packaged application | Electron + NSIS | **L3** | Built on Windows; verified as a PE executable with a matching digest. **Never installed or launched.** |
+| Packaged application | Electron + NSIS | **L3** | Built, installed, launched and uninstalled on the Windows runner (CI run 42103239365): 13 GUI steps, 16 install-lifecycle checks, 10 portable checks, no problems. **Never installed on physical hardware and never seen by a person.** |
 
 ---
 

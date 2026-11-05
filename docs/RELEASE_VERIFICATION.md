@@ -15,37 +15,54 @@ listed here as **NOT VERIFIED**.
 
 | | |
 | --- | --- |
-| Release candidate | `1.0.0`, built by CI only — never installed |
-| Build produced | **Yes** — Windows x64 installer and portable, CI run 42030263971 |
-| Verified on | **nothing** |
-| Verified by | — |
-| Result | **Built, not run. No physical Windows machine has executed this build.** |
+| Release candidate | `1.0.0`, built by CI — installed, launched and removed on a Windows runner |
+| Build produced | **Yes** — Windows x64 installer and portable, CI run 42103239365 |
+| Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
+| Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
+| Result | **Installed, launched, uninstalled on a VM. Still never run on physical hardware.** |
 
-Every item below is unchecked except the build checks in §1, which CI performs and whose
-results are quoted. This table is deliberately not pre-filled: a verification document with
-tick marks nobody earned is worse than no document.
+Every item below is unchecked except the build checks in §1 and the machine checks that
+automation now performs, which are marked **VM** and quote their evidence. This table is
+deliberately not pre-filled: a verification document with tick marks nobody earned is worse
+than no document, and a tick earned on a virtual machine is not a tick for a PC with a battery,
+an SSD and a discrete GPU in it.
 
 ## What has been established, and what has not
 
-**Established** (Windows 10/11 runner, `windows-latest`, commit `25e9f22`+):
+**Established** (Windows Server 2025 runner, `windows-latest`, CI run 42103239365):
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `8650933234b3f4e22b3a8e2aabd2e48b2d2311d08cb8fd9573bfc528a848a0e9` |
-| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `6da0e220dfec25651e5c9e143ef7fbddb8c744fade85965683a0a7e641a9ffa7` |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `90a5602b6f4a5c72b68ed7838ea9308cd85d0303cbd3439c03ca9da76fd511c0` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `3627a41d3e3ce6e7c73c5ac6afad19099fa61766699da23c8aafb378e9d7ff0a` |
 
-- the full test suite passes on Windows as well as Linux (453 tests at the time of writing);
+- the full test suite passes on Windows as well as Linux (488 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
 - both executables are unsigned, as expected and as stated in the release notes;
-- a build manifest with these facts is published beside the artifacts.
+- a build manifest with these facts is published beside the artifacts;
+- **the unpacked build launched and was driven through its whole interface**: 13 steps, no
+  problems — boot, a visible window, the shipped `webPreferences`, a scan through the
+  interface, the rendered result, all 15 pages, history, live monitoring, a settings round
+  trip, JSON/HTML/PDF reports at real sizes (41 kB / 46 kB / 24 kB), cancellation, clean exit;
+- **the portable executable launched** from its extraction directory and reported a working
+  interface: 10 checks, no problems, 15 seconds end to end;
+- **the installer installed**: silently, per-user, into `%LOCALAPPDATA%\Programs\VERIDEX`,
+  with an uninstaller and both shortcuts; **the installed application then launched and
+  worked** — title, preload bridge with 18 invoke channels, a real `app:info` call, and all
+  15 pages rendered — and **the uninstaller removed it**; 16 checks, no problems.
 
 **Not established — and these are the reasons no release is published:**
 
-- the installer has **never been run**. Nobody has installed it.
-- the application has **never been launched**. The renderer has been exercised under jsdom
-  against a simulated bridge; a real BrowserWindow has never opened on a real desktop.
+- **No physical hardware.** Every run above is on a virtual machine with synthetic devices:
+  no battery, no SMART, no discrete GPU. The application's behaviour on a real PC — which is
+  the only place a laptop battery or an SSD's SMART data exists — has never been observed.
+- **A human has never used it.** The window is confirmed visible to the operating system; no
+  person has looked at it.
+- **UAC elevation has never been exercised**, so nothing in §4 has been done.
+- **SmartScreen has never been seen.** An unsigned download on a real machine warns; the
+  exact wording is unrecorded because nobody has downloaded it.
 - **partly addressed, and it took a live smoke test to do it.** As first written, this line
   said no WMI/CIM, PowerShell or registry call had ever executed. That was true, and it was
   hiding four defects: a zero measurement that crashed the memory task, a provider killed by
@@ -62,33 +79,47 @@ tick marks nobody earned is worse than no document.
   (GitHub serves artifacts from blob storage, outside the allowlist), so the binary has not
   been inspected locally either — only its recorded metadata.
 
-Everything in §2 onward is therefore unchecked, and remains so until a person runs the
-installer on a Windows machine and records what happened.
+§1 and the **VM** boxes in §2 and §7 are done. Everything else needs a person at a physical
+machine, and nothing in this document becomes **L4** evidence until that happens.
 
 ---
 
 ## 1. Build — performed by CI on windows-latest
 
 - [x] `npm ci` completes from a clean checkout
-- [x] `npm test` passes with zero failures (423 tests, both platforms)
+- [x] `npm test` passes with zero failures (488 tests, both platforms)
 - [x] `npm run check` reports 0 errors
 - [x] `npm run audit:requirements -- --check` reports no inconsistency
 - [x] `npm run build:win` produces an NSIS installer and a portable executable
 - [x] `npm run verify:artifacts` writes `dist/SHA256SUMS.txt` with an entry per artifact
+- [x] The packaged application passes validation: real x64 PE with version metadata matching
+      `package.json`, and an `app.asar` whose header parses and which contains the main
+      process, the preload and the renderer
 - [x] The recorded SHA-256 values match the files actually built
 - [ ] `dist/` contains no source maps, test files or development tooling **(not inspected: the artifact could not be downloaded here)**
 
-## 2. Launch — the first thing never yet done
+## 2. Launch
 
-- [ ] The application launches **as a standard user**
-- [ ] The window opens at a usable size and does not open maximised over the taskbar
-- [ ] No blank white frame, no flash of unstyled content
-- [ ] The dashboard shows **Unrated** everywhere and no invented numbers
-- [ ] The header states the application is local and read-only
-- [ ] The window title is `VERIDEX`
+`[x]` **VM** means an automated harness checked it on the Windows runner and the run is
+quoted in *What has been established*. Those ticks are honest and they are not the whole
+list: every unchecked box needs a person in front of a physical machine.
+
+- [x] **VM** The application launches as a standard user (no elevation prompt)
+- [x] **VM** The window becomes visible, at 1024×720, and reports itself visible
+- [x] **VM** The installed build launches from `%LOCALAPPDATA%\Programs\VERIDEX`
+- [x] **VM** The portable build launches from its temporary extraction directory
+- [x] **VM** The window title is `VERIDEX — Advanced All-in-One Windows PC & Laptop Diagnostics`
+- [x] **VM** The preload bridge loads: 18 invoke channels, event subscription present
+- [x] **VM** All 15 pages render from inside the asar
+- [ ] No blank white frame, no flash of unstyled content — **a flash is not observable from
+      inside the process; it needs an eye on the screen**
+- [ ] The window opens at a size that looks right on a real display, and does not open over
+      the taskbar
+- [ ] No invented numbers on first view (the harness asserts *no score is presented as full
+      health*; a person must read the page)
 - [ ] Closing and reopening works, with no orphaned process left behind
-- [ ] A second launch focuses or refuses the existing instance rather than starting a
-      second copy
+- [ ] A second launch focuses or refuses the existing instance
+- [ ] The dashboard is legible at 125% and 150% DPI scaling
 
 ## 3. A standard-user scan
 
@@ -133,12 +164,18 @@ installer on a Windows machine and records what happened.
 
 ## 7. Installer
 
-- [ ] Installs per-user without an administrator prompt
-- [ ] Installs to the expected location and creates a start-menu shortcut
-- [ ] The uninstaller removes the application and leaves saved reports intact
+- [x] **VM** Installs per-user, silently (`/S`), with no administrator prompt
+- [x] **VM** Installs to `%LOCALAPPDATA%\Programs\VERIDEX` and creates the start-menu and
+      desktop shortcuts
+- [x] **VM** The uninstaller removes the application, its directory and its shortcuts, and
+      leaves saved user data in place (`deleteAppDataOnUninstall: false`)
+- [x] **VM** The portable executable runs from a directory that is not an installation
+- [ ] The interactive installer: the licence page, the directory chooser, the progress
+      bar, and the finish page — **`/S` proves none of those; somebody must click through it**
 - [ ] Windows SmartScreen warns, as expected for an unsigned build — **record the exact
       wording**, because a build that does *not* warn would be a different build
-- [ ] The portable executable runs from a removable drive with no installation
+- [ ] The portable executable runs from a removable drive on a machine without the
+      prerequisites installed
 - [ ] The licence text is shown by the installer and matches `LICENSE`
 
 ## 8. Real-hardware behaviour

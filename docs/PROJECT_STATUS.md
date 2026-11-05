@@ -22,10 +22,12 @@ is the narrative summary of it.
 | Source | 54 modules, ~16,500 lines |
 | Build | **produced** on Windows: installer 117.4 MiB + portable 106.5 MiB, unsigned |
 
-The headline: **the application now builds on Windows and its full test suite passes on
-Windows, but it has never been installed or launched on a real desktop.** A build that
-exists is not a build that works, and no requirement is marked VERIFIED on the strength of
-a successful CI build.
+The headline: **the application now builds on Windows, its full test suite passes there, and
+the packaged build has been installed, launched and uninstalled on a Windows virtual
+machine.** What it has never done is run on physical hardware, where the battery, the SSD and
+the GPU that this tool exists to inspect actually live. A build that installs is not a build
+that has been verified on a machine somebody owns, and no requirement is marked VERIFIED on
+the strength of a virtual machine.
 
 ---
 

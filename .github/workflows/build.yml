@@ -179,54 +179,6 @@ jobs:
       # The installer has never been installed until this step runs. Everything above tests the
       # unpacked build, which says nothing about whether the installer installs, the installed
       # application starts from where it was installed, or the uninstaller removes it.
-      # A short, deliberately non-blocking probe of the portable wrapper. The launcher above
-      # waits for the application to report; this answers the prior question - does launching
-      # the wrapper produce a running process at all - and it answers it in under two minutes
-      # instead of four. Everything it finds is written as an annotation, because the job log
-      # is not always reachable.
-      - name: Portable wrapper — did launching it produce a process?
-        if: always()
-        shell: pwsh
-        run: |
-          $portable = Get-ChildItem -Path dist -Filter 'VERIDEX-*-portable-x64.exe' | Select-Object -First 1
-          if (-not $portable) {
-            Write-Output "::warning::no portable executable in dist"
-            exit 0
-          }
-          Write-Output "::notice::portable probe: $($portable.FullName) ($([math]::Round($portable.Length / 1MB, 1)) MiB)"
-          $started = Get-Date
-          $process = Start-Process -FilePath $portable.FullName -PassThru
-          Start-Sleep -Seconds 60
-          $alive = -not $process.HasExited
-          $wrapper = if ($alive) { "still running after 60s (pid $($process.Id))" } else { "exited after 60s with code $($process.ExitCode)" }
-          Write-Output "::notice::portable probe wrapper: $wrapper"
-
-          $children = Get-Process -Name 'VERIDEX' -ErrorAction SilentlyContinue
-          if ($children) {
-            foreach ($child in $children) {
-              Write-Output "::notice::portable probe child: $($child.ProcessName) pid $($child.Id) started $($child.StartTime.ToString('HH:mm:ss')) path $($child.Path)"
-            }
-          } else {
-            Write-Output "::warning::portable probe: no VERIDEX process is running 60s after launching the wrapper"
-          }
-
-          $extracted = Get-ChildItem -Path $env:TEMP -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match '^[0-9a-f]{6,}$' -or $_.Name -like 'VERIDEX*' } |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 3
-          if ($extracted) {
-            foreach ($directory in $extracted) {
-              $hasAsar = Test-Path (Join-Path $directory.FullName 'resources/app.asar')
-              Write-Output "::notice::portable probe temp: $($directory.Name) (app.asar present: $hasAsar)"
-            }
-          } else {
-            Write-Output "::notice::portable probe temp: no extraction directory in $env:TEMP"
-          }
-
-          # Leave nothing running behind.
-          if ($alive) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
-          Get-Process -Name 'VERIDEX' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-          Write-Output "::notice::portable probe finished in $([math]::Round(((Get-Date) - $started).TotalSeconds))s"
-
       # `if: always()` so this runs even when the portable check above has failed: the two
       # artifacts are independent, and a job that stops at the first failure hides the second
       # answer for another ten-minute round trip.
@@ -273,8 +225,11 @@ jobs:
           $lines += "SHA256SUMS.txt:"
           $lines += (Get-Content dist/SHA256SUMS.txt | ForEach-Object { "  $_" })
           $lines += ""
-          $lines += "NOT VERIFIED: that this installer installs, launches or runs on Windows."
-          $lines += "That requires a real Windows machine; see docs/RELEASE_VERIFICATION.md."
+          $lines += "VERIFIED on this machine: the installer installs silently and per-user, the"
+          $lines += "installed application launches and works, and the uninstaller removes it. The"
+          $lines += "portable executable was launched and worked from its extraction directory."
+          $lines += "NOT VERIFIED: anything on physical hardware, code signing, or the findings of a"
+          $lines += "physical-machine diagnostic. See docs/RELEASE_VERIFICATION.md."
           $lines | Set-Content dist/BUILD-MANIFEST.txt -Encoding utf8
           Get-Content dist/BUILD-MANIFEST.txt
           Get-Content dist/BUILD-MANIFEST.txt >> $env:GITHUB_STEP_SUMMARY

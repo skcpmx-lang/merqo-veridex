@@ -111,18 +111,26 @@ providers run against a no-op runner.
 
 Stated plainly, because this is the section that matters:
 
-1. **That any of it works on Windows.** No test runs on Windows hardware in this
-   repository's history. CI is configured to run the suite on `windows-latest`
-   (`.github/workflows/build.yml`), and that configuration has not yet produced a result
-   here.
+1. ~~That any of it works on Windows.~~ **Partly done.** The suite runs on
+   `windows-latest` on every push and passes, and three harnesses execute the packaged
+   application there: the GUI smoke test drives the unpacked build through its whole
+   interface, `npm run smoke:portable` launches the portable executable, and
+   `npm run smoke:install` installs, launches and uninstalls the real installer. What none of
+   them can do is run on **physical** hardware with a battery, an SSD exposing SMART, and a
+   discrete GPU.
 2. **That the real interfaces return the shapes the fixtures assume.** A parser that is
    perfectly tested against a fixture proves the parser matches the fixture, nothing more.
-3. **That the packaged application installs and launches.** A Windows installer **is** now
-   produced — CI builds `VERIDEX-Setup-1.0.0-x64.exe` (117.4 MiB) and the portable build on
-   `windows-latest`, and the digests are recorded in `docs/RELEASE_VERIFICATION.md`. But no
-   build has ever been *run*: nobody has installed it, and no BrowserWindow has opened on a
-   real desktop. A build that exists is not a build that works.
-4. **That the installer installs.** It has never been executed.
+3. ~~That the packaged application installs and launches.~~ **Done on a virtual machine.**
+   CI installs `VERIDEX-Setup-1.0.0-x64.exe` silently and per-user, starts the installed
+   application, checks its window, title, bridge and pages, and uninstalls it; the portable
+   executable is launched from its extraction directory. What remains unproven is the same
+   thing as everywhere else in this list: **physical hardware, and a person looking at it.** A
+   BrowserWindow has opened, and its visibility is asserted by the operating system — nobody
+   has seen it.
+4. ~~That the installer installs.~~ **Done.** `npm run smoke:install` runs the real installer
+   silently on the Windows runner, launches the installed application, checks its window,
+   title, preload bridge, one IPC round trip and all 15 pages, then runs the uninstaller and
+   confirms the files, directory and shortcuts are gone. 16 checks, no problems.
 5. **That performance is acceptable on real hardware.** The ~770 ms figure comes from
    this container running providers that mostly return `UNSUPPORTED` immediately. It says
    nothing about a Windows machine running 28 real queries.

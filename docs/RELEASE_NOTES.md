@@ -4,13 +4,20 @@
 
 ## No release has been published
 
-`package.json` says `1.0.0`, and CI now **builds** a Windows x64 installer and portable
-executable on every pull request. Neither has been **published**, and neither has been
-**run**: nobody has installed the application, and it has never launched on a real desktop.
+`package.json` says `1.0.0`, and CI **builds** a Windows x64 installer and portable
+executable on every pull request — and now **runs them**: the installer is installed silently
+and per-user, the installed application is launched and its interface driven, the uninstaller
+removes it again, and the portable executable starts from its extraction directory. All of
+that happens on `windows-latest`.
 
-Publishing is blocked deliberately. `docs/RELEASE_VERIFICATION.md` §2 onward is untouched,
-and no requirement is marked VERIFIED. A published release is a claim that the thing works
-for the person downloading it, and that claim has not been earned.
+Neither artifact has been **published**, and neither has been on a physical machine. The
+virtual machine has no battery, no SSD exposing SMART and no discrete GPU — the three things
+this tool exists to inspect — and no person has looked at the window.
+
+Publishing is blocked deliberately. `docs/RELEASE_VERIFICATION.md` still has every
+physical-machine box unchecked, and no requirement is marked VERIFIED. A published release is
+a claim that the thing works for the person downloading it, and that claim has not been
+earned.
 
 `docs/PROJECT_STATUS.md` describes what is finished and what is not. `docs/TEST_STATUS.md`
 describes what has actually been executed, and `docs/HARDWARE_COMPATIBILITY.md` records the
@@ -20,8 +27,8 @@ evidence level of every subsystem.
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `8650933234b3f4e22b3a8e2aabd2e48b2d2311d08cb8fd9573bfc528a848a0e9` |
-| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `6da0e220dfec25651e5c9e143ef7fbddb8c744fade85965683a0a7e641a9ffa7` |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `90a5602b6f4a5c72b68ed7838ea9308cd85d0303cbd3439c03ca9da76fd511c0` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `3627a41d3e3ce6e7c73c5ac6afad19099fa61766699da23c8aafb378e9d7ff0a` |
 
 These come from a `windows-latest` CI runner. **Unsigned**, so SmartScreen will warn. They
 are not offered for download from a release page, because a release page is a

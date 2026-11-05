@@ -75,10 +75,20 @@ npm ci
 npm run icon
 npm run build:win                   # electron-builder, NSIS + portable, x64
 npm run verify:artifacts            # writes dist/SHA256SUMS.txt
+node scripts/verify-package.mjs     # the unpacked build: PE metadata, app.asar contents
+npm run smoke:gui -- --dist dist/win-unpacked   # drive the whole interface
+npm run smoke:portable              # launch the portable executable itself
+npm run smoke:install               # install silently, launch, uninstall
 ```
 
-Measured on `windows-latest`: **117.4 MiB installer, 106.5 MiB portable**, roughly two
-minutes for the packaging job. The build also writes `dist/BUILD-MANIFEST.txt` (version,
+The last four are the difference between "an installer came out of it" and "the installer
+installs". Each writes a JSON verdict, uploads it as the `veridex-gui-evidence` artifact, and
+emits one annotation per problem, because the job log is not always reachable and a failure
+that cannot be read is a failure that cannot be fixed.
+
+Measured on `windows-latest`: **117.4 MiB installer, 106.5 MiB portable**. The GUI sweep takes
+about thirty seconds with a three-task scan, the portable check fifteen, the install lifecycle
+twenty-three; packaging itself is around two and a half minutes. The build also writes `dist/BUILD-MANIFEST.txt` (version,
 commit, runner, per-artifact sizes and digests) and emits the same facts as `::notice`
 annotations, so the artifacts can be audited through the checks API without downloading
 234 MB.

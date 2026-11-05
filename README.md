@@ -3,13 +3,16 @@
 **Advanced all-in-one Windows PC & laptop diagnostics.**
 Local. Read-only. Offline by construction. Honest about what it could not measure.
 
-> **Status: builds on Windows, never launched on it.**
-> The test suite passes on Linux **and** Windows, and CI produces a real x64 installer and
-> portable build (`VERIDEX-Setup-1.0.0-x64.exe`, 117.4 MiB, digests in
-> [release verification](docs/RELEASE_VERIFICATION.md)). But the installer has **never been
-> installed** and the application has **never been launched on a real desktop**, so no
-> requirement is marked verified. See [hardware compatibility](docs/HARDWARE_COMPATIBILITY.md)
-> for exactly what has executed and what has not.
+> **Status: installs, launches and uninstalls on a Windows virtual machine — never on
+> physical hardware.**
+> The test suite passes on Linux **and** Windows. CI builds the installer and the portable
+> executable, then *uses* them: it installs silently and per-user, launches the installed
+> application, drives its whole interface, and uninstalls it — plus the portable build,
+> launched from its extraction directory (digests in
+> [release verification](docs/RELEASE_VERIFICATION.md)). What no automated test can do is run
+> on a real PC with a battery, an SSD and a discrete GPU, or show its window to a person. That
+> is why **no requirement is marked verified** and no release is published. See
+> [hardware compatibility](docs/HARDWARE_COMPATIBILITY.md) for exactly what has executed.
 
 ---
 
@@ -95,8 +98,9 @@ Requires Node ≥ 20.11.0 for development. End users need nothing but the instal
 | [Requirements](docs/REQUIREMENTS.md) | All 130 requirements with per-item status |
 | [Release notes](docs/RELEASE_NOTES.md) | Why there is no release yet |
 | [CI/CD](docs/GITHUB_ACTIONS.md) | The two workflows and their current state |
-| [Release verification](docs/RELEASE_VERIFICATION.md) | The pre-release checklist; the build half is done, the runtime half is not |
+| [Release verification](docs/RELEASE_VERIFICATION.md) | The pre-release checklist; build, launch and installer are done on a VM, physical hardware is not |
 | [Hardware compatibility](docs/HARDWARE_COMPATIBILITY.md) | What has actually executed, per subsystem |
+| [Physical verification](docs/PHYSICAL_VERIFICATION.md) | The run sheet for the first physical-machine test — the only route to L4 |
 
 ## Testing
 
