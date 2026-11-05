@@ -102,7 +102,7 @@ working across vendors, not evidence that it works on any of them.
 | UNAVAILABLE / NOT_APPLICABLE / UNSUPPORTED | 235 / 4 / 4 |
 | ERROR | 0 |
 | Structural problems | 0 |
-| Assessment | rated, 84, coverage 75 % |
+| Assessment | rated, 84, coverage 75 % — **this is the cap, not a measurement** (see §4b) |
 
 Two things about that table matter more than the numbers. First, six earlier runs of the
 same script found six defects that the test suite could not: a zero measurement that crashed
@@ -112,6 +112,42 @@ executed, and a slow query that took a whole task down with it. Second, a *rated
 on a virtual machine says nothing about a real PC — the hardware is synthetic, and the
 devices a consumer machine exposes (a real battery, a real SSD with SMART attributes, a
 discrete GPU) are exactly the ones this run did not see.
+
+---
+
+## 4b. Why the score was 84 at 75 % coverage
+
+Asked directly, because a number that looks arbitrary is a number nobody can defend. The
+answer is the coverage gate in `src/engine/health.js`, and it is working as designed:
+
+| Coverage | What is published |
+| --- | --- |
+| below 50 % | **No number at all.** The assessment is `Unrated` with the reason. |
+| 50 – 80 % | The raw average is computed, then **held at 84 ("Fair")**. |
+| 80 % and above | The measured score is published as-is. |
+
+On the runner, three of four weighted components could be assessed — CPU, memory and
+storage — and the GPU could not, because the image has no discrete adapter and `dxdiag`
+cannot run. That is 75 % coverage, so the raw average (100 on those three) was capped to 84.
+The report and the interface both print the explanation beside the number: *"Coverage is
+75%, so the score is capped at 84 (Fair) rather than reported as Good."*
+
+Three properties make the number hard to misread, and all three are pinned by tests
+(`tests/unit/health-cap.test.js`, 9 tests):
+
+1. **The cap is a ceiling, not a floor.** A machine scoring 40 at 75 % coverage reports 40,
+   unchanged. Only scores that would otherwise read as "Good" are held down.
+2. **The cap stays below "Good".** `ratingFor(84)` is `Fair`. A capped score can never
+   present as a healthy machine.
+3. **The rating travels with its reason.** HTML, PDF, JSON and the dashboard each carry
+   `gatingNote`; a score shown without its coverage would be a hard failure in the GUI smoke
+   test, and is asserted here.
+
+What this number is **not**: a statement about the machine. It is a statement about the
+evidence collected, from a virtual machine with synthetic hardware, where the three devices
+most likely to fail on a real PC — a battery, an SSD exposing SMART, a discrete GPU — were
+all absent. On a physical machine with all four components readable, coverage would pass
+80 % and the cap would not apply at all.
 
 ---
 
