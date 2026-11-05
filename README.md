@@ -3,10 +3,13 @@
 **Advanced all-in-one Windows PC & laptop diagnostics.**
 Local. Read-only. Offline by construction. Honest about what it could not measure.
 
-> **Status: not yet released.** The code is substantially complete and 430 automated tests
-> cover the logic, but **VERIDEX has never run on real Windows hardware.** No requirement
-> is marked verified. See [Project status](docs/PROJECT_STATUS.md) and
-> [Test status](docs/TEST_STATUS.md) before treating anything here as working.
+> **Status: builds on Windows, never launched on it.**
+> The test suite passes on Linux **and** Windows, and CI produces a real x64 installer and
+> portable build (`VERIDEX-Setup-1.0.0-x64.exe`, 117.4 MiB, digests in
+> [release verification](docs/RELEASE_VERIFICATION.md)). But the installer has **never been
+> installed** and the application has **never been launched on a real desktop**, so no
+> requirement is marked verified. See [hardware compatibility](docs/HARDWARE_COMPATIBILITY.md)
+> for exactly what has executed and what has not.
 
 ---
 
@@ -92,7 +95,8 @@ Requires Node ≥ 20.11.0 for development. End users need nothing but the instal
 | [Requirements](docs/REQUIREMENTS.md) | All 130 requirements with per-item status |
 | [Release notes](docs/RELEASE_NOTES.md) | Why there is no release yet |
 | [CI/CD](docs/GITHUB_ACTIONS.md) | The two workflows and their current state |
-| [Release verification](docs/RELEASE_VERIFICATION.md) | The pre-release checklist, currently unstarted |
+| [Release verification](docs/RELEASE_VERIFICATION.md) | The pre-release checklist; the build half is done, the runtime half is not |
+| [Hardware compatibility](docs/HARDWARE_COMPATIBILITY.md) | What has actually executed, per subsystem |
 
 ## Testing
 

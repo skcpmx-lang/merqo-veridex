@@ -7,11 +7,24 @@ importantly — what has and has not been observed to work.
 
 ## 1. Status
 
-**Neither workflow has run.** The repository has no recorded CI result. The YAML is
-written and reviewed, and the commands in it are the same commands that run locally, but
-"the workflow is configured" and "the workflow passes" are different claims.
+`build.yml` runs on every push and pull request and **passes on both Linux and Windows**.
+`release.yml` has **never run** — it is manual by design, and it must not be dispatched
+until the runtime verification in `docs/RELEASE_VERIFICATION.md` §2 onward is complete.
 
-Add the first passing run to this document when it exists.
+Recorded runs:
+
+| Run | Trigger | Result |
+| --- | --- | --- |
+| [`42013425380`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42013425380) | push | ✅ first green run on Windows and Linux |
+| [`42014598911`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42014598911) | pull request | ✅ including a real Windows installer build |
+| [`42015386547`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42015386547) | pull request | ✅ build + artifact verification + build manifest |
+
+Before run 42013425380 the workflow had been **failing on every push since it was added**,
+and this document incorrectly said it had not run at all. That was wrong in a way worth
+recording: the workflow existed, executed, and failed, while the documentation asserted
+silence. The failures were real and only visible on Windows — see the commit history for
+`ci: replace fixed sleeps with condition polling` and `fix(test): remove two host-dependent
+assumptions`.
 
 ---
 
@@ -47,8 +60,10 @@ asset. On failure it uploads logs with a 7-day retention.
 
 ### `package`
 
-Runs only on `main` or by manual dispatch, because a full Electron build is slow and
-produces a large artifact.
+Runs on `main`, on a manual dispatch, and on **every pull request**. The pull-request case
+is deliberate: a reviewer should be able to inspect the artifact a change actually produces,
+because "the packaging configuration is valid" and "an installer came out of it" are
+different claims. Pull-request builds never publish anything.
 
 ```bash
 npm ci
@@ -56,6 +71,12 @@ npm run icon
 npm run build:win                   # electron-builder, NSIS + portable, x64
 npm run verify:artifacts            # writes dist/SHA256SUMS.txt
 ```
+
+Measured on `windows-latest`: **117.4 MiB installer, 106.5 MiB portable**, roughly two
+minutes for the packaging job. The build also writes `dist/BUILD-MANIFEST.txt` (version,
+commit, runner, per-artifact sizes and digests) and emits the same facts as `::notice`
+annotations, so the artifacts can be audited through the checks API without downloading
+234 MB.
 
 `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` is set so electron-builder does not go looking for
 a signing certificate. The build is unsigned and the release notes say so; there is no

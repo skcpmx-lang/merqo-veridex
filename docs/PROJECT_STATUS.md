@@ -20,10 +20,12 @@ is the narrative summary of it.
 | Not started | 44 |
 | Automated tests | 430, all passing |
 | Source | 54 modules, ~16,500 lines |
-| Build | configured, **never produced** |
+| Build | **produced** on Windows: installer 117.4 MiB + portable 106.5 MiB, unsigned |
 
-The headline: **the code is substantially written and the logic is tested, but the
-application has never run on the operating system it is built for.**
+The headline: **the application now builds on Windows and its full test suite passes on
+Windows, but it has never been installed or launched on a real desktop.** A build that
+exists is not a build that works, and no requirement is marked VERIFIED on the strength of
+a successful CI build.
 
 ---
 

@@ -76,9 +76,11 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/artifacts.test.js` | 7 | release artifact verification: signatures, checksums, tampering |
 | `tests/integration/workflow.test.js` | 7 | CI workflows reference scripts that exist; tests gate publishing |
 
-Run in **Linux CI only**. Nothing in this table is evidence about Windows behaviour: the
-tests exercise logic, parsers and integration seams against recorded or simulated
-command output.
+Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
+`.github/workflows/build.yml`). The suite passes on both, which proves the logic is
+platform-independent. It is still **not** evidence about real hardware: the tests exercise
+parsers and integration seams against recorded or simulated command output, and the
+providers run against a no-op runner.
 
 ---
 
@@ -109,9 +111,12 @@ Stated plainly, because this is the section that matters:
    here.
 2. **That the real interfaces return the shapes the fixtures assume.** A parser that is
    perfectly tested against a fixture proves the parser matches the fixture, nothing more.
-3. **That the packaged application launches.** No build has been produced in this
-   environment: there is no Electron binary, no Wine, and no NSIS toolchain available.
-4. **That the installer installs.** Same reason.
+3. **That the packaged application installs and launches.** A Windows installer **is** now
+   produced — CI builds `VERIDEX-Setup-1.0.0-x64.exe` (117.4 MiB) and the portable build on
+   `windows-latest`, and the digests are recorded in `docs/RELEASE_VERIFICATION.md`. But no
+   build has ever been *run*: nobody has installed it, and no BrowserWindow has opened on a
+   real desktop. A build that exists is not a build that works.
+4. **That the installer installs.** It has never been executed.
 5. **That performance is acceptable on real hardware.** The ~770 ms figure comes from
    this container running providers that mostly return `UNSUPPORTED` immediately. It says
    nothing about a Windows machine running 28 real queries.

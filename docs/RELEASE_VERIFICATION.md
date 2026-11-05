@@ -15,26 +15,60 @@ listed here as **NOT VERIFIED**.
 
 | | |
 | --- | --- |
-| Release candidate | none |
+| Release candidate | `1.0.0`, built by CI only — never installed |
+| Build produced | **Yes** — Windows x64 installer and portable, CI run 42015386547 |
 | Verified on | **nothing** |
 | Verified by | — |
-| Result | **No build has been produced or run.** |
+| Result | **Built, not run. No physical Windows machine has executed this build.** |
 
-Every item below is unchecked. This table is deliberately not pre-filled: a verification
-document with tick marks nobody earned is worse than no document.
+Every item below is unchecked except the build checks in §1, which CI performs and whose
+results are quoted. This table is deliberately not pre-filled: a verification document with
+tick marks nobody earned is worse than no document.
+
+## What has been established, and what has not
+
+**Established** (Windows 10/11 runner, `windows-latest`, commit `25e9f22`+):
+
+| Artifact | Size | SHA-256 |
+| --- | --- | --- |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `a8377850b828f769f0492071f59758d20d6763ac00e05d72e68ca67baf09c613` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `fe7338dca1de85c164195606c0825f6b098341043cf546a58069c9b19d6b9335` |
+
+- the full test suite passes on Windows as well as Linux (423 tests at the time of that build);
+- electron-builder produced both targets without error;
+- the artifacts carry valid PE headers and plausible sizes;
+- the digests were recomputed and match, so the files are the files that were built;
+- both executables are unsigned, as expected and as stated in the release notes;
+- a build manifest with these facts is published beside the artifacts.
+
+**Not established — and these are the reasons no release is published:**
+
+- the installer has **never been run**. Nobody has installed it.
+- the application has **never been launched**. The renderer has been exercised under jsdom
+  against a simulated bridge; a real BrowserWindow has never opened on a real desktop.
+- no WMI/CIM, PowerShell, registry, SMART/NVMe, battery or driver call has ever executed on
+  real Windows hardware. The providers have run only against a no-op runner.
+- UAC elevation has never been exercised.
+- DPI scaling, window resizing and multi-monitor behaviour are untested in a real window.
+- the artifact could not be downloaded in the environment where this document was written
+  (GitHub serves artifacts from blob storage, outside the allowlist), so the binary has not
+  been inspected locally either — only its recorded metadata.
+
+Everything in §2 onward is therefore unchecked, and remains so until a person runs the
+installer on a Windows machine and records what happened.
 
 ---
 
-## 1. Build
+## 1. Build — performed by CI on windows-latest
 
-- [ ] `npm ci` completes from a clean checkout
-- [ ] `npm test` passes with zero failures
-- [ ] `npm run check` reports 0 errors
-- [ ] `npm run audit:requirements -- --check` reports no inconsistency
-- [ ] `npm run build:win` produces an NSIS installer and a portable executable
-- [ ] `npm run verify:artifacts` writes `dist/SHA256SUMS.txt` with an entry per artifact
-- [ ] The recorded SHA-256 values match the files actually published
-- [ ] `dist/` contains no source maps, test files or development tooling
+- [x] `npm ci` completes from a clean checkout
+- [x] `npm test` passes with zero failures (423 tests, both platforms)
+- [x] `npm run check` reports 0 errors
+- [x] `npm run audit:requirements -- --check` reports no inconsistency
+- [x] `npm run build:win` produces an NSIS installer and a portable executable
+- [x] `npm run verify:artifacts` writes `dist/SHA256SUMS.txt` with an entry per artifact
+- [x] The recorded SHA-256 values match the files actually built
+- [ ] `dist/` contains no source maps, test files or development tooling **(not inspected: the artifact could not be downloaded here)**
 
 ## 2. Launch — the first thing never yet done
 

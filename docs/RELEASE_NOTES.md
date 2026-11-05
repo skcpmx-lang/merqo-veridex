@@ -4,14 +4,36 @@
 
 ## No release has been published
 
-`package.json` says `1.0.0`, but **no build of VERIDEX has been produced, packaged, or run
-on Windows.** This file exists so the first release has a place to be recorded, and so the
-current state cannot be mistaken for one.
+`package.json` says `1.0.0`, and CI now **builds** a Windows x64 installer and portable
+executable on every pull request. Neither has been **published**, and neither has been
+**run**: nobody has installed the application, and it has never launched on a real desktop.
+
+Publishing is blocked deliberately. `docs/RELEASE_VERIFICATION.md` §2 onward is untouched,
+and no requirement is marked VERIFIED. A published release is a claim that the thing works
+for the person downloading it, and that claim has not been earned.
 
 `docs/PROJECT_STATUS.md` describes what is finished and what is not. `docs/TEST_STATUS.md`
-describes what has actually been executed.
+describes what has actually been executed, and `docs/HARDWARE_COMPATIBILITY.md` records the
+evidence level of every subsystem.
+
+### Unreleased build, for inspection only
+
+| Artifact | Size | SHA-256 |
+| --- | --- | --- |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `a8377850b828f769f0492071f59758d20d6763ac00e05d72e68ca67baf09c613` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `fe7338dca1de85c164195606c0825f6b098341043cf546a58069c9b19d6b9335` |
+
+These come from a `windows-latest` CI runner. **Unsigned**, so SmartScreen will warn. They
+are not offered for download from a release page, because a release page is a
+recommendation and this build has not been run.
 
 ---
+
+## What the first published release must additionally establish
+
+Beyond the build facts above, a published release must record that a person installed it on
+a physical Windows machine and that it launched, scanned and reported. That evidence does not
+exist yet. See `docs/RELEASE_VERIFICATION.md`.
 
 ## What will be in the first release, when it happens
 
