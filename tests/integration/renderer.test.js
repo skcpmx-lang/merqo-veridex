@@ -290,6 +290,32 @@ test('an empty history says so rather than showing a blank area', { skip: JSDOM 
   }
 });
 
+test('several stored runs each render, not just the newest', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
+  // The defect this guards against: entries were saved without ids and discarded on
+  // load, so the page showed an empty list no matter how many scans had run. A test
+  // with a single entry would not have distinguished "one run" from "all runs".
+  const entries = [run('VX-A', 91), run('VX-B', 74), run('VX-C', null, { gated: true }), run('VX-D', 63)];
+  const { document, restore } = await bootWithBridge(baseAnswers({ ok: true, data: { entries } }));
+  try {
+    const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
+    nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+
+    const rows = document.querySelectorAll('.vx-rows .vx-row');
+    assert.equal(rows.length, 4, 'every stored run must appear');
+    const total = [...rows].map((row) => row.textContent).join(' | ');
+    for (const id of ['VX-A', 'VX-B', 'VX-C', 'VX-D']) {
+      assert.ok(total.includes(id), `${id} is missing from the list`);
+    }
+    for (const score of ['91', '74', '63']) {
+      assert.ok(total.includes(score), `score ${score} is missing`);
+    }
+    assert.match(total, /Score withheld/, 'the gated run must stay visibly withheld');
+  } finally {
+    restore();
+  }
+});
+
 test('a failed history read is reported, not disguised as "no runs"', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
   const { document, restore } = await bootWithBridge(
     baseAnswers({ ok: false, error: { code: 'disk', message: 'The history file is unreadable.' } })
