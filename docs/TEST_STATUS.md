@@ -35,11 +35,11 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 366 · pass 364 · fail 2
+tests 405 · pass 405 · fail 0
 ```
 
-The two failures are documentation checks that fail while a document is still being
-written — they pass once the file exists. They are listed in §5.
+Every test passes. The two documentation checks that previously failed (missing documents
+and unreferenced documents) now pass, and the paths they guard are valid.
 
 | File | Tests | What it covers |
 | --- | --- | --- |
@@ -59,6 +59,8 @@ written — they pass once the file exists. They are listed in §5.
 | `tests/unit/network.test.js` | 8 | adapter parsing, socket derivation |
 | `tests/unit/report.test.js` | 34 | model → json/html/pdf/csv/certificate |
 | `tests/unit/security.test.js` | 15 | forbidden commands, consent, network guard |
+| `tests/unit/permissions.test.js` | 16 | elevation detection, capability gating, blocked matrix |
+| `tests/unit/platform.test.js` | 16 | CIM error classification, registry, shared plumbing |
 | `tests/unit/smart.test.js` | 18 | ATA SMART and NVMe health log parsing |
 | `tests/unit/stress.test.js` | 16 | stress guard, elapsed time, transitions |
 | `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a tier |
@@ -66,9 +68,11 @@ written — they pass once the file exists. They are listed in §5.
 | `tests/integration/docs.test.js` | 5 | documentation paths and claims match the code |
 | `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
 | `tests/integration/providers.test.js` | 6 | every registered provider executes and explains itself |
+| `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
 | `tests/integration/renderer.test.js` | 8 | all 15 pages render under jsdom |
 | `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults |
+| `tests/integration/workflow.test.js` | 7 | CI workflows reference scripts that exist; tests gate publishing |
 
 Run in **Linux CI only**. Nothing in this table is evidence about Windows behaviour: the
 tests exercise logic, parsers and integration seams against recorded or simulated
@@ -112,19 +116,23 @@ Stated plainly, because this is the section that matters:
 
 ---
 
-## 5. The two failing checks
+## 5. Checks that found real defects
 
-`tests/integration/docs.test.js` contains two checks that fail while documentation is
-incomplete. They are:
+Four checks were added specifically because their absence had hidden bugs:
 
-1. **every repository path named in the documentation exists** — `requirements.json`
-   cites `docs/PROJECT_STATUS.md`, `docs/GITHUB_ACTIONS.md` and others that are being
-   written in the same change as this file.
-2. **every document in `docs/` is referenced somewhere** — a document nothing links to is
-   a document nobody reads.
-
-Both are real checks, not placeholders. They fail now because the work is not finished;
-they are the mechanism that guarantees it gets finished rather than forgotten.
+1. **`providers.test.js`** — executes every registered provider. It found five providers
+   returning an empty object instead of an explained status, and two `ReferenceError`s
+   that fired on every scan.
+2. **`confidence-tiers.test.js`** — asserts every mechanism has a declared tier. It found
+   three providers silently classified as heuristic guesses, one of which reads
+   authoritative Windows servicing state.
+3. **`security.test.js`** — the forbidden-command table had **no test at all** despite
+   being the product's central guarantee. Writing it found that `diskpart /s script`
+   was permitted while `diskpart` + `clean` was refused.
+4. **`docs.test.js`** — verifies that paths named in documentation exist. It found 47
+   entries in `requirements.json` citing files nobody had written, while the requirement
+   auditor reported a clean bill of health. The auditor now validates implementation,
+   documentation and test references for every status, not only for TS claims.
 
 ---
 

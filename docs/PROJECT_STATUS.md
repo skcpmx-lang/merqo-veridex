@@ -18,7 +18,7 @@ is the narrative summary of it.
 | Tested (automated) | 75 |
 | Implemented, untested | 11 |
 | Not started | 44 |
-| Automated tests | 366 (364 pass, 2 documentation checks pending) |
+| Automated tests | 405, all passing |
 | Source | 54 modules, ~16,500 lines |
 | Build | configured, **never produced** |
 

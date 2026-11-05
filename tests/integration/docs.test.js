@@ -81,6 +81,34 @@ test('the CSP quoted in SECURITY.md matches the one in the document shell', () =
   }
 });
 
+test('the test count quoted in the documentation matches the files on disk', () => {
+  // Documents that quote a number rot the moment a test is added. Rather than banning the
+  // number (it is useful evidence), pin it to the files: count the `test(` declarations in
+  // the suite and require the documented figure to be within one of it.
+  let declared = 0;
+  for (const dir of ['tests/unit', 'tests/integration']) {
+    for (const name of readdirSync(path.join(ROOT, dir))) {
+      if (!name.endsWith('.test.js')) continue;
+      const text = readFileSync(path.join(ROOT, dir, name), 'utf8');
+      declared += (text.match(/^test\(/gm) ?? []).length;
+    }
+  }
+  assert.ok(declared > 300, `expected a real suite, counted ${declared} test declarations`);
+
+  for (const file of ['README.md', 'docs/TEST_STATUS.md', 'docs/PROJECT_STATUS.md', 'docs/KNOWN_LIMITATIONS.md']) {
+    const target = path.join(ROOT, file);
+    if (!existsSync(target)) continue;
+    const text = readFileSync(target, 'utf8');
+    for (const match of text.matchAll(/(\d{3})\s+(?:automated\s+)?tests/g)) {
+      const quoted = Number(match[1]);
+      assert.ok(
+        Math.abs(quoted - declared) <= 2,
+        `${file} quotes ${quoted} tests but the suite declares ${declared}`
+      );
+    }
+  }
+});
+
 test('every document in docs/ is listed in the README or requirements', () => {
   // A document nobody links to is a document nobody reads.
   const docs = readdirSync(DOCS).filter((name) => name.endsWith('.md'));
