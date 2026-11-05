@@ -103,7 +103,13 @@ jobs:
   package:
     name: Windows package
     needs: [verify, test]
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    # A real installer is built for `main`, for a manual dispatch, and for every pull
+    # request. The pull-request case exists so a reviewer can inspect the artifact a
+    # change actually produces instead of trusting that it would build: "the packaging
+    # config is valid" and "an installer came out of it" are different claims. These
+    # builds are never published - only the release workflow publishes, and only when a
+    # person dispatches it.
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
