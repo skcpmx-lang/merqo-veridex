@@ -49,12 +49,30 @@ const VALID_STATUSES = new Set(Object.values(Status));
 const findings = [];
 const problems = [];
 
-/** @param {'ok'|'info'|'warn'|'fail'} level @param {string} message */
+const IN_ACTIONS = process.env.GITHUB_ACTIONS === 'true';
+
+/** Escape a value for a GitHub Actions workflow command. */
+function cmdEscape(value) {
+  return String(value).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+}
+
+/**
+ * @param {'ok'|'info'|'warn'|'fail'} level
+ * @param {string} message
+ *
+ * Failures are also emitted as workflow commands. CI logs are frequently unreachable, so
+ * an error that exists only in stdout is invisible to whoever has to fix it; an annotation
+ * is not.
+ */
 function record(level, message) {
   findings.push({ level, message });
   const prefix = level === 'fail' ? 'FAIL' : level === 'warn' ? 'WARN' : level === 'ok' ? '  ok' : ' info';
   console.log(`${prefix}  ${message}`);
-  if (level === 'fail') problems.push(message);
+  if (level === 'fail') {
+    problems.push(message);
+    if (IN_ACTIONS) console.log(`::error title=live-smoke::${cmdEscape(message.slice(0, 900))}`);
+  }
+  if (level === 'warn' && IN_ACTIONS) console.log(`::warning title=live-smoke::${cmdEscape(message.slice(0, 400))}`);
 }
 
 function heading(title) {
@@ -253,6 +271,25 @@ async function main() {
     };
     await writeFile(path.resolve(JSON_OUT), JSON.stringify(payload, null, 2), 'utf8');
     console.log(`\nJSON evidence written to ${JSON_OUT}`);
+  }
+
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const lines = [
+      '## VERIDEX live smoke test',
+      '',
+      `Host: \`${process.platform} ${process.arch}\`, node ${process.version}`,
+      '',
+      '| Level | Finding |',
+      '| --- | --- |',
+      ...findings.map((finding) => `| ${finding.level} | ${finding.message.replace(/\|/g, '\\|').slice(0, 300)} |`),
+      '',
+      problems.length > 0
+        ? `**${problems.length} structural problem(s).** A provider threw, or a field claimed data it does not have.`
+        : 'No structural problems. This does not prove the packaged app runs — see docs/RELEASE_VERIFICATION.md.'
+    ];
+    const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+    const { appendFile } = await import('node:fs/promises');
+    await appendFile(summaryPath, `${lines.join('\n')}\n\n`, 'utf8');
   }
 
   if (problems.length > 0) {

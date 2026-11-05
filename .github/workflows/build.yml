@@ -99,9 +99,7 @@ jobs:
       # command paths execute and that every field they produce is well formed.
       - name: Live platform smoke test (real WMI, PowerShell, registry)
         if: runner.os == 'Windows'
-        run: |
-          node scripts/live-smoke.mjs --json live-smoke.json
-          echo "exit=$?"
+        run: node scripts/live-smoke.mjs --json live-smoke.json
         shell: bash
         continue-on-error: false
 
