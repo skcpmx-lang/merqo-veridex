@@ -172,9 +172,23 @@ async function createWindow() {
   });
   await window.loadFile(path.join(ROOT, 'src', 'renderer', 'index.html'));
   await logger?.info('renderer loaded', { scope: 'startup', readyState: 'complete' });
-  window.show();
-  // Reported as observed, not as intended: show() returning is not the same as a visible window.
-  await logger?.info('window show requested', { scope: 'startup', visible: window.isVisible(), minimised: window.isMinimized() });
+
+  // A window that loads and is never shown is useless, so this is not allowed to fail quietly:
+  // whatever happens here is logged, and a failure to show is reported as such.
+  try {
+    window.show();
+    await logger?.info('window show requested', {
+      scope: 'startup',
+      visible: window.isVisible(),
+      minimised: window.isMinimized()
+    });
+  } catch (error) {
+    await logger?.error('the window could not be shown', {
+      scope: 'startup',
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      destroyed: window.isDestroyed()
+    });
+  }
 }
 
 /** Render the report for one format. Shared by build and save. */
