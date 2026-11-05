@@ -77,20 +77,31 @@ test('the installed-application harness is selected by an environment variable, 
   assert.doesNotMatch(smoke, /process\.argv/, 'the installed harness must not parse command line flags');
 });
 
-test('the installed harness waits for the application to be ready before touching `app`', () => {
-  // main.js imports this module before `ready`. `app.getPath()` before ready throws, and
-  // because that happens inside the main process's startup the application simply never
-  // starts - which is exactly what the first portable run on Windows looked like.
+test('the installed harness never awaits readiness at module scope', () => {
+  // Electron does not emit `ready` until the main script finishes evaluating, and main.js
+  // imports this harness at the top level. `await app.whenReady()` here therefore deadlocks
+  // the entire application: no window, no log, no exit. Two CI runs were spent on a portable
+  // build that appeared to hang on launch and was in fact waiting on itself.
+  //
+  // The rule, then: no module-scope statement may touch `app` at all. Everything that needs it
+  // lives inside a function that is scheduled from `app.whenReady().then(run)`.
   const source = readFileSync(path.join(ROOT, 'src', 'app', 'install-smoke.js'), 'utf8');
-  // Ignore comment lines: the file explains this rule in prose, and prose is not a call.
-  const code = source.split('\n').map((line, index) => ({ line, index, comment: /^\s*(\/\/|\*|\/\*)/.test(line) }));
-  const readyLine = code.find(({ line }) => line.includes('await app.whenReady()'));
-  const firstAppUse = code.find(({ line, comment }) => !comment && /app\.getPath\(/.test(line));
-  assert.ok(readyLine, 'the harness must await app.whenReady()');
-  assert.ok(firstAppUse, 'the harness should use app.getPath()');
-  assert.ok(firstAppUse.index > readyLine.index, 'app.getPath() must come after app.whenReady()');
-  // And it must be a real await, not a .then() that the rest of the module races past.
-  assert.match(readyLine.line, /^\s*await app\.whenReady\(\);\s*$/);
+  const lines = source.split('\n');
+  // Comments in this file explain the rule using the very text the rule forbids, so they are
+  // removed before any assertion looks at the code.
+  const code = lines.filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n');
+
+  assert.doesNotMatch(code, /await app\.whenReady\(\)/, 'module scope must not await readiness');
+  assert.match(code, /app\.whenReady\(\)\.then\(run\)/, 'the work must be scheduled, not awaited');
+
+  const moduleScope = lines.filter((line) => {
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) return false; // comments explain the rule
+    if (/^\s/.test(line)) return false; // inside a function or block
+    // `app.asar` is a file name, not the Electron module.
+    return /\bapp\.(?:getPath|whenReady|exit|quit|on|getVersion|isPackaged|getAppPath)\(/.test(line);
+  });
+  const offending = moduleScope.filter((line) => !line.includes('app.whenReady().then(run)'));
+  assert.deepEqual(offending, [], 'no module-scope statement may touch `app`');
 });
 
 test('both harnesses write their report atomically', () => {

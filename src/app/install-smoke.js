@@ -21,15 +21,21 @@
  */
 import { app, BrowserWindow } from 'electron';
 import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 // main.js imports this module before the application is ready, so nothing here may touch
-// `app` until it is. Calling app.getPath() too early throws, and because the import happens
-// inside the main process's own startup the failure is silent: the process waits forever and
-// the launcher sees a portable build that never reports. That cost one CI run to find.
-await app.whenReady();
+// `app` until it is - and, more importantly, nothing here may *await* readiness at module
+// scope. Electron does not emit `ready` until the main script has finished evaluating, so
+// `await app.whenReady()` in an imported module deadlocks the whole application: no window, no
+// log, no exit. From outside that looks like a portable build that hangs on launch, and it
+// cost two CI runs to attribute correctly.
+//
+// So: module evaluation stays synchronous and the work is scheduled instead.
+const reportPath = process.env.VERIDEX_INSTALL_SMOKE_REPORT ?? null;
 
-const reportPath = process.env.VERIDEX_INSTALL_SMOKE_REPORT ?? path.join(app.getPath('temp'), 'veridex-install-smoke.json');
+/** The temp directory, without asking Electron for it (that needs readiness). */
+const tempDir = () => process.env.TEMP || process.env.TMP || os.tmpdir();
 
 // The same checks run for the portable build, which is the same application extracted to a
 // temporary directory by its self-extracting wrapper. Two expectations differ there: a
@@ -37,6 +43,8 @@ const reportPath = process.env.VERIDEX_INSTALL_SMOKE_REPORT ?? path.join(app.get
 // Everything about whether the application itself works is identical.
 const variant = process.env.VERIDEX_SMOKE_VARIANT === 'portable' ? 'portable' : 'installed';
 const startedAt = Date.now();
+/** Resolved once the app is ready; the report path needs it. */
+let resolvedReportPath = reportPath;
 
 /** @type {{level: 'ok'|'info'|'warn'|'fail', message: string}[]} */
 const findings = [];
@@ -62,6 +70,7 @@ function fail(message) {
  * @param {boolean} complete
  */
 function persist(complete) {
+  const reportPath = resolvedReportPath ?? path.join(tempDir(), 'veridex-install-smoke.json');
   const verdict = {
     kind: `${variant}-smoke`,
     app: {
@@ -104,135 +113,148 @@ async function waitFor(fn, timeoutMs, what) {
   throw new Error(`timed out after ${Math.round(timeoutMs / 1000)}s waiting for ${what}`);
 }
 
-record('info', `→ installed application smoke test`);
-
-const handle = { findings, problems, persist };
-process.on('unhandledRejection', (reason) => {
-  fail(`unhandled rejection: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`);
-  persist(false);
+app.whenReady().then(run).catch((error) => {
+  console.error(`install smoke test failed before it started: ${error instanceof Error ? error.stack : String(error)}`);
+  process.exitCode = 1;
 });
 
-// ── 1. Where am I running from? ───────────────────────────────────────────────
-// If this is not the installed location, the rest of the run measures the wrong thing while
-// appearing to succeed, so it is checked first and reported either way.
-const installDir = path.dirname(process.execPath);
-record('info', `executable: ${process.execPath}`);
-record('info', `install directory: ${installDir}`);
+/**
+ * All of the work, run once the application is ready. Deliberately not called at module scope
+ * and deliberately not awaited by the caller.
+ */
+async function run() {
+  resolvedReportPath = reportPath ?? path.join(tempDir(), 'veridex-install-smoke.json');
 
-const appDir = path.join(installDir, 'resources', 'app.asar');
-if (existsSync(appDir)) {
-  const size = readFileSync(appDir).length;
-  record('ok', `resources/app.asar present in the install directory (${size} bytes)`);
-} else {
-  fail(`no resources/app.asar under ${installDir} — the installation is incomplete`);
-}
+  record('info', `→ installed application smoke test`);
 
-const sibling = path.join(installDir, 'resources', 'app.asar.unpacked');
-record('info', `unpacked resources: ${existsSync(sibling) ? 'present' : 'absent (nothing was marked asarUnpack)'}`);
+  const handle = { findings, problems, persist };
+  process.on('unhandledRejection', (reason) => {
+    fail(`unhandled rejection: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`);
+    persist(false);
+  });
 
-const entries = readdirSync(installDir).slice(0, 12);
-record('info', `install directory contains ${readdirSync(installDir).length} entries, e.g. ${entries.slice(0, 6).join(', ')}`);
+  // ── 1. Where am I running from? ───────────────────────────────────────────────
+  // If this is not the installed location, the rest of the run measures the wrong thing while
+  // appearing to succeed, so it is checked first and reported either way.
+  const installDir = path.dirname(process.execPath);
+  record('info', `executable: ${process.execPath}`);
+  record('info', `install directory: ${installDir}`);
 
-const expectedExe = path.join(installDir, 'VERIDEX.exe');
-if (existsSync(expectedExe)) record('ok', 'VERIDEX.exe is present beside the running executable');
-else if (variant === 'portable') record('info', `portable build runs as ${path.basename(process.execPath)} from an extraction directory`);
-else record('warn', `VERIDEX.exe not found by name; running as ${path.basename(process.execPath)}`);
-
-// ── 2. The uninstaller, which is what makes this an installation ─────────────
-if (variant === 'portable') {
-  const hasUninstaller = readdirSync(installDir).some((name) => /^Uninstall .*\.exe$/i.test(name));
-  record('info', `portable build: uninstaller ${hasUninstaller ? 'present (unexpected)' : 'absent, as designed'}`);
-} else {
-  const uninstaller = readdirSync(installDir).find((name) => /^Uninstall .*\.exe$/i.test(name));
-  if (uninstaller) {
-    const bytes = readFileSync(path.join(installDir, uninstaller), { encoding: null }).length;
-    record('ok', `uninstaller present: ${uninstaller} (${bytes} bytes)`);
+  const appDir = path.join(installDir, 'resources', 'app.asar');
+  if (existsSync(appDir)) {
+    const size = readFileSync(appDir).length;
+    record('ok', `resources/app.asar present in the install directory (${size} bytes)`);
   } else {
-    // This is a failure, not a warning: an application that cannot be removed from Programs and
-    // Features has no business being installed, and the brief requires a proper uninstaller.
-    fail('no Uninstall*.exe in the install directory — the installation cannot be removed normally');
-  }
-}
-
-// ── 3. The data directory ─────────────────────────────────────────────────────
-// A fresh installation must work with a data directory that does not exist yet. The
-// application creates it; if anything assumed it was there, a first run is the only time that
-// shows up.
-const userData = app.getPath('userData');
-record('info', `userData: ${userData}`);
-if (variant !== 'portable' && app.getPath('userData').toLowerCase().includes('program files')) {
-  fail('the data directory is inside Program Files — settings would be unwritable for a standard user');
-}
-writeFileSync(path.join(app.getPath('temp'), 'veridex-install-smoke-probe.txt'), 'probe\n');
-record('ok', 'the temp directory is writable, so the application can write reports and logs');
-
-// ── 4. The interface comes up ────────────────────────────────────────────────
-let window = null;
-try {
-  window = await waitFor(() => BrowserWindow.getAllWindows()[0], 45_000, 'the application window');
-  record('ok', `window created (${BrowserWindow.getAllWindows().length} window(s))`);
-  await waitFor(() => window.isVisible(), 30_000, 'the window to become visible');
-  record('ok', `window visible: ${window.getBounds().width}×${window.getBounds().height}`);
-
-  // The renderer must load from the asar, not from a development server or a missing file.
-  const url = window.webContents.getURL();
-  if (url.includes('app.asar')) record('ok', `renderer loaded from ${url.split('/').slice(-2).join('/')}`);
-  else record('warn', `renderer URL is ${url.slice(0, 120)} — expected a file inside app.asar`);
-
-  await waitFor(
-    () => window.webContents.executeJavaScript('document.readyState === "complete" && Boolean(document.body) && document.body.childElementCount > 0').catch(() => false),
-    45_000,
-    'the renderer to finish loading'
-  );
-
-  const title = await window.webContents.executeJavaScript('document.title');
-  record('ok', `document title: ${title}`);
-  if (!/^VERIDEX\b/.test(title)) fail(`the window title does not identify the application: "${title}"`);
-
-  // The preload bridge is the only way the interface can do anything. If it did not load from
-  // the installed location, every feature is dead even though the page looks fine.
-  const bridge = await window.webContents.executeJavaScript(`(() => {
-    const bridge = window.veridex;
-    if (!bridge) return { ok: false, reason: 'window.veridex is undefined' };
-    return {
-      ok: true,
-      channels: Object.keys(bridge.invoke ?? {}).length,
-      events: typeof bridge.on === 'function'
-    };
-  })()`);
-  if (bridge.ok) record('ok', `preload bridge loaded: ${bridge.channels} invoke channel(s), events: ${bridge.events}`);
-  else fail(`the preload bridge is missing in the installed application: ${bridge.reason}`);
-
-  // One real call through the real bridge, from the installed build.
-  if (bridge.ok) {
-    const info = await window.webContents.executeJavaScript(`window.veridex.invoke['app:info']().then((r) => JSON.stringify(r)).catch((e) => 'error:' + e.message)`);
-    if (String(info).startsWith('error:')) fail(`app:info failed in the installed application: ${info.slice(0, 200)}`);
-    else record('ok', `app:info replied: ${String(info).slice(0, 160)}`);
+    fail(`no resources/app.asar under ${installDir} — the installation is incomplete`);
   }
 
-  // Pages must render. A blank window is the classic installed-build failure — resources
-  // resolved in the repository but not inside the asar.
-  const pages = await window.webContents.executeJavaScript(`document.querySelectorAll('[data-page]').length`);
-  if (pages > 0) record('ok', `${pages} navigable page(s) rendered from the installed build`);
-  else fail('no pages rendered in the installed application — the interface is empty');
+  const sibling = path.join(installDir, 'resources', 'app.asar.unpacked');
+  record('info', `unpacked resources: ${existsSync(sibling) ? 'present' : 'absent (nothing was marked asarUnpack)'}`);
 
-  record('ok', `installed application is usable after ${Date.now() - startedAt}ms`);
-} catch (error) {
-  fail(`the installed application did not come up: ${error instanceof Error ? error.message : String(error)}`);
+  const entries = readdirSync(installDir).slice(0, 12);
+  record('info', `install directory contains ${readdirSync(installDir).length} entries, e.g. ${entries.slice(0, 6).join(', ')}`);
+
+  const expectedExe = path.join(installDir, 'VERIDEX.exe');
+  if (existsSync(expectedExe)) record('ok', 'VERIDEX.exe is present beside the running executable');
+  else if (variant === 'portable') record('info', `portable build runs as ${path.basename(process.execPath)} from an extraction directory`);
+  else record('warn', `VERIDEX.exe not found by name; running as ${path.basename(process.execPath)}`);
+
+  // ── 2. The uninstaller, which is what makes this an installation ─────────────
+  if (variant === 'portable') {
+    const hasUninstaller = readdirSync(installDir).some((name) => /^Uninstall .*\.exe$/i.test(name));
+    record('info', `portable build: uninstaller ${hasUninstaller ? 'present (unexpected)' : 'absent, as designed'}`);
+  } else {
+    const uninstaller = readdirSync(installDir).find((name) => /^Uninstall .*\.exe$/i.test(name));
+    if (uninstaller) {
+      const bytes = readFileSync(path.join(installDir, uninstaller), { encoding: null }).length;
+      record('ok', `uninstaller present: ${uninstaller} (${bytes} bytes)`);
+    } else {
+      // This is a failure, not a warning: an application that cannot be removed from Programs and
+      // Features has no business being installed, and the brief requires a proper uninstaller.
+      fail('no Uninstall*.exe in the install directory — the installation cannot be removed normally');
+    }
+  }
+
+  // ── 3. The data directory ─────────────────────────────────────────────────────
+  // A fresh installation must work with a data directory that does not exist yet. The
+  // application creates it; if anything assumed it was there, a first run is the only time that
+  // shows up.
+  const userData = app.getPath('userData');
+  record('info', `userData: ${userData}`);
+  if (variant !== 'portable' && app.getPath('userData').toLowerCase().includes('program files')) {
+    fail('the data directory is inside Program Files — settings would be unwritable for a standard user');
+  }
+  writeFileSync(path.join(app.getPath('temp'), 'veridex-install-smoke-probe.txt'), 'probe\n');
+  record('ok', 'the temp directory is writable, so the application can write reports and logs');
+
+  // ── 4. The interface comes up ────────────────────────────────────────────────
+  let window = null;
+  try {
+    window = await waitFor(() => BrowserWindow.getAllWindows()[0], 45_000, 'the application window');
+    record('ok', `window created (${BrowserWindow.getAllWindows().length} window(s))`);
+    await waitFor(() => window.isVisible(), 30_000, 'the window to become visible');
+    record('ok', `window visible: ${window.getBounds().width}×${window.getBounds().height}`);
+
+    // The renderer must load from the asar, not from a development server or a missing file.
+    const url = window.webContents.getURL();
+    if (url.includes('app.asar')) record('ok', `renderer loaded from ${url.split('/').slice(-2).join('/')}`);
+    else record('warn', `renderer URL is ${url.slice(0, 120)} — expected a file inside app.asar`);
+
+    await waitFor(
+      () => window.webContents.executeJavaScript('document.readyState === "complete" && Boolean(document.body) && document.body.childElementCount > 0').catch(() => false),
+      45_000,
+      'the renderer to finish loading'
+    );
+
+    const title = await window.webContents.executeJavaScript('document.title');
+    record('ok', `document title: ${title}`);
+    if (!/^VERIDEX\b/.test(title)) fail(`the window title does not identify the application: "${title}"`);
+
+    // The preload bridge is the only way the interface can do anything. If it did not load from
+    // the installed location, every feature is dead even though the page looks fine.
+    const bridge = await window.webContents.executeJavaScript(`(() => {
+      const bridge = window.veridex;
+      if (!bridge) return { ok: false, reason: 'window.veridex is undefined' };
+      return {
+        ok: true,
+        channels: Object.keys(bridge.invoke ?? {}).length,
+        events: typeof bridge.on === 'function'
+      };
+    })()`);
+    if (bridge.ok) record('ok', `preload bridge loaded: ${bridge.channels} invoke channel(s), events: ${bridge.events}`);
+    else fail(`the preload bridge is missing in the installed application: ${bridge.reason}`);
+
+    // One real call through the real bridge, from the installed build.
+    if (bridge.ok) {
+      const info = await window.webContents.executeJavaScript(`window.veridex.invoke['app:info']().then((r) => JSON.stringify(r)).catch((e) => 'error:' + e.message)`);
+      if (String(info).startsWith('error:')) fail(`app:info failed in the installed application: ${info.slice(0, 200)}`);
+      else record('ok', `app:info replied: ${String(info).slice(0, 160)}`);
+    }
+
+    // Pages must render. A blank window is the classic installed-build failure — resources
+    // resolved in the repository but not inside the asar.
+    const pages = await window.webContents.executeJavaScript(`document.querySelectorAll('[data-page]').length`);
+    if (pages > 0) record('ok', `${pages} navigable page(s) rendered from the installed build`);
+    else fail('no pages rendered in the installed application — the interface is empty');
+
+    record('ok', `installed application is usable after ${Date.now() - startedAt}ms`);
+  } catch (error) {
+    fail(`the installed application did not come up: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  // ── 5. Verdict ───────────────────────────────────────────────────────────────
+  // Finalised before the window closes: closing it quits the application.
+  persist(true);
+  console.log('');
+  console.log(`${findings.length} finding(s), ${problems.length} problem(s)`);
+  console.log(`verdict written to ${reportPath}`);
+
+  try {
+    if (window && !window.isDestroyed()) window.close();
+  } catch {
+    // The process is ending either way.
+  }
+  await sleep(400);
+  app.exit(problems.length === 0 ? 0 : 1);
+  void handle;
 }
-
-// ── 5. Verdict ───────────────────────────────────────────────────────────────
-// Finalised before the window closes: closing it quits the application.
-persist(true);
-console.log('');
-console.log(`${findings.length} finding(s), ${problems.length} problem(s)`);
-console.log(`verdict written to ${reportPath}`);
-
-try {
-  if (window && !window.isDestroyed()) window.close();
-} catch {
-  // The process is ending either way.
-}
-await sleep(400);
-app.exit(problems.length === 0 ? 0 : 1);
-void handle;
