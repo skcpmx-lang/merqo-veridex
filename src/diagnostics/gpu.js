@@ -16,7 +16,7 @@
 import { available, unavailable, failed, field, measured, unsupported } from '../core/field.js';
 import { Status } from '../core/status.js';
 import { cleanString, num, nonNegative, bytesToGiB, asArray, date } from '../platform/parse.js';
-import { queryCim, readRegistry, listSubKeys, runReadOnly, loadSystemInformation, failureToStatus } from '../platform/windows.js';
+import { queryCim, readRegistry, listSubKeys, runReadOnly, loadSystemInformation, failureToStatus, summariseToolOutput } from '../platform/windows.js';
 
 /** Display adapter class GUID used by the registry memory-size key. */
 export const DISPLAY_CLASS_GUID = '{4d36e968-e325-11ce-bfc1-08002be10318}';
@@ -333,7 +333,9 @@ export function registerGpu(registry) {
           directxVersion: field(null, {
             status: Status.ERROR,
             source: 'directx-dxdiag.gpu',
-            error: `dxdiag did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`}). The DirectX tool is slow on some systems; this does not indicate a GPU fault.`
+            // Carry the tool's own words. An exit code alone cannot distinguish "not
+            // present on this image" from "ran and failed", and those are different answers.
+            error: `dxdiag did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`})${summariseToolOutput(run)}. The DirectX tool is slow on some systems; this does not indicate a GPU fault.`
           })
         };
       }

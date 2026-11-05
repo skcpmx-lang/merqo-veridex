@@ -132,3 +132,24 @@ test('every registered provider builds a plausible command line', async () => {
     }
   }
 });
+
+test('a failed tool invocation carries the tool\'s own words, not just an exit code', async () => {
+  // On a real image dxdiag failed with exit 127 and no explanation, because the runner
+  // reports the exit code and drops nothing else. "Exit 127" cannot tell a missing program
+  // from a broken GPU; the tool's stderr usually can.
+  const registry = new ProviderRegistry();
+  registerGpu(registry);
+
+  const { spawnFn } = makeSpawn({ stdout: '', code: 127 });
+  const failing = new CommandRunner({ platform: 'win32', spawnFn });
+  const fields = await registry.provider('directx-dxdiag.gpu').collect({
+    runner: failing,
+    permissions: windowsPermissions,
+    logger: null,
+    timeoutMs: 5_000
+  });
+
+  assert.equal(fields.directxVersion.status, 'ERROR');
+  assert.match(fields.directxVersion.error, /exit 127/);
+  assert.doesNotMatch(fields.directxVersion.error, /^dxdiag did not complete \(exit 127\)\./, 'a bare exit code is not an explanation');
+});

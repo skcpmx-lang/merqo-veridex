@@ -149,6 +149,27 @@ export async function runReadOnly(runner, file, args, options = {}) {
 }
 
 /**
+ * Reduce a failed tool invocation to one short clause, or nothing.
+ *
+ * `exit 127` says nothing on its own; the tool's stderr usually says everything. A provider
+ * that reports a bare exit code makes a missing program and a broken device look identical.
+ * @param {{stdout?:string, stderr?:string}} run
+ * @returns {string}
+ */
+export function summariseToolOutput(run) {
+  const text = `${run?.stderr ?? ''}`.trim() || `${run?.stdout ?? ''}`.trim();
+  if (!text) {
+    // Silence is itself the diagnostic: a program that is not present at all produces an
+    // exit code and nothing else, and saying so steers the reader to "not installed"
+    // instead of "the device is broken".
+    return ' — the tool printed nothing at all, which is what a missing program looks like';
+  }
+  const firstLine = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)[0] ?? '';
+  if (!firstLine) return ' — the tool printed nothing at all, which is what a missing program looks like';
+  return ` — ${firstLine.slice(0, 200)}`;
+}
+
+/**
  * Map a failed collection outcome to a field-status decision.
  * Centralising this stops providers from inventing their own (usually wrong)
  * mapping, e.g. reporting an access-denied SMART read as "not supported".

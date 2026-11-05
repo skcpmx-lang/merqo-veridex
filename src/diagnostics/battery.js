@@ -441,7 +441,7 @@ export function registerBattery(registry) {
       const target = `${process.env.TEMP ?? process.env.TMP ?? '.'}\\veridex-battery-${Date.now()}.xml`;
       const run = await runReadOnly(ctx.runner, 'powercfg', ['/batteryreport', '/XML', '/OUTPUT', target], { timeoutMs: Math.max(ctx.timeoutMs, 30_000) });
       if (!run.ok) {
-        return { designCapacity: failed(`powercfg /batteryreport did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`})`, 'powercfg-report') };
+        return { designCapacity: failed(`powercfg /batteryreport did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`})${toolOutputClause(run)}`, 'powercfg-report') };
       }
       try {
         const { readFile, unlink } = await import('node:fs/promises');

@@ -17,7 +17,7 @@
 import { available, unavailable, failed, field, unsupported, permissionRequired } from '../core/field.js';
 import { Status } from '../core/status.js';
 import { cleanString, num, bool, asArray } from '../platform/parse.js';
-import { queryCim, readRegistry, runReadOnly, failureToStatus } from '../platform/windows.js';
+import { queryCim, readRegistry, runReadOnly, failureToStatus, summariseToolOutput as toolOutputClause } from '../platform/windows.js';
 
 /**
  * Map Defender state from `Get-MpComputerStatus`.
@@ -264,7 +264,9 @@ export function registerSecurity(registry) {
         Object.assign(fields, mapBitlocker('', false));
       } else {
         const bde = await runReadOnly(ctx.runner, 'manage-bde', ['-status', '-csv'], { timeoutMs: 30_000 });
-        Object.assign(fields, bde.ok ? mapBitlocker(bde.stdout, true) : { bitlocker: failed(bde.stderr || `manage-bde exited ${bde.code}`, 'cim-win32.security') });
+        Object.assign(fields, bde.ok
+          ? mapBitlocker(bde.stdout, true)
+          : { bitlocker: failed(`manage-bde exited ${bde.code}${toolOutputClause(bde)}`, 'cim-win32.security') });
       }
 
       return fields;
