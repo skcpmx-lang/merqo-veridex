@@ -139,6 +139,11 @@ export function summariseServices(services) {
  * Register OS providers and task.
  * @param {import('../engine/provider-registry.js').ProviderRegistry} registry
  */
+/** `Get-WindowsOptionalFeature -Online` is the slowest query in the product; bound it. */
+const OPTIONAL_FEATURE_BUDGET_MS = 40_000;
+/** Service and hotfix enumeration; generous, but inside the provider's own budget. */
+const SERVICE_BUDGET_MS = 20_000;
+
 export function registerWindows(registry) {
   registry.registerProvider({
     id: 'cim-win32.windows',
@@ -218,17 +223,21 @@ export function registerWindows(registry) {
     title: 'Windows servicing inventory',
     priority: 1,
     // Three separate PowerShell/CIM calls, two of which enumerate a whole subsystem. On a
-    // Windows runner this is the slowest provider in the sweep and reliably exceeds the
-    // global 20 s budget; it then reports ERROR and the checksum history for the machine
-    // gains a spurious difference.
-    timeoutMs: 90_000,
+    // Windows runner this is the slowest provider in the sweep: `Get-WindowsOptionalFeature
+    // -Online` alone took longer than 90 s on a cold image, which took the whole task down
+    // and lost the services and update data that had been ready in 3 s.
+    //
+    // Each sub-query now has its own budget well inside the provider's, so a slow one costs
+    // its own field and nothing else. The sub-processes are killed individually, so nothing
+    // is left running behind a timed-out provider.
+    timeoutMs: 60_000,
     collect: async (ctx) => {
       const [features, services, updates] = await Promise.all([
         ctx.permissions.isAdmin
-          ? ctx.runner.powershellJson('Get-WindowsOptionalFeature -Online | Select-Object FeatureName,State', { name: 'os:features', timeoutMs: Math.max(ctx.timeoutMs, 60_000) })
+          ? ctx.runner.powershellJson('Get-WindowsOptionalFeature -Online | Select-Object FeatureName,State', { name: 'os:features', timeoutMs: OPTIONAL_FEATURE_BUDGET_MS })
           : Promise.resolve({ ok: false, data: null, error: 'Windows optional features require administrative rights' }),
-        ctx.runner.powershellJson('Get-Service | Select-Object Name,Status,StartType', { name: 'os:services', timeoutMs: Math.max(ctx.timeoutMs, 30_000) }),
-        queryCim(ctx.runner, 'Win32_QuickFixEngineering', { name: 'os:updates', timeoutMs: ctx.timeoutMs })
+        ctx.runner.powershellJson('Get-Service | Select-Object Name,Status,StartType', { name: 'os:services', timeoutMs: SERVICE_BUDGET_MS }),
+        queryCim(ctx.runner, 'Win32_QuickFixEngineering', { name: 'os:updates', timeoutMs: SERVICE_BUDGET_MS })
       ]);
 
       /** @type {Record<string, import('../core/field.js').FieldValue>} */
@@ -241,7 +250,11 @@ export function registerWindows(registry) {
           : field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: 'Enumerating Windows optional features requires administrative rights.', source: 'cim-win32.windows' });
 
       const serviceSummary = services.ok ? summariseServices(services.data) : null;
-      fields.servicesSummary = serviceSummary ? available(`${serviceSummary.running} running of ${serviceSummary.total}`, 'cim-win32.windows') : failed(services.error ?? 'Services could not be enumerated', 'cim-win32.windows');
+      // A service enumeration that did not finish is an absence of data, not a fault: the
+      // machine is not misconfigured because a query was slow.
+      fields.servicesSummary = serviceSummary
+        ? available(`${serviceSummary.running} running of ${serviceSummary.total}`, 'cim-win32.windows')
+        : unavailable(services.error ?? 'Services could not be enumerated', 'cim-win32.windows');
       if (serviceSummary && serviceSummary.automaticStopped.length > 0) {
         fields.servicesNotRunning = field(serviceSummary.automaticStopped.slice(0, 40), {
           status: Status.WARNING,
@@ -257,7 +270,7 @@ export function registerWindows(registry) {
         ? available(updateList.slice(0, 40), 'cim-win32.windows', { notes: ['A partial view: cumulative updates are not always listed by this class.'] })
         : updates.ok
           ? unavailable('No updates were reported', 'cim-win32.windows')
-          : failed(updates.error ?? 'Update history could not be queried', 'cim-win32.windows');
+          : unavailable(updates.error ?? 'Update history could not be queried', 'cim-win32.windows');
 
       return fields;
     }

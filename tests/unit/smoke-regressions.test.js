@@ -103,20 +103,27 @@ test('a provider that declares its own budget gets it; others keep the default',
 
 test('a provider that hangs is still killed at its declared budget', async () => {
   // The budget is a ceiling, not an exemption from one.
+  //
+  // The elapsed-time assertion is deliberately loose. A first version demanded the cut-off
+  // land "near 120 ms" and failed at 4.8 s on a loaded CI runner, where a queue of test
+  // files starves the event loop. A timer that fires late is not a broken timeout; asserting
+  // on wall-clock precision tests the machine, not the product. What matters is that the
+  // provider is stopped at its own declared budget rather than the much larger default.
   const built = buildRunner({
-    defaultTimeoutMs: 10_000,
-    providers: [{ id: 'hangs', timeoutMs: 120, collect: () => new Promise(() => {}) }]
+    defaultTimeoutMs: 30_000,
+    providers: [{ id: 'hangs', timeoutMs: 250, collect: () => new Promise(() => {}) }]
   });
   // The budget timer is unref'd, so a hanging provider cannot keep a process alive on its
   // own - correct for the app, but it means an idle test process would exit before the
   // timer fires. Hold the loop open explicitly rather than removing the unref.
-  const keepAlive = setTimeout(() => {}, 3_000);
+  const keepAlive = setTimeout(() => {}, 30_000);
   const started = Date.now();
   const result = await built.runner.runTask('t.hangs');
   const elapsed = Date.now() - started;
   clearTimeout(keepAlive);
-  assert.ok(elapsed < 3_000, `must stop near its 120ms budget, took ${elapsed}ms`);
-  assert.match(JSON.stringify(result.attempts), /exceeded its 120ms budget/);
+
+  assert.match(JSON.stringify(result.attempts), /exceeded its 250ms budget/, 'the cut-off must name the declared budget');
+  assert.ok(elapsed < 20_000, `must be cut off well before the 30s default, took ${elapsed}ms`);
 });
 
 /**

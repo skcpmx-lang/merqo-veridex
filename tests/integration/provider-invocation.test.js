@@ -310,3 +310,50 @@ test('a tool that runs and fails is an ERROR; one that cannot run is UNSUPPORTED
   assert.equal(fields.directxVersion.status, 'ERROR', 'a tool that spoke and failed is an error');
   assert.match(fields.directxVersion.error, /Access is denied/);
 });
+
+test('one slow sub-query must not cost the whole Windows inventory', async () => {
+  // On a real runner `Get-WindowsOptionalFeature -Online` exceeded 90 s and the provider's
+  // budget killed the entire task, discarding services and hotfix data that had been ready
+  // in seconds. A slow field must cost only itself.
+  const { registerWindows } = await import('../../src/diagnostics/windows.js');
+  const registry = new ProviderRegistry();
+  registerWindows(registry);
+
+  let featuresTimeout = null;
+  const runner = new CommandRunner({
+    platform: 'win32',
+    spawnFn: (file, args) => {
+      const script = args.join(' ');
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      if (/WindowsOptionalFeature/.test(script)) {
+        featuresTimeout = true;
+        setImmediate(() => child.emit('close', -1)); // a timeout, as the runner reports it
+        return child;
+      }
+      setImmediate(() => {
+        child.stdout.end('{"ok":true,"error":null,"data":[]}');
+        child.stderr.end('');
+        child.emit('close', 0);
+      });
+      return child;
+    }
+  });
+
+  const elevated = { ...windowsPermissions, isAdmin: true, mode: 'elevated' };
+  const fields = await registry.provider('system-features.windows').collect({
+    runner,
+    permissions: elevated,
+    logger: null,
+    timeoutMs: 5_000
+  });
+
+  assert.ok(featuresTimeout, 'precondition: the optional-feature query was attempted');
+  assert.ok(fields.windowsFeatures, 'the slow field must still produce an answer');
+  assert.notEqual(fields.windowsFeatures.status, 'PASS', 'it must not claim data it does not have');
+  assert.notEqual(fields.windowsFeatures.status, 'ERROR', 'a slow query is not a fault');
+  assert.ok(fields.servicesSummary, 'the fast queries must survive the slow one');
+  assert.ok(fields.updates, 'the fast queries must survive the slow one');
+});
