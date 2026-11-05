@@ -103,10 +103,12 @@ async function execute(electron) {
     stderr += chunk.toString();
   });
 
-  const deadline = Date.now() + 360_000;
+  // The harness budgets 600s for a sweep plus the rest; killing it at 360s was terminating a
+  // run that was still legitimately working and then reporting 'did not report'.
+  const deadline = Date.now() + 900_000;
   const timer = setInterval(() => {
     if (Date.now() > deadline) {
-      console.error('The application did not exit within 6 minutes; terminating it.');
+      console.error('The application did not exit within 15 minutes; terminating it.');
       child.kill('SIGKILL');
     }
   }, 5_000);

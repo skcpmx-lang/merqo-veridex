@@ -164,7 +164,10 @@ jobs:
       # below covers installation separately.
       - name: GUI smoke test — unpacked application
         run: node scripts/gui-smoke.mjs --dist dist/win-unpacked --json gui-smoke-unpacked.json
-        timeout-minutes: 8
+        # The sweep alone can take ten minutes on a cold virtual machine, and this step is
+        # the only place the product is executed at all, so it gets room rather than a
+        # timeout that reports "did not report" while the app is still working.
+        timeout-minutes: 20
 
       - name: Upload GUI evidence
         if: always()
