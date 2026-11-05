@@ -246,12 +246,15 @@ export function registerNetwork(registry) {
     priority: 2,
     collect: async () => {
       const loaded = await loadSystemInformation();
-      if (!loaded.ok) return {};
+      if (!loaded.ok) return { adapterCount: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation.network') };
       try {
         const mapped = mapNetworkInterfaces(await loaded.si.networkInterfaces());
+        if (!mapped.summary || Object.keys(mapped.summary).length === 0) {
+          return { adapterCount: unavailable('systeminformation reported no network adapters', 'systeminformation.network') };
+        }
         return mapped.summary;
-      } catch {
-        return {};
+      } catch (error) {
+        return { adapterCount: failed(error instanceof Error ? error.message : String(error), 'systeminformation.network') };
       }
     }
   });

@@ -187,9 +187,12 @@ export function registerWindows(registry) {
         if (typeof osInfo?.uptime === 'number' && osInfo.uptime > 0) {
           fields.uptimeSeconds = available(Math.floor(osInfo.uptime), 'systeminformation.windows', { unit: 's' });
         }
+        if (Object.keys(fields).length === 0) {
+          return { osName: unavailable('systeminformation reported no operating-system details', 'systeminformation.windows') };
+        }
         return fields;
-      } catch {
-        return {};
+      } catch (error) {
+        return { osName: failed(error instanceof Error ? error.message : String(error), 'systeminformation.windows') };
       }
     }
   });

@@ -35,9 +35,29 @@ const standardSession = Object.freeze({
   detail: 'provider execution test'
 });
 
-function context() {
+/**
+ * A runner that throws from every method.
+ *
+ * NoopRunner returns a clean failure, which exercises each provider's *happy* path:
+ * the command runs, fails politely, and the provider writes an explained field. It does
+ * not exercise the `catch` blocks. Three providers returned `{}` from those blocks and
+ * the earlier version of this file passed anyway — the failure path was never run.
+ */
+class ThrowingRunner extends NoopRunner {
+  constructor() {
+    super();
+    /** How many times a provider actually tried to run something. */
+    this.attempts = 0;
+  }
+  run() { this.attempts += 1; return Promise.reject(new Error('simulated runner failure')); }
+  powershellJson() { this.attempts += 1; return Promise.reject(new Error('simulated runner failure')); }
+  shellJson() { this.attempts += 1; throw new Error('simulated runner failure'); }
+  powershell() { this.attempts += 1; return Promise.reject(new Error('simulated runner failure')); }
+}
+
+function context(runner = new NoopRunner()) {
   return {
-    runner: new NoopRunner(),
+    runner,
     permissions: standardSession,
     logger: { debug() {}, info() {}, warn() {}, error() {}, providerAttempt() {}, trace() {} },
     timeoutMs: 4000
@@ -159,4 +179,52 @@ test('a task naming a missing provider is refused at registration', () => {
     () => registry.registerTask({ id: 'x.y', module: 'x', title: 'X', providers: ['nope'] }),
     /unknown provider "nope"/
   );
+});
+
+
+test('a provider whose runner fails still explains itself rather than returning silence', async () => {
+  // The failure path, which the NoopRunner test above does not reach. A provider that
+  // awaits a command and catches the error must write an explained field, not `{}`:
+  // `{}` reads as "this machine has no such component".
+  const failures = [];
+  const registry = buildDefaultRegistry({ failures });
+  assert.deepEqual(failures, []);
+
+  const problems = [];
+  for (const provider of registry.providers.values()) {
+    const runner = new ThrowingRunner();
+    let fields;
+    try {
+      fields = await provider.collect(context(runner));
+    } catch {
+      // A throw is tolerated by design: the registry catches it, records the provider
+      // attempt as ERROR and carries on with the next provider, so the scan survives.
+      // What is *not* tolerated is returning an empty object, which the registry reads
+      // as a successful answer that produced nothing. `provider-registry.test` covers
+      // the catching side; this test covers the returning side.
+      continue;
+    }
+    if (!fields || typeof fields !== 'object') {
+      problems.push(`${provider.id}: returned ${String(fields)}`);
+      continue;
+    }
+    if (Object.keys(fields).length === 0) {
+      problems.push(`${provider.id}: returned {} when its runner failed`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(fields)) {
+      if (!value || !VALID_STATUSES.has(value.status)) {
+        problems.push(`${provider.id}.${key}: invalid FieldValue`);
+        continue;
+      }
+      // Nothing may claim a healthy reading when every command it issued failed. A
+      // provider that never touched the runner (systeminformation reads in-process) is
+      // allowed to pass: its data really did come from a working source.
+      if (value.status === Status.PASS && runner.attempts > 0) {
+        problems.push(`${provider.id}.${key}: claims PASS although all ${runner.attempts} command(s) failed`);
+      }
+    }
+  }
+
+  assert.deepEqual(problems, [], `providers returned silence when their runner failed:\n  ${problems.join('\n  ')}`);
 });

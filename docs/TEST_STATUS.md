@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 422 · pass 422 · fail 0
+tests 423 · pass 423 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -68,7 +68,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
 | `tests/integration/docs.test.js` | 5 | documentation paths and claims match the code |
 | `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
-| `tests/integration/providers.test.js` | 6 | every registered provider executes and explains itself |
+| `tests/integration/providers.test.js` | 7 | every provider executes and explains itself, including when its runner fails |
 | `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
 | `tests/integration/renderer.test.js` | 17 | all 15 pages render under jsdom; live-mode pages with a fake bridge |
 | `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
@@ -123,7 +123,9 @@ Four checks were added specifically because their absence had hidden bugs:
 
 1. **`providers.test.js`** — executes every registered provider. It found five providers
    returning an empty object instead of an explained status, and two `ReferenceError`s
-   that fired on every scan.
+   that fired on every scan. It was then strengthened with a runner that throws, because
+   the first version only exercised each provider's happy path: three more providers
+   returned `{}` from their `catch` blocks, which the polite-failure runner never reached.
 2. **`confidence-tiers.test.js`** — asserts every mechanism has a declared tier. It found
    three providers silently classified as heuristic guesses, one of which reads
    authoritative Windows servicing state.

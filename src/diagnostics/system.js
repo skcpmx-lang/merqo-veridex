@@ -179,8 +179,8 @@ export function registerSystem(registry) {
           hostname: cleanString(system?.hostname) ? available(cleanString(system.hostname), 'systeminformation.system', { notes: ['Sensitive identifier: redacted from reports unless enabled.'] }) : unavailable('Hostname not reported', 'systeminformation.system'),
           osPlatform: cleanString(osInfo?.platform) ? available(cleanString(osInfo.platform), 'systeminformation') : unavailable('Platform not reported', 'systeminformation.system')
         };
-      } catch {
-        return {};
+      } catch (error) {
+        return { hostname: failed(error instanceof Error ? error.message : String(error), 'systeminformation.system') };
       }
     }
   });
