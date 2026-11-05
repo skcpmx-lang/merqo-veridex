@@ -135,6 +135,35 @@ async function main() {
   const powershell = await runner.powershellJson('$PSVersionTable.PSVersion.ToString()', { name: 'smoke:psversion', timeoutMs: 20_000 });
   record(powershell.ok ? 'ok' : 'warn', powershell.ok ? `PowerShell JSON path works; PSVersion = ${JSON.stringify(powershell.data)}` : `PowerShell JSON path failed: ${powershell.error}`);
 
+  // Which external tools actually exist on this host? Three ERROR fields in the first green
+  // run were commands that failed, and "failed" and "is not installed on this SKU" are
+  // different facts. Ask the filesystem instead of inferring from an exit code.
+  if (permissions.isWindows) {
+    const probes = await runner.powershellJson(
+      "@('powercfg','dxdiag','manage-bde','pnputil','reagentc') | ForEach-Object { " +
+      "$p = Join-Path $env:SystemRoot ('System32\\' + $_ + '.exe'); " +
+      "if (-not (Test-Path $p)) { $p = Join-Path $env:SystemRoot ('System32\\' + $_ + '.exe') } " +
+      "[pscustomobject]@{ tool = $_; path = $p; present = (Test-Path $p) } } | ConvertTo-Json -Compress",
+      { name: 'smoke:tools', timeoutMs: 30_000 }
+    );
+    if (probes.ok) {
+      const list = Array.isArray(probes.data) ? probes.data : [probes.data];
+      for (const tool of list) {
+        record(tool.present ? 'ok' : 'warn', `tool ${tool.tool}: ${tool.present ? 'present' : 'NOT PRESENT on this host'} (${tool.path})`);
+      }
+    } else {
+      record('warn', `tool availability probe failed: ${probes.error}`);
+    }
+
+    const batteryPresent = await queryCim(runner, 'Win32_Battery', { properties: ['Name', 'Status'] });
+    record(
+      batteryPresent.ok && batteryPresent.rows.length > 0 ? 'ok' : 'info',
+      batteryPresent.ok
+        ? `Win32_Battery reports ${batteryPresent.rows.length} battery instance(s)`
+        : `Win32_Battery: ${batteryPresent.error}`
+    );
+  }
+
   const si = await loadSystemInformation();
   record(si.ok ? 'ok' : 'warn', si.ok ? 'systeminformation loaded' : `systeminformation unavailable: ${si.error}`);
 
