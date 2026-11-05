@@ -247,7 +247,9 @@ async function main() {
   // Tested first, so it is not measured while a four-minute sweep is still unwinding.
   await step('a scan can be cancelled mid-flight', async () => {
     // scan:start resolves only when the sweep is over, so it must never be awaited here.
-    await evaluate(`(window.veridex.invoke['scan:start']({}).then(() => 'done').catch((e) => 'error:' + e.message))`);
+    // A bounded list so the sweep is long enough to cancel but not long enough to be the
+    // reason the step expires.
+    await evaluate(`(window.veridex.invoke['scan:start']({ tasks: ['storage.health', 'drivers.inventory', 'windows.inventory'] }).then(() => 'done').catch((e) => 'error:' + e.message))`);
     // Wait until the sweep has actually begun, then cancel.
     let started = false;
     for (let i = 0; i < 30 && !started; i += 1) {
@@ -273,20 +275,24 @@ async function main() {
   }, 150_000);
 
   // ── 4b. A full sweep ─────────────────────────────────────────────────────
-  const sweep = await step('scan:start runs a real sweep and finishes', async () => {
-    // Fire without awaiting: scan:start resolves only when every task is done.
+  const sweep = await step('a scan runs through the UI and finishes', async () => {
+    // A bounded task list, deliberately. A full 15-task sweep takes ten minutes on a cold
+    // virtual machine and is already measured by `npm run smoke:live`, which drives the same
+    // runner without a window in the way. Repeating that measurement here made the GUI test
+    // a slow integration test that timed out on its own subject.
+    const tasks = ['system.identity', 'cpu.info', 'memory.info'];
     await evaluate(`(() => {
       window.__vxProgress = [];
       window.__vxUnsub?.();
       window.__vxUnsub = window.veridex.on('scan:progress', (p) => window.__vxProgress.push({ t: Date.now(), ...p }));
       return true;
     })()`);
-    await evaluate(`(window.veridex.invoke['scan:start']({}).then(() => 'done').catch((e) => 'error:' + e.message))`);
+    await evaluate(`(window.veridex.invoke['scan:start']({ tasks: ${JSON.stringify(tasks)} }).then(() => 'done').catch((e) => 'error:' + e.message))`);
 
     // Measured profile: a sweep on a cold virtual machine is slow, and "slow" is only useful
     // as a diagnostic if it says which task was slow. The budget is generous because the
     // point of this step is to observe the sweep, not to race it.
-    const deadline = Date.now() + 600_000;
+    const deadline = Date.now() + 180_000;
     let last = {};
     while (Date.now() < deadline) {
       const state = await ipc('scan:state');
@@ -305,8 +311,8 @@ async function main() {
       await sleep(1_000);
     }
     const events = await evaluate(`(window.__vxProgress ?? []).slice(-4)`);
-    throw new Error(`the sweep did not finish in 600s (running=${last.running}, lastScanAt=${last.lastScanAt ?? 'none'}, recent=${JSON.stringify(events)})`);
-  }, 640_000);
+    throw new Error(`the scan did not finish in 180s (running=${last.running}, lastScanAt=${last.lastScanAt ?? 'none'}, recent=${JSON.stringify(events)})`);
+  }, 200_000);
   if (sweep.ok) record('info', `sweep: ${JSON.stringify(sweep.value.slowest)}`);
 
   await step('the dashboard shows a coverage-aware score, never a bare one', async () => {
