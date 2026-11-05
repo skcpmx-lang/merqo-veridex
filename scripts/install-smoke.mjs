@@ -110,7 +110,7 @@ const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 function run(command, args, options = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
-      windowsHide: true,
+      windowsHide: true, // the default; a caller that launches a GUI must override it
       ...options,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -229,6 +229,12 @@ async function main() {
     const launchedAt = Date.now();
     const launch = await run(installedExe, [], {
       timeoutMs: 300_000,
+      // NOT windowsHide. That flag sets the process's STARTUPINFO to SW_HIDE, and Windows
+      // applies that show state to the application's first window: the page loads, show() is
+      // called, and the window is created invisible and stays invisible. It is meant for
+      // suppressing the console window of a console program, and it is wrong for a GUI one.
+      // This cost a run: the installed build reported readyState=complete, loading=false, and
+      // visible=false, forever.
       env: { ...process.env, VERIDEX_INSTALL_SMOKE: '1', VERIDEX_INSTALL_SMOKE_REPORT: smokeReport }
     });
     record('info', `installed application exited ${launch.code} after ${Date.now() - launchedAt}ms`);

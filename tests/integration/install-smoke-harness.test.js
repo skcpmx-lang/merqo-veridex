@@ -104,6 +104,21 @@ test('the installed harness never awaits readiness at module scope', () => {
   assert.deepEqual(offending, [], 'no module-scope statement may touch `app`');
 });
 
+test('neither launcher starts a GUI application with its window hidden', () => {
+  // `windowsHide: true` sets STARTUPINFO to SW_HIDE, and Windows applies that to the process's
+  // first window. The page loads, show() runs, and isVisible() stays false forever. It is a
+  // console-program flag and it does not belong on an application being tested for visibility.
+  const launcher = readFileSync(path.join(ROOT, 'scripts', 'install-smoke.mjs'), 'utf8');
+  const appLaunch = launcher.slice(launcher.indexOf('const launch = await run(installedExe'));
+  assert.match(appLaunch.slice(0, 600), /NOT windowsHide/, 'the app launch must explain why it is visible');
+  assert.doesNotMatch(appLaunch.slice(0, 600), /^\s*windowsHide: true,/m, 'the app launch must not hide its window');
+
+  const portable = readFileSync(path.join(ROOT, 'scripts', 'portable-smoke.mjs'), 'utf8');
+  const spawnAt = portable.indexOf('const child = spawn(exe, [], {');
+  assert.ok(spawnAt > -1);
+  assert.match(portable.slice(spawnAt, spawnAt + 400), /windowsHide: false/);
+});
+
 test('the installed harness never reads the archive it is running out of', () => {
   // Electron patches `fs` to serve paths inside an asar. Reading the archive file itself, from
   // the application running out of it, hangs the process - no error, no exit, just a wedge that

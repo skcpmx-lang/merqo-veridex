@@ -132,7 +132,10 @@ async function check() {
   const report = path.join(os.tmpdir(), 'veridex-portable-smoke.json');
   const exitCode = await new Promise((resolve) => {
     const child = spawn(exe, [], {
-      windowsHide: true,
+      // Not hidden: this asks Windows to start the application with its window hidden, and the
+      // application then never reports itself as visible. See the same note in
+      // scripts/install-smoke.mjs.
+      windowsHide: false,
       stdio: ['ignore', 'pipe', 'pipe'],
       // The light harness, not the full GUI suite: the question here is whether this build
       // starts and works from its extraction directory, and the full page walk already runs
