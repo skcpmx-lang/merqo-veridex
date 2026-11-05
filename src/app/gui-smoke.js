@@ -366,8 +366,27 @@ async function main() {
 
 // Attach only when invoked deliberately. A normal launch must never run this.
 if (process.env.VERIDEX_GUI_SMOKE === '1') {
+  // Lifecycle tracing. The run kept exiting early with no explanation, and an Electron main
+  // process can be brought down by events that never reach a step: a window closed by a
+  // stray click, a crash, or a quit triggered by something the harness did.
+  for (const event of ['before-quit', 'will-quit', 'quit', 'window-all-closed', 'render-process-gone', 'child-process-gone']) {
+    app.on(event, (...args) => {
+      record('info', `lifecycle: ${event}${args.length ? ` ${JSON.stringify(args[0]?.reason ?? args[0] ?? null).slice(0, 120)}` : ''}`);
+      void persist();
+    });
+  }
+  for (const [index, window] of BrowserWindow.getAllWindows().entries()) {
+    window.on('close', () => record('info', `window ${index} received close`));
+  }
+
   app.whenReady().then(() => {
     // The smoke test needs the window that main.js creates; give it a moment to appear.
+    app.on('browser-window-created', (_event, window) => {
+      record('info', `a window was created (${BrowserWindow.getAllWindows().length} total)`);
+      window.on('close', () => record('info', 'that window received close'));
+      window.on('closed', () => record('info', 'that window was closed'));
+      window.webContents.on('render-process-gone', (_e, details) => record('fail', `renderer gone: ${details.reason}`));
+    });
     const started = Date.now();
     const waitForWindow = setInterval(() => {
       if (BrowserWindow.getAllWindows().length > 0 && BrowserWindow.getAllWindows()[0].webContents.getURL()) {
