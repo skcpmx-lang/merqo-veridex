@@ -284,8 +284,12 @@ async function main() {
     const outcomes = {};
     for (const format of ['json', 'html', 'pdf']) {
       const result = await evaluate(`window.veridex.invoke['report:build']({ format: ${JSON.stringify(format)} })`);
-      const data = result?.data ?? result;
-      const bytes = data?.bytes ?? data?.length ?? (typeof data?.content === 'string' ? data.content.length : 0);
+      // The envelope is { ok, data: { format, bytes } } — an earlier version of this harness
+      // looked for data.bytes on the wrong level and reported "0 bytes" for a working build.
+      if (result?.ok === false) throw new Error(`${format} report failed: ${result.error?.message ?? 'unknown'}`);
+      const data = result?.data ?? {};
+      const bytes = data.bytes ?? 0;
+      if (data.format !== format) throw new Error(`asked for ${format}, got ${data.format}`);
       outcomes[format] = bytes;
       if (!bytes || bytes < 200) throw new Error(`${format} report produced ${bytes} bytes`);
     }

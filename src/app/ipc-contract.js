@@ -106,25 +106,68 @@ export function fail(error, code = 'app_error') {
  * @param {unknown[]} args
  * @returns {{ok:true, value:unknown}|{ok:false, reason:string}}
  */
+/**
+ * Normalise an argument list into the shape each channel documents.
+ *
+ * The renderer calls channels positionally - `invoke('report:save', 'csv')` - because that
+ * is what the preload exposes: one function per channel, taking plain arguments. The
+ * contract, however, describes named parameters. Accepting only the object form silently
+ * discarded a positional argument and defaulted to the first allowed value, so every
+ * report the user asked to save as CSV or JSON was written as a PDF. Accepting only the
+ * positional form would break every future caller that passes an object.
+ *
+ * So: if the first argument is an object, treat it as the named payload; otherwise map the
+ * positional arguments onto the channel's declared parameter names, in order.
+ *
+ * @param {string} channel
+ * @param {unknown[]} args
+ * @returns {Record<string, unknown>|null}
+ */
+function namedArguments(channel, args) {
+  const spec = CHANNELS[channel];
+  if (!spec) return null;
+  if (args.length === 1 && args[0] && typeof args[0] === 'object' && !Array.isArray(args[0])) {
+    return /** @type {Record<string, unknown>} */ (args[0]);
+  }
+  if (args.length === 0) return {};
+  /** @type {Record<string, unknown>} */
+  const named = {};
+  spec.args.forEach((name, index) => {
+    if (index < args.length) named[name] = args[index];
+  });
+  return named;
+}
+
 export function validateRequest(channel, args = []) {
   if (!isInvokable(channel)) return { ok: false, reason: `Unknown channel "${channel}"` };
-  const [first, second, third] = Array.isArray(args) ? args : [];
+  const list = Array.isArray(args) ? args : [];
+  const named = namedArguments(channel, list);
+  const [first, second] = named ? [named, list[1]] : [list[0], list[1]];
 
   switch (channel) {
     case 'app:setSetting': {
-      const key = String(first ?? '');
+      const key = String(named?.key ?? '');
       if (!key || key.length > 120) return { ok: false, reason: 'A setting key is required.' };
+      const value = named?.value;
       // A setting value may legitimately be a string, number, boolean, array or
       // object; it must not be a function or a class instance from the renderer.
-      const kind = typeof second;
+      const kind = typeof value;
       if (!['string', 'number', 'boolean', 'object', 'undefined'].includes(kind)) {
         return { ok: false, reason: `Setting values of type ${kind} are not accepted.` };
       }
-      return { ok: true, value: { key, value: second } };
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        // A plain object from the renderer has a prototype from its own realm, which is a
+        // different realm from this one. Accept only null-prototype or plain objects.
+        const proto = Object.getPrototypeOf(value);
+        if (proto !== null && proto !== Object.prototype) {
+          return { ok: false, reason: 'Setting values must be plain data, not class instances.' };
+        }
+      }
+      return { ok: true, value: { key, value } };
     }
 
     case 'app:applyPrivacyPreset': {
-      const presetId = String(first ?? '');
+      const presetId = String(named?.presetId ?? '');
       if (!['private', 'minimalTrace', 'workshop'].includes(presetId)) {
         return { ok: false, reason: `Unknown privacy preset "${presetId}"` };
       }
@@ -132,8 +175,11 @@ export function validateRequest(channel, args = []) {
     }
 
     case 'scan:start': {
-      const options = first && typeof first === 'object' ? first : {};
-      const tasks = Array.isArray(/** @type {any} */ (options).tasks) ? /** @type {any} */ (options).tasks : [];
+      const options = named ?? {};
+      // No task list means every registered task. Returning an empty array here made
+      // `scan:start` start a sweep of nothing, which reported success and produced no data.
+      const requested = /** @type {any} */ (options).tasks;
+      const tasks = Array.isArray(requested) ? requested : [];
       // Accept only task ids that look like ids: the main process resolves them
       // against the registry and refuses anything unknown, but a malformed list
       // should not even reach that far.
@@ -146,7 +192,12 @@ export function validateRequest(channel, args = []) {
 
     case 'report:build':
     case 'report:save': {
-      const format = String(first ?? 'pdf').toLowerCase();
+      // No default. Choosing pdf for a caller that asked for nothing is how the positional
+      // bug stayed invisible: the call succeeded and produced a document nobody requested.
+      if (named?.format === undefined || named?.format === null || named?.format === '') {
+        return { ok: false, reason: 'A report format is required: pdf, html, csv or json.' };
+      }
+      const format = String(named.format).toLowerCase();
       if (!['pdf', 'html', 'csv', 'json'].includes(format)) {
         return { ok: false, reason: `Unsupported report format "${format}".` };
       }
@@ -154,9 +205,9 @@ export function validateRequest(channel, args = []) {
     }
 
     case 'manual:record': {
-      const testId = String(first ?? '');
-      const verdict = String(second ?? '');
-      const detail = third && typeof third === 'object' ? third : {};
+      const testId = String(named?.testId ?? '');
+      const verdict = String(named?.verdict ?? '');
+      const detail = named?.detail && typeof named.detail === 'object' ? named.detail : {};
       if (!testId) return { ok: false, reason: 'A test id is required.' };
       if (!['PASS', 'FAIL', 'WARNING', 'NOT_APPLICABLE'].includes(verdict)) {
         return { ok: false, reason: `"${verdict}" is not a recordable verdict.` };
@@ -179,8 +230,8 @@ export function validateRequest(channel, args = []) {
     }
 
     case 'history:compare': {
-      const aId = String(first ?? '');
-      const bId = String(second ?? '');
+      const aId = String(named?.aId ?? '');
+      const bId = String(named?.bId ?? '');
       if (!aId || !bId) return { ok: false, reason: 'Two run ids are required to compare.' };
       if (aId.length > 80 || bId.length > 80) return { ok: false, reason: 'Run ids are too long.' };
       return { ok: true, value: { aId, bId } };
