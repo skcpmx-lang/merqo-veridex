@@ -77,6 +77,22 @@ test('the installed-application harness is selected by an environment variable, 
   assert.doesNotMatch(smoke, /process\.argv/, 'the installed harness must not parse command line flags');
 });
 
+test('the installed harness waits for the application to be ready before touching `app`', () => {
+  // main.js imports this module before `ready`. `app.getPath()` before ready throws, and
+  // because that happens inside the main process's startup the application simply never
+  // starts - which is exactly what the first portable run on Windows looked like.
+  const source = readFileSync(path.join(ROOT, 'src', 'app', 'install-smoke.js'), 'utf8');
+  // Ignore comment lines: the file explains this rule in prose, and prose is not a call.
+  const code = source.split('\n').map((line, index) => ({ line, index, comment: /^\s*(\/\/|\*|\/\*)/.test(line) }));
+  const readyLine = code.find(({ line }) => line.includes('await app.whenReady()'));
+  const firstAppUse = code.find(({ line, comment }) => !comment && /app\.getPath\(/.test(line));
+  assert.ok(readyLine, 'the harness must await app.whenReady()');
+  assert.ok(firstAppUse, 'the harness should use app.getPath()');
+  assert.ok(firstAppUse.index > readyLine.index, 'app.getPath() must come after app.whenReady()');
+  // And it must be a real await, not a .then() that the rest of the module races past.
+  assert.match(readyLine.line, /^\s*await app\.whenReady\(\);\s*$/);
+});
+
 test('both harnesses write their report atomically', () => {
   // The GUI harness lost four CI runs to a half-written verdict. These must not repeat it.
   for (const script of ['install-smoke.mjs', 'portable-smoke.mjs']) {

@@ -23,6 +23,12 @@ import { app, BrowserWindow } from 'electron';
 import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
 
+// main.js imports this module before the application is ready, so nothing here may touch
+// `app` until it is. Calling app.getPath() too early throws, and because the import happens
+// inside the main process's own startup the failure is silent: the process waits forever and
+// the launcher sees a portable build that never reports. That cost one CI run to find.
+await app.whenReady();
+
 const reportPath = process.env.VERIDEX_INSTALL_SMOKE_REPORT ?? path.join(app.getPath('temp'), 'veridex-install-smoke.json');
 
 // The same checks run for the portable build, which is the same application extracted to a

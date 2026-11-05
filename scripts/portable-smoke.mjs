@@ -123,6 +123,7 @@ if (process.platform !== 'win32') {
 
 async function check() {
   record('info', `portable executable: ${exe} (${readFileSync(exe).length} bytes)`);
+  const launchedAt = Date.now();
   record('info', `working directory: ${ROOT}`);
   record('info', `report will be written to ${reportPath}`);
 
@@ -146,11 +147,16 @@ async function check() {
     let output = '';
     child.stdout?.on('data', (chunk) => { output += chunk; });
     child.stderr?.on('data', (chunk) => { output += chunk; });
-    // A portable application that has not reported within eight minutes is not going to.
+    // The light harness finishes in under two minutes when it works at all; a portable build
+    // that has not reported in four is not going to. The wrapper spawns its own child, so a
+    // plain kill leaves that child running - taskkill /T takes the tree.
     const timer = setTimeout(() => {
-      try { child.kill(); } catch { /* gone */ }
+      try {
+        if (process.platform === 'win32') spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true });
+        else child.kill('SIGKILL');
+      } catch { /* already gone */ }
       resolve({ code: -1, output, timedOut: true });
-    }, 480_000);
+    }, 240_000);
     child.on('error', (error) => {
       clearTimeout(timer);
       resolve({ code: -1, output: `${output}${error.message}` });
@@ -162,8 +168,37 @@ async function check() {
   });
 
   const verdictPath = report;
-  if (typeof exitCode === 'object') record('info', `portable application output tail:\n${exitCode.output.trim().split('\n').slice(-12).join('\n')}`);
-  else record('info', `portable application exited ${exitCode}`);
+  record('info', `portable wrapper exited ${exitCode.code}${exitCode.timedOut ? ' (timed out and was killed)' : ''} after ${Math.round((Date.now() - launchedAt) / 1000)}s`);
+  if (exitCode.output?.trim()) {
+    for (const line of exitCode.output.trim().split('\n').slice(-15)) console.log(`    [portable] ${line}`);
+  } else {
+    record('info', 'the portable wrapper produced no output of its own');
+  }
+
+  // Whatever went wrong, the application writes a log, and the extraction directory is
+  // inspectable. This is the evidence that distinguishes "never started" from "started and
+  // hung", and there is no other way to get it from an unreachable job log.
+  const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
+  const logDir = path.join(appData, 'VERIDEX', 'logs');
+  if (existsSync(logDir)) {
+    const logs = readdirSync(logDir).filter((name) => name.endsWith('.log')).sort();
+    const newest = logs.at(-1);
+    if (newest) {
+      const lines = readFileSync(path.join(logDir, newest), 'utf8').trim().split('\n');
+      record('info', `application log ${newest}: ${lines.length} lines`);
+      for (const line of lines.slice(-12)) console.log(`    [log] ${line}`);
+      emit('notice', 'portable-smoke log', lines.slice(-6).join(' | ').slice(0, 900));
+    }
+  } else {
+    record('info', `no application log directory at ${logDir} — the application may never have started`);
+  }
+
+  // electron-builder's portable target extracts under the user's temp directory. If it is
+  // absent, the wrapper never unpacked; if it is present, it unpacked and something after
+  // that failed.
+  const temp = os.tmpdir();
+  const extracted = readdirSync(temp).filter((name) => /^[0-9a-f]{6,}$|VERIDEX/i.test(name));
+  record('info', `temp extraction candidates: ${extracted.slice(0, 8).join(', ') || '(none)'}`);
 
   if (!existsSync(verdictPath)) {
     record('fail', 'the portable executable did not write a verdict — it either failed to start or crashed');
