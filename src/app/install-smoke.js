@@ -273,22 +273,38 @@ async function run() {
     // waits with a running commentary rather than failing silently at the end.
     const visibleFrom = Date.now();
     let visible = window.isVisible();
-    while (!visible && Date.now() - visibleFrom < 180_000) {
+    while (!visible && Date.now() - visibleFrom < 90_000) {
       await sleep(1_000);
       if (window.isDestroyed()) throw new Error('the window was destroyed before it appeared');
       visible = window.isVisible();
       const elapsed = Date.now() - visibleFrom;
-      if (elapsed % 15_000 < 1_000) {
+      if (elapsed % 20_000 < 1_000) {
         let readyState = '(unavailable)';
         try {
           readyState = await window.webContents.executeJavaScript('document.readyState');
         } catch (error) {
           readyState = `unavailable: ${error instanceof Error ? error.message : String(error)}`;
         }
-        record('info', `${Math.round(elapsed / 1000)}s: visible=${visible} loading=${window.webContents.isLoading()} readyState=${readyState} url=${window.webContents.getURL().slice(-40)}`);
+        record('info', `${Math.round(elapsed / 1000)}s: visible=${visible} minimised=${window.isMinimized()} loading=${window.webContents.isLoading()} readyState=${readyState} url=${window.webContents.getURL().slice(-40)}`);
       }
     }
-    if (!visible) throw new Error('timed out after 180s waiting for the window to become visible');
+    if (!visible) {
+      // The last question worth asking from inside: can this window be shown at all? If an
+      // explicit show() works, the window exists and the platform permits it, so the application
+      // simply did not show its own window - a defect, and one the harness should name rather
+      // than hide. If it does not work, the window is not permitted to appear on this desktop
+      // and the finding has to say that instead.
+      record('info', 'the window never became visible on its own; asking it to show explicitly');
+      window.show();
+      await sleep(1_500);
+      const forced = window.isVisible();
+      if (forced) {
+        fail('the window was created and loaded but the application never showed it; an explicit show() made it visible');
+      } else {
+        fail('the window exists and its page has loaded, but it cannot be shown on this desktop at all');
+      }
+      throw new Error(`the window did not become visible (forced show: ${forced ? 'worked' : 'no effect'})`);
+    }
     record('ok', `window visible after ${Date.now() - visibleFrom}ms: ${window.getBounds().width}×${window.getBounds().height}${window.isMinimized() ? ' (minimised)' : ''}`);
 
     // The renderer must load from the asar, not from a development server or a missing file.
