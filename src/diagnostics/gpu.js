@@ -13,7 +13,7 @@
  * driver reports.
  */
 
-import { available, unavailable, failed, field, unsupported } from '../core/field.js';
+import { available, unavailable, failed, field, measured, unsupported } from '../core/field.js';
 import { Status } from '../core/status.js';
 import { cleanString, num, nonNegative, bytesToGiB, asArray, date } from '../platform/parse.js';
 import { queryCim, readRegistry, listSubKeys, runReadOnly, loadSystemInformation, failureToStatus } from '../platform/windows.js';
@@ -93,8 +93,8 @@ export function mapVideoController(adapter, vramBytesFromRegistry = null) {
       error: classification.kind === 'unknown' ? 'Adapter could not be classified' : null,
       notes: [`Classified as ${classification.kind} by rule: ${classification.rule}. This is a model-naming inference, not a driver-reported fact.`]
     }),
-    dedicatedVram: vramBytes !== null ? available(bytesToGiB(vramBytes), vramSource, { unit: 'GB', notes }) : unavailable('Dedicated video memory not reported', source),
-    sharedMemory: nonNegative(adapter.SharedSystemMemory) !== null ? available(bytesToGiB(nonNegative(adapter.SharedSystemMemory)), source, { unit: 'GB' }) : unavailable('Shared system memory not reported', source),
+    dedicatedVram: measured(vramBytes, bytesToGiB, vramSource, { unit: 'GB', notes, missing: 'Dedicated video memory not reported' }),
+    sharedMemory: measured(nonNegative(adapter.SharedSystemMemory), bytesToGiB, source, { unit: 'GB', missing: 'Shared system memory not reported' }),
     driverVersion: cleanString(adapter.DriverVersion) ? available(cleanString(adapter.DriverVersion), source) : unavailable('Driver version not reported', source),
     driverDate: driverDate ? available(driverDate.slice(0, 10), source) : unavailable('Driver date not reported', source),
     driverProvider: cleanString(adapter.InstalledDisplayDrivers) ? available(cleanString(adapter.InstalledDisplayDrivers), source) : unavailable('Installed driver file list not reported', source),
@@ -184,7 +184,7 @@ export function mapGraphicsUtilisation(graphics) {
     const memoryUsed = nonNegative(primary.memoryUsed);
     const memoryTotal = nonNegative(primary.memoryTotal);
     if (memoryUsed !== null && memoryTotal !== null && memoryTotal > 0) {
-      fields.vramUsed = available(bytesToGiB(memoryUsed), source, { unit: 'GB' });
+      fields.vramUsed = measured(memoryUsed, bytesToGiB, source, { unit: 'GB', missing: 'VRAM usage is not exposed by this driver' });
       fields.vramUtilization = available(Math.round((memoryUsed / memoryTotal) * 1000) / 10, source, { unit: '%' });
     } else {
       fields.vramUsed = unavailable('VRAM usage is not exposed by this driver', source);

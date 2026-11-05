@@ -18,7 +18,7 @@
  * reason, so the user knows the drive is not unreadable, only out of reach.
  */
 
-import { available, unavailable, failed, field, permissionRequired, unsupported } from '../core/field.js';
+import { available, unavailable, failed, field, measured, permissionRequired, unsupported } from '../core/field.js';
 import { Status } from '../core/status.js';
 import { cleanString, num, nonNegative, bytesToGiB } from '../platform/parse.js';
 import { queryCim, loadSystemInformation, failureToStatus } from '../platform/windows.js';
@@ -77,7 +77,7 @@ export function mapPhysicalDisk(disk, index = 0) {
     friendlyName: cleanString(disk.FriendlyName) ? available(cleanString(disk.FriendlyName), source) : unavailable(`${label}: name not reported`, source),
     model: cleanString(disk.Model) ? available(cleanString(disk.Model), source) : unavailable(`${label}: model not reported`, source),
     manufacturer: cleanString(disk.Manufacturer) ? available(cleanString(disk.Manufacturer), source) : unavailable(`${label}: manufacturer not reported`, source),
-    capacity: sizeBytes !== null ? available(bytesToGiB(sizeBytes), source, { unit: 'GB' }) : unavailable(`${label}: capacity not reported`, source),
+    capacity: measured(sizeBytes, bytesToGiB, source, { unit: 'GB', missing: `${label}: capacity not reported` }),
     mediaType: mediaType !== null && MEDIA_TYPE[mediaType] ? available(MEDIA_TYPE[mediaType], source) : unavailable(`${label}: media type not reported`, source),
     busType: busType !== null && BUS_TYPE[busType] ? available(BUS_TYPE[busType], source) : unavailable(`${label}: bus type not reported`, source),
     healthStatus: health !== null && HEALTH_STATUS[health] ? available(HEALTH_STATUS[health], source, { notes: ['Windows storage-stack health as reported by Storage Management.'] }) : unavailable(`${label}: Windows health status not reported`, source),
@@ -124,7 +124,7 @@ export function mapDiskDrive(drive, index = 0) {
     friendlyName: model ? available(model, source) : unavailable(`${label}: model not reported`, source),
     model: model ? available(model, source) : unavailable(`${label}: model not reported`, source),
     manufacturer: cleanString(drive?.Manufacturer) ? available(cleanString(drive.Manufacturer), source) : unavailable(`${label}: manufacturer not reported`, source),
-    capacity: sizeBytes !== null ? available(bytesToGiB(sizeBytes), source, { unit: 'GB' }) : unavailable(`${label}: capacity not reported`, source),
+    capacity: measured(sizeBytes, bytesToGiB, source, { unit: 'GB', missing: `${label}: capacity not reported` }),
     mediaType: mediaType ? available(mediaType, source) : unavailable(`${label}: media type not reported`, source),
     busType: busType ? available(busType, source) : unavailable(`${label}: bus type not reported`, source),
     serialNumber: cleanString(drive?.SerialNumber) ? available(cleanString(drive.SerialNumber), source, { notes: ['Sensitive identifier: redacted unless enabled.'] }) : unavailable(`${label}: serial number not available`, source),
@@ -315,7 +315,7 @@ export function registerStorage(registry) {
         const fields = {};
         (Array.isArray(layout) ? layout : []).forEach((disk, index) => {
           const size = nonNegative(disk.size);
-          if (size !== null && size > 0) fields[`disk${index + 1}.capacity`] = available(bytesToGiB(size), 'systeminformation.storage', { unit: 'GB' });
+          if (size !== null && size > 0) fields[`disk${index + 1}.capacity`] = measured(size, bytesToGiB, 'systeminformation.storage', { unit: 'GB', missing: `Disk ${index + 1}: capacity not reported` });
           const type = cleanString(disk.type);
           if (type) fields[`disk${index + 1}.mediaType`] = available(type, 'systeminformation.storage');
           const iface = cleanString(disk.interfaceType);

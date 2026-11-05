@@ -206,16 +206,24 @@ export class DiagnosticRunner {
       }
 
       const providerStart = Date.now();
+      // A provider may need a different budget from the global one, in either direction:
+      // enumerating every Windows optional feature on a cold machine takes far longer than a
+      // quick CIM query, while a provider that shells out to a single fast command should not
+      // be allowed to sit for 20 s. A declared budget wins as written. It is still a ceiling,
+      // so this cannot turn a hang into a wait - the test suite asserts that.
+      const budgetMs = Number.isFinite(provider.timeoutMs) && provider.timeoutMs > 0
+        ? provider.timeoutMs
+        : this.timeoutMs;
       try {
         const fields = await this.#withTimeout(
           provider.collect({
             runner: this.#runnerFor(provider),
             permissions: this.permissions,
             logger: this.logger,
-            timeoutMs: this.timeoutMs,
+            timeoutMs: budgetMs,
             signal: options.signal
           }),
-          this.timeoutMs,
+          budgetMs,
           providerId
         );
 

@@ -12,7 +12,7 @@
  * population, XMP disabled, mixed modules).
  */
 
-import { available, unavailable, failed, field, notApplicable } from '../core/field.js';
+import { available, unavailable, failed, field, measured, notApplicable } from '../core/field.js';
 import { Status } from '../core/status.js';
 import { cleanString, num, nonNegative, kbToGiB, smbiosMemoryType, memoryFormFactor, bytesToGiB } from '../platform/parse.js';
 import { queryCim, loadSystemInformation, failureToStatus } from '../platform/windows.js';
@@ -57,7 +57,7 @@ export function mapMemoryModule(module, index = 0) {
 
   const fields = {
     label: available(`${label}${deviceLocator ? ` — ${deviceLocator}` : ''}`, source),
-    capacity: capacityBytes !== null ? available(bytesToGiB(capacityBytes), source, { unit: 'GB' }) : unavailable(`${label}: capacity not reported`, source),
+    capacity: measured(capacityBytes, bytesToGiB, source, { unit: 'GB', missing: `${label}: capacity not reported` }),
     manufacturer: cleanString(module.Manufacturer)
       ? available(cleanString(module.Manufacturer), source)
       : unavailable(`${label}: manufacturer not encoded in the module SPD`, source),
@@ -116,11 +116,11 @@ export function summariseModules(modules, arrayInfo = null) {
   /** @type {Record<string, import('../core/field.js').FieldValue>} */
   const fields = {
     moduleCount: list.length > 0 ? available(list.length, source) : unavailable('No memory modules reported', source),
-    totalCapacity: list.length > 0 ? available(bytesToGiB(totalBytes), source, { unit: 'GB' }) : unavailable('Total module capacity not reported', source),
+    totalCapacity: measured(totalBytes, bytesToGiB, source, { unit: 'GB', missing: 'Total module capacity not reported' }),
     slotsTotal: slots !== null ? available(slots, source) : unavailable('Physical memory array slot count not reported', source),
     slotsPopulated: list.length > 0 && slots !== null ? available(list.length, source) : unavailable('Populated slot count not reported', source),
     slotsFree: slots !== null && list.length > 0 ? available(Math.max(0, slots - list.length), source) : unavailable('Free slot count not reported', source),
-    maxSupportedCapacity: maxCapacityKb !== null ? available(kbToGiB(maxCapacityKb), source, { unit: 'GB', notes: ['Reported by the firmware as the arithmetic maximum. Real limits also depend on module density and the chipset.'] }) : unavailable('Maximum supported capacity not reported', source),
+    maxSupportedCapacity: measured(maxCapacityKb, kbToGiB, source, { unit: 'GB', missing: 'Maximum supported capacity not reported', notes: ['Reported by the firmware as the arithmetic maximum. Real limits also depend on module density and the chipset.'] }),
     channelLayout: describeChannels(list)
   };
 
@@ -166,10 +166,11 @@ export function mapMemoryTotals(mem) {
 
   /** @type {Record<string, import('../core/field.js').FieldValue>} */
   const fields = {};
-  if (total !== null && total > 0) fields.totalPhysical = available(bytesToGiB(total), source, { unit: 'GB' });
-  if (used !== null) fields.usedMemory = available(bytesToGiB(used), source, { unit: 'GB' });
-  if (free !== null) fields.availableMemory = available(bytesToGiB(free), source, { unit: 'GB' });
-  if (active !== null) fields.activeMemory = available(bytesToGiB(active), source, { unit: 'GB' });
+  if (total !== null && total > 0) fields.totalPhysical = measured(total, bytesToGiB, source, { unit: 'GB', missing: 'Total physical memory not reported' });
+  // `used` can legitimately be 0 on an idle machine, and 0 bytes converts to null.
+  if (used !== null) fields.usedMemory = measured(used, bytesToGiB, source, { unit: 'GB', missing: 'Used memory not reported' });
+  if (free !== null) fields.availableMemory = measured(free, bytesToGiB, source, { unit: 'GB', missing: 'Available memory not reported' });
+  if (active !== null) fields.activeMemory = measured(active, bytesToGiB, source, { unit: 'GB', missing: 'Active memory not reported' });
   if (total !== null && total > 0 && used !== null) {
     fields.utilization = available(Math.round((used / total) * 1000) / 10, source, { unit: '%' });
   }
@@ -194,7 +195,7 @@ export function mapMemLayout(layout) {
   const totalBytes = modules.reduce((sum, module) => sum + (nonNegative(module.size) ?? 0), 0);
   const fields = {
     moduleCount: available(modules.length, source),
-    totalCapacity: available(bytesToGiB(totalBytes), source, { unit: 'GB' })
+    totalCapacity: measured(totalBytes, bytesToGiB, source, { unit: 'GB', missing: 'Total module capacity not reported' })
   };
 
   return { modules, fields };
@@ -256,7 +257,7 @@ export function registerMemory(registry) {
         layoutMapped.modules.forEach((module, index) => {
           const size = nonNegative(module.size);
           if (size !== null && size > 0) {
-            fields[`fallbackModule${index + 1}.capacity`] = available(bytesToGiB(size), 'systeminformation.memory', { unit: 'GB' });
+            fields[`fallbackModule${index + 1}.capacity`] = measured(size, bytesToGiB, 'systeminformation.memory', { unit: 'GB', missing: `Module ${index + 1}: capacity not reported` });
             const type = cleanString(module.type);
             if (type) fields[`fallbackModule${index + 1}.type`] = available(type, 'systeminformation.memory');
             const clock = nonNegative(module.clockSpeed);

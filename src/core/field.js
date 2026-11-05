@@ -126,6 +126,32 @@ export function warning(value, source, options = {}) {
   return field(value, { ...options, source, status: Status.WARNING });
 }
 
+/**
+ * Build a field from a raw value that has to be converted first, where the conversion can
+ * fail to produce a number.
+ *
+ * `bytesToGiB(0)` returns `null`: "0 bytes" and "not reported" are different answers, and
+ * a zero-size device is nonsense. But `available(null)` is a contradiction - a field that
+ * claims a value while carrying none - so it throws, and on a real machine one 0-byte
+ * device took down the whole memory task with an invariant violation. This helper makes
+ * the conversion's absence an honest `unavailable` instead. It cannot be forgotten by
+ * writing the two-step version, because there is only one step.
+ *
+ * @param {unknown} value        Raw value fed to the converter.
+ * @param {(value: unknown) => number|null} convert
+ * @param {string|null} source
+ * @param {{unit?: string|null, notes?: string[], missing?: string, warningBelow?: number|null}} [options]
+ * @returns {FieldValue}
+ */
+export function measured(value, convert, source, options = {}) {
+  const { unit = null, notes = [], missing = 'Value not reported' } = options;
+  const converted = convert(value);
+  if (converted === null || converted === undefined || !Number.isFinite(Number(converted))) {
+    return unavailable(missing, source, { notes, unit });
+  }
+  return available(converted, source, { unit, notes });
+}
+
 /** No provider on this device can supply the data. */
 export function unavailable(reason, source = null, options = {}) {
   return field(null, {

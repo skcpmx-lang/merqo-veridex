@@ -217,6 +217,11 @@ export function registerWindows(registry) {
     id: 'system-features.windows',
     title: 'Windows servicing inventory',
     priority: 1,
+    // Three separate PowerShell/CIM calls, two of which enumerate a whole subsystem. On a
+    // Windows runner this is the slowest provider in the sweep and reliably exceeds the
+    // global 20 s budget; it then reports ERROR and the checksum history for the machine
+    // gains a spurious difference.
+    timeoutMs: 90_000,
     collect: async (ctx) => {
       const [features, services, updates] = await Promise.all([
         ctx.permissions.isAdmin
