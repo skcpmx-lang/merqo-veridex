@@ -245,9 +245,12 @@ async function main() {
       }
       if (verdict) {
         record('info', `installed build reported ${verdict.findings?.length ?? 0} finding(s), ${verdict.problems?.length ?? 0} problem(s)`);
-        for (const finding of verdict.findings ?? []) record(finding.level, `[installed] ${finding.message}`);
+        for (const finding of (verdict.findings ?? []).slice(-40)) record(finding.level, `[installed] ${finding.message}`);
         for (const problem of verdict.problems ?? []) fail(`[installed] ${problem}`);
-        if (verdict.complete !== true) fail('the installed application stopped before finishing its own checks');
+        if (verdict.complete !== true) {
+          const lastPhase = [...(verdict.findings ?? [])].reverse().find((finding) => finding.message.startsWith('→ '));
+          fail(`the installed application stopped before finishing its checks${lastPhase ? ` (last phase: ${lastPhase.message.slice(2)})` : ''}`);
+        }
         if (verdict.installDir && path.resolve(verdict.installDir).toLowerCase() !== path.resolve(installedDir).toLowerCase()) {
           fail(`the running application reported a different install directory (${verdict.installDir}) than the one it was installed to (${installedDir})`);
         }

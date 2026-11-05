@@ -51,9 +51,29 @@ const findings = [];
 /** @type {string[]} */
 const problems = [];
 
+/** The phase in progress, so a hang can say where it hung. */
+let phase = 'module load';
+/** When the current phase began. */
+let lastProgress = Date.now();
+
+/**
+ * Enter a phase. Recorded, persisted and used by the watchdog.
+ * @param {string} name
+ */
+function enter(name) {
+  phase = name;
+  lastProgress = Date.now();
+  record('info', `→ ${name}`);
+  try {
+    persist(false);
+  } catch {
+    // The verdict is best-effort until the run is complete.
+  }
+}
+
 /** @param {'ok'|'info'|'warn'|'fail'} level @param {string} message */
 function record(level, message) {
-  findings.push({ level, message });
+  findings.push({ level, message, phase });
   const prefix = level === 'fail' ? 'FAIL' : level === 'warn' ? 'WARN' : level === 'ok' ? '  ok' : ' info';
   console.log(`${prefix}  ${message}`);
 }
@@ -125,7 +145,24 @@ app.whenReady().then(run).catch((error) => {
 async function run() {
   resolvedReportPath = reportPath ?? path.join(tempDir(), 'veridex-install-smoke.json');
 
-  record('info', `→ installed application smoke test`);
+  // A watchdog, because a hung harness is indistinguishable from a broken build and this one
+  // has already produced two runs of exactly that confusion. If no phase reports for 120s, the
+  // verdict says which phase and the process ends - a named failure instead of a timeout.
+  const watchdog = setInterval(() => {
+    const stuckFor = Date.now() - lastProgress;
+    if (stuckFor < 120_000) return;
+    clearInterval(watchdog);
+    fail(`the harness stopped making progress for ${Math.round(stuckFor / 1000)}s during "${phase}"`);
+    try {
+      persist(false); // incomplete on purpose: the run did not finish
+    } catch {
+      // evidence already on stdout
+    }
+    app.exit(1);
+  }, 5_000);
+  watchdog.unref?.();
+
+  enter('installed application smoke test');
 
   const handle = { findings, problems, persist };
   process.on('unhandledRejection', (reason) => {
@@ -139,6 +176,7 @@ async function run() {
   const installDir = path.dirname(process.execPath);
   record('info', `executable: ${process.execPath}`);
   record('info', `install directory: ${installDir}`);
+  enter('inspecting the installed files');
 
   const appDir = path.join(installDir, 'resources', 'app.asar');
   if (existsSync(appDir)) {
@@ -151,6 +189,7 @@ async function run() {
   const sibling = path.join(installDir, 'resources', 'app.asar.unpacked');
   record('info', `unpacked resources: ${existsSync(sibling) ? 'present' : 'absent (nothing was marked asarUnpack)'}`);
 
+  enter('reading the install directory');
   const entries = readdirSync(installDir).slice(0, 12);
   record('info', `install directory contains ${readdirSync(installDir).length} entries, e.g. ${entries.slice(0, 6).join(', ')}`);
 
@@ -159,7 +198,8 @@ async function run() {
   else if (variant === 'portable') record('info', `portable build runs as ${path.basename(process.execPath)} from an extraction directory`);
   else record('warn', `VERIDEX.exe not found by name; running as ${path.basename(process.execPath)}`);
 
-  // ── 2. The uninstaller, which is what makes this an installation ─────────────
+    enter('inspecting the uninstaller');
+// ── 2. The uninstaller, which is what makes this an installation ─────────────
   if (variant === 'portable') {
     const hasUninstaller = readdirSync(installDir).some((name) => /^Uninstall .*\.exe$/i.test(name));
     record('info', `portable build: uninstaller ${hasUninstaller ? 'present (unexpected)' : 'absent, as designed'}`);
@@ -175,7 +215,8 @@ async function run() {
     }
   }
 
-  // ── 3. The data directory ─────────────────────────────────────────────────────
+    enter('checking the data directory');
+// ── 3. The data directory ─────────────────────────────────────────────────────
   // A fresh installation must work with a data directory that does not exist yet. The
   // application creates it; if anything assumed it was there, a first run is the only time that
   // shows up.
@@ -188,9 +229,11 @@ async function run() {
   record('ok', 'the temp directory is writable, so the application can write reports and logs');
 
   // ── 4. The interface comes up ────────────────────────────────────────────────
+  enter('waiting for the window');
   let window = null;
   try {
     window = await waitFor(() => BrowserWindow.getAllWindows()[0], 45_000, 'the application window');
+    enter('the interface is up');
     record('ok', `window created (${BrowserWindow.getAllWindows().length} window(s))`);
     await waitFor(() => window.isVisible(), 30_000, 'the window to become visible');
     record('ok', `window visible: ${window.getBounds().width}×${window.getBounds().height}`);
@@ -242,7 +285,8 @@ async function run() {
     fail(`the installed application did not come up: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // ── 5. Verdict ───────────────────────────────────────────────────────────────
+    enter('verdict');
+// ── 5. Verdict ───────────────────────────────────────────────────────────────
   // Finalised before the window closes: closing it quits the application.
   persist(true);
   console.log('');
