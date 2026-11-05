@@ -192,26 +192,34 @@ export async function renderPdf(report, options = {}) {
   // ── Coverage ────────────────────────────────────────────────────────────────
   const coverage = report.coverage;
   ensureSpace(90);
-  heading(doc, 'Test coverage', contentWidth);
-  const cells = [
-    ['Assessed', coverage.assessed],
-    ['Passed', coverage.passed],
-    ['Warnings', coverage.warned],
-    ['Failed', coverage.failed],
-    ['Untested', coverage.untested],
-    ['Blocked', coverage.blocked],
-    ['Unavailable', coverage.unsupported],
-    ['Coverage', `${coverage.coveragePercent}%`]
-  ];
-  const cellWidth = (contentWidth - 7 * 6) / 8;
-  const cellTop = doc.y;
-  cells.forEach(([label, value], index) => {
-    const x = PAGE.margin + index * (cellWidth + 6);
-    doc.roundedRect(x, cellTop, cellWidth, 40, 5).fillAndStroke('#ffffff', COLOURS.lineSoft);
-    doc.font(FONTS.bold).fontSize(13).fillColor(COLOURS.ink).text(String(value), x + 6, cellTop + 7, { width: cellWidth - 12, lineBreak: false });
-    doc.font(FONTS.regular).fontSize(6).fillColor(COLOURS.inkSoft).text(label.toUpperCase(), x + 6, cellTop + 25, { width: cellWidth - 12, characterSpacing: 0.4, lineBreak: false });
-  });
-  doc.y = cellTop + 48;
+  heading(doc, 'Automated field coverage', contentWidth);
+
+  // Draw one strip of count cells. Shared by field coverage and manual programme so
+  // the two can never be confused for each other.
+  const strip = (cells) => {
+    const cellWidth = (contentWidth - (cells.length - 1) * 6) / cells.length;
+    const cellTop = doc.y;
+    cells.forEach(([label, value], index) => {
+      const x = PAGE.margin + index * (cellWidth + 6);
+      doc.roundedRect(x, cellTop, cellWidth, 40, 5).fillAndStroke('#ffffff', COLOURS.lineSoft);
+      doc.font(FONTS.bold).fontSize(13).fillColor(COLOURS.ink).text(String(value), x + 6, cellTop + 7, { width: cellWidth - 12, lineBreak: false });
+      doc.font(FONTS.regular).fontSize(6).fillColor(COLOURS.inkSoft).text(label.toUpperCase(), x + 6, cellTop + 25, { width: cellWidth - 12, characterSpacing: 0.4, lineBreak: false });
+    });
+    doc.y = cellTop + 48;
+  };
+
+  if (coverage.totalFields > 0) {
+    strip([
+      ['Assessed', coverage.assessed],
+      ['Passed', coverage.passed],
+      ['Warnings', coverage.warned],
+      ['Failed', coverage.failed],
+      ['Untested', coverage.untested],
+      ['Blocked', coverage.blocked],
+      ['Unavailable', coverage.unsupported],
+      ['Coverage', `${coverage.coveragePercent}%`]
+    ]);
+  }
   doc.font(FONTS.italic).fontSize(7).fillColor(COLOURS.inkSoft).text(coverage.note, PAGE.margin, doc.y, { width: contentWidth });
   doc.y += 12;
 
@@ -282,13 +290,26 @@ export async function renderPdf(report, options = {}) {
     ensureSpace(90);
     doc.y += 10;
     heading(doc, 'Manual inspection results', contentWidth);
-    doc.font(FONTS.italic).fontSize(7.5).fillColor(COLOURS.inkSoft).text('Recorded by the person performing the inspection. Software cannot detect these defects; these are observations, not measurements.', PAGE.margin, doc.y, { width: contentWidth });
+    doc.font(FONTS.italic).fontSize(7.5).fillColor(COLOURS.inkSoft).text('Recorded by the person performing the inspection. Rows marked "capture" are computed from real device events; rows marked "manual observation" depend on the inspector\'s judgement. Tests that were not run are not listed and are counted as not run, never as passing.', PAGE.margin, doc.y, { width: contentWidth });
     doc.y += 8;
+
+    if (report.manualCoverage) {
+      const mc = report.manualCoverage;
+      ensureSpace(30);
+      doc.font(FONTS.regular).fontSize(7).fillColor(COLOURS.ink).text(
+        `Manual programme: ${mc.answered} of ${mc.totalTests} tests answered (${mc.percentComplete}%). ${mc.passed} passed, ${mc.failed} failed, ${mc.warned} warned, ${mc.notApplicable} not applicable, ${mc.untested} not run.`,
+        PAGE.margin,
+        doc.y,
+        { width: contentWidth }
+      );
+      doc.y += 8;
+    }
 
     for (const result of report.manualResults) {
       ensureSpace(28);
       const rowY = doc.y;
-      doc.font(FONTS.bold).fontSize(7.5).fillColor(COLOURS.ink).text(result.title, PAGE.margin + 2, rowY, { width: contentWidth * 0.4 });
+      doc.font(FONTS.bold).fontSize(7.5).fillColor(COLOURS.ink).text(result.title, PAGE.margin + 2, rowY, { width: contentWidth * 0.34 });
+      doc.font(FONTS.regular).fontSize(6).fillColor(COLOURS.muted).text(result.kind === 'capture' ? 'capture' : 'manual observation', PAGE.margin + contentWidth * 0.36, rowY + 1, { width: contentWidth * 0.16, lineBreak: false });
       pill(doc, statusLabel(result.status), toneOf(result.status), PAGE.margin + contentWidth * 0.52, rowY - 1);
       doc.font(FONTS.regular).fontSize(6.5).fillColor(COLOURS.inkSoft).text(result.observedAt, PAGE.margin + contentWidth - 110, rowY, { width: 110, align: 'right' });
       doc.y = rowY + 12;

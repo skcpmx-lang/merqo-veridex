@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildReport, buildMeta, makeReportId, humaniseKey, fieldsToRows, redactField,
-  isPrivateField, computeCoverage, aggregateStatus, formatValue, flattenReport,
+  isPrivateField, computeCoverage, tallyManual, aggregateStatus, formatValue, flattenReport,
   REPORT_SCHEMA_VERSION, SECTION_ORDER
 } from '../../src/reporting/model.js';
 import { renderPdf } from '../../src/reporting/pdf.js';
@@ -175,7 +175,11 @@ test('disabling manual results removes them and recomputes coverage', () => {
   const withManual = sampleReport();
   const without = sampleReport({ extra: { settings: { includeManualResults: false } } });
   assert.equal(without.manualResults.length, 0);
-  assert.notEqual(without.coverage.totalFields, withManual.coverage.totalFields);
+  assert.equal(without.manualCoverage, null, 'with manual results off there is no manual programme to report');
+  // Field coverage is unaffected by manual results either way — that separation is
+  // the whole point of keeping the two tallies apart.
+  assert.equal(without.coverage.totalFields, withManual.coverage.totalFields);
+  assert.equal(without.coverage.coveragePercent, withManual.coverage.coveragePercent);
 });
 
 test('PDF renders a real document with page furniture and the certificate', async () => {
@@ -223,7 +227,7 @@ test('status pills always carry a text label, never colour alone', () => {
 
 test('HTML includes the coverage block and the mandatory disclaimer', () => {
   const html = renderHtml(sampleReport());
-  assert.ok(html.includes('Test coverage'));
+  assert.ok(html.includes('Automated field coverage'));
   assert.ok(html.includes('Coverage'));
   assert.ok(html.includes('not a warranty') || html.includes('excluded from the score'));
 });
@@ -303,4 +307,58 @@ test('computeCoverage handles an empty report without dividing by zero', () => {
   const coverage = computeCoverage([], []);
   assert.equal(coverage.coveragePercent, 0);
   assert.equal(coverage.totalFields, 0);
+});
+
+test('manual results never inflate automated field coverage', () => {
+  // Regression: folding manual observations into the field tally made a run that
+  // collected no automated fields report 100% field coverage.
+  const coverage = computeCoverage([], [
+    { status: Status.PASS },
+    { status: Status.PASS },
+    { status: Status.WARNING }
+  ]);
+  assert.equal(coverage.totalFields, 0);
+  assert.equal(coverage.coveragePercent, 0, 'field coverage must stay 0 when no fields were collected');
+  assert.match(coverage.note, /No automated fields were collected/);
+  assert.equal(coverage.manual.total, 3);
+  assert.equal(coverage.manual.passed, 2);
+  assert.equal(coverage.manual.coveragePercent, 100);
+});
+
+test('not-applicable manual results are neither passed nor untested', () => {
+  const coverage = computeCoverage([], [{ status: Status.NOT_APPLICABLE }, { status: Status.PASS }]);
+  assert.equal(coverage.manual.notApplicable, 1);
+  assert.equal(coverage.manual.untested, 0);
+  assert.equal(coverage.manual.passed, 1);
+  assert.equal(coverage.manual.coveragePercent, 50);
+});
+
+test('a manual-only report states there is no field coverage instead of showing a bar', () => {
+  const report = buildReport({
+    modules: {},
+    manualResults: [{ id: 'display.white', title: 'White field', status: Status.PASS, observedAt: '2026-11-05T00:00:00.000Z', notes: ['clean'], kind: 'observe' }],
+    meta: { reportId: 'VX-RPT-MANUAL-ONLY' }
+  });
+  assert.equal(report.coverage.totalFields, 0);
+  assert.equal(report.manualCoverage.total, 1);
+  const html = renderHtml(report);
+  assert.ok(html.includes('No automated fields were collected'));
+  assert.ok(html.includes('Manual observation'), 'the result must be labelled as a human observation');
+});
+
+test('manual coverage is present in every renderer, so formats cannot disagree', async () => {
+  const report = buildReport({
+    modules: {},
+    manualResults: [{ id: 'keyboard.keys', title: 'Essential keys respond', status: Status.WARNING, observedAt: '2026-11-05T00:00:00.000Z', notes: ['KeyZ silent'], kind: 'capture' }],
+    manualCoverage: { totalTests: 31, answered: 1, passed: 0, failed: 0, warned: 1, notApplicable: 0, untested: 30, percentComplete: 3.2, statement: '1 of 31 manual inspection tests were answered; 30 were not run and are reported as UNTESTED, not as passing.' },
+    meta: { reportId: 'VX-RPT-MANUAL-COV' }
+  });
+
+  assert.equal(JSON.parse(renderJson(report)).manualCoverage.answered, 1);
+  const html = renderHtml(report);
+  assert.ok(html.includes('30') && html.includes('Not run'));
+  const pdf = await renderPdf(report);
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  // A capture-based result must be labelled as captured, not as an observation.
+  assert.ok(html.includes('Captured from device events'));
 });

@@ -104,21 +104,38 @@ export function renderHtml(report, options = {}) {
     )
     .join('');
 
+  const manualCoverage = report.manualCoverage ?? null;
+  const manualCoverageHtml = manualCoverage
+    ? `<div class="coverage-grid">
+  <div class="coverage-cell"><div class="n">${manualCoverage.answered}</div><div class="k">Answered</div></div>
+  <div class="coverage-cell"><div class="n">${manualCoverage.passed}</div><div class="k">Passed</div></div>
+  <div class="coverage-cell"><div class="n">${manualCoverage.failed}</div><div class="k">Failed</div></div>
+  <div class="coverage-cell"><div class="n">${manualCoverage.warned}</div><div class="k">Warnings</div></div>
+  <div class="coverage-cell"><div class="n">${manualCoverage.notApplicable}</div><div class="k">Not applicable</div></div>
+  <div class="coverage-cell"><div class="n">${manualCoverage.untested}</div><div class="k">Not run</div></div>
+  <div class="coverage-cell"><div class="n">${manualCoverage.totalTests}</div><div class="k">Total tests</div></div>
+  <div class="coverage-cell"><div class="n">${manualCoverage.percentComplete}%</div><div class="k">Complete</div></div>
+</div>
+<p class="disclaimer">${escapeHtml(manualCoverage.statement)}</p>`
+    : '';
+
   const manualHtml = report.manualResults.length
     ? `
     <section class="section manual">
       <h2>Manual inspection results <span class="hint">recorded by the person performing the inspection</span></h2>
+      ${manualCoverageHtml}
       <table>
-        <thead><tr><th>Test</th><th>Result</th><th>Observed at</th><th>Notes</th></tr></thead>
+        <thead><tr><th>Test</th><th>Result</th><th>Evidence basis</th><th>Observed at</th><th>Notes</th></tr></thead>
         <tbody>
           ${report.manualResults
             .map(
-              (result) => `<tr><td class="field">${escapeHtml(result.title)}</td><td>${statusPill(result.status)}</td><td class="source">${escapeHtml(result.observedAt)}</td><td class="detail">${escapeHtml(result.notes.join(' '))}</td></tr>`
+              (result) =>
+                `<tr><td class="field">${escapeHtml(result.title)}</td><td>${statusPill(result.status)}</td><td class="source">${result.kind === 'capture' ? 'Captured from device events' : 'Manual observation'}</td><td class="source">${escapeHtml(result.observedAt ?? '')}</td><td class="detail">${escapeHtml(result.notes.join(' '))}${result.defects === null || result.defects === undefined ? '' : ` <span class="src">Defects recorded: ${result.defects}</span>`}</td></tr>`
             )
             .join('')}
         </tbody>
       </table>
-      <p class="disclaimer">These results describe what a human observed. Software cannot detect dead pixels, backlight bleed, speaker distortion or physical port function, so these findings depend on the inspector's judgement.</p>
+      <p class="disclaimer">Rows marked "Manual observation" describe what a human saw or heard. Software cannot detect dead pixels, backlight bleed, speaker distortion or physical port function, so those findings depend on the inspector's judgement. Rows marked "Captured from device events" are computed from real events VERIDEX received. Tests that were not run are not listed here and are counted as not run above; they are never assumed to have passed.</p>
     </section>`
     : '';
 
@@ -294,8 +311,11 @@ ${
     : ''
 }
 
-<h1>Test coverage</h1>
-<div class="coverage-grid">
+<h1>Automated field coverage</h1>
+${
+  coverage.totalFields === 0
+    ? `<p class="disclaimer">${escapeHtml(coverage.note)}</p>`
+    : `<div class="coverage-grid">
   <div class="coverage-cell"><div class="n">${coverage.assessed}</div><div class="k">Assessed</div></div>
   <div class="coverage-cell"><div class="n">${coverage.passed}</div><div class="k">Passed</div></div>
   <div class="coverage-cell"><div class="n">${coverage.warned}</div><div class="k">Warnings</div></div>
@@ -305,7 +325,8 @@ ${
   <div class="coverage-cell"><div class="n">${coverage.unsupported}</div><div class="k">Unavailable</div></div>
   <div class="coverage-cell"><div class="n">${coverage.coveragePercent}%</div><div class="k">Coverage</div></div>
 </div>
-<p class="disclaimer">${escapeHtml(coverage.note)}</p>
+<p class="disclaimer">${escapeHtml(coverage.note)}</p>`
+}
 
 <h1>Detailed findings</h1>
 ${sectionHtml}

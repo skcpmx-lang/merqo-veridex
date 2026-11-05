@@ -254,8 +254,14 @@ export function buildReport(input = {}) {
     id: result.id,
     title: result.title,
     status: result.status,
+    // Provenance travels with the result: a captured verdict and a human verdict
+    // must never look the same in an exported document.
+    kind: result.kind ?? 'observe',
+    component: result.component ?? null,
     observedAt: result.observedAt,
-    notes: result.notes ?? []
+    notes: result.notes ?? [],
+    defects: result.defects ?? null,
+    inspector: result.inspector ?? null
   }));
 
   const coverage = computeCoverage(sections, manualResults);
@@ -267,6 +273,9 @@ export function buildReport(input = {}) {
     manualResults,
     assessment: input.assessment ?? null,
     coverage,
+    // Prefer the registry-backed summary (which knows how many tests exist in total,
+    // including the ones never run); fall back to a tally of the results supplied.
+    manualCoverage: input.manualCoverage ?? (manualResults.length > 0 ? tallyManual(manualResults) : null),
     issues: {
       warnings: [...(input.issues?.warnings ?? [])],
       errors: [...(input.issues?.errors ?? [])],
@@ -286,7 +295,10 @@ export function buildReport(input = {}) {
   };
 
   if (report.generatedWith.includeManualResults === false) {
+    // Dropping the results must also drop the programme summary: reporting
+    // "8 of 31 tests answered" while listing none of them would be incoherent.
     report.manualResults = [];
+    report.manualCoverage = null;
     report.coverage = computeCoverage(sections, []);
   }
 
@@ -298,6 +310,8 @@ export function buildReport(input = {}) {
   };
   // Summarised from the *source* module maps, not from the rendered rows: the
   // rows already carry the placeholder, so counting them would always report zero.
+  // Manual-programme coverage is reported separately from field coverage: a run can
+  // measure most fields and still have inspected almost none of the physical parts.
   report.privacy = {
     ...summariseRedactions(Object.values(modules), privacyPolicy),
     screenedSections: sections.length,
@@ -385,17 +399,13 @@ export function computeCoverage(sections, manualResults = []) {
     }
   }
 
-  for (const result of manualResults) {
-    total += 1;
-    if (result.status === Status.PASS) passed += 1;
-    else if (result.status === Status.FAIL) failed += 1;
-    else if (result.status === Status.WARNING) warned += 1;
-    else if (result.status === Status.UNTESTED) untested += 1;
-    else if (result.status === Status.UNSUPPORTED) unsupported += 1;
-    else untested += 1;
-  }
+  // Manual observations are counted SEPARATELY. Folding them in produced a report
+  // that claimed 100% field coverage on a run that collected no automated fields at
+  // all — the exact false impression this tool must never create.
+  const manual = manualResults.length === 0 ? null : tallyManual(manualResults);
 
   const assessed = passed + failed + warned;
+  const fieldCoveragePercent = total === 0 ? 0 : Math.round((assessed / total) * 1000) / 10;
   return {
     totalFields: total,
     passed,
@@ -405,8 +415,55 @@ export function computeCoverage(sections, manualResults = []) {
     blocked,
     unsupported,
     assessed,
-    coveragePercent: total === 0 ? 0 : Math.round((assessed / total) * 1000) / 10,
-    note: 'Coverage counts fields that produced an assessment. Unavailable, unsupported, blocked and untested items are excluded from coverage rather than counted as passes.'
+    coveragePercent: fieldCoveragePercent,
+    manual,
+    note:
+      total === 0
+        ? 'No automated fields were collected, so there is no field coverage to report. Manual inspection results are counted separately below.'
+        : 'Coverage counts automated fields that produced an assessment. Unavailable, unsupported, blocked and untested items are excluded from coverage rather than counted as passes. Manual observations are reported separately and never increase field coverage.'
+  };
+}
+
+/**
+ * Tally manual results on their own terms, keeping not-applicable distinct from
+ * both "passed" and "not run".
+ * @param {Array<{status:string}>} manualResults
+ */
+export function tallyManual(manualResults = []) {
+  let passed = 0;
+  let failed = 0;
+  let warned = 0;
+  let notApplicable = 0;
+  let untested = 0;
+  for (const result of manualResults) {
+    switch (result.status) {
+      case Status.PASS:
+        passed += 1;
+        break;
+      case Status.FAIL:
+        failed += 1;
+        break;
+      case Status.WARNING:
+        warned += 1;
+        break;
+      case Status.NOT_APPLICABLE:
+        notApplicable += 1;
+        break;
+      default:
+        untested += 1;
+    }
+  }
+  const total = manualResults.length;
+  const assessed = passed + failed + warned;
+  return {
+    total,
+    passed,
+    failed,
+    warned,
+    notApplicable,
+    untested,
+    assessed,
+    coveragePercent: total === 0 ? 0 : Math.round((assessed / total) * 1000) / 10
   };
 }
 
