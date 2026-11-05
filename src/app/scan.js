@@ -18,6 +18,17 @@ import { guardFromSettings } from '../security/guard.js';
 import { Status } from '../core/status.js';
 import { InspectionSession } from '../manual/session.js';
 import { runnerOptions, historyOptions } from './settings-wiring.js';
+import { registerSystem } from '../diagnostics/system.js';
+import { registerCpu } from '../diagnostics/cpu.js';
+import { registerMemory } from '../diagnostics/memory.js';
+import { registerMotherboard } from '../diagnostics/motherboard.js';
+import { registerGpu } from '../diagnostics/gpu.js';
+import { registerStorage } from '../diagnostics/storage.js';
+import { registerBattery } from '../diagnostics/battery.js';
+import { registerNetwork } from '../diagnostics/network.js';
+import { registerDrivers } from '../diagnostics/drivers.js';
+import { registerWindows } from '../diagnostics/windows.js';
+import { registerSecurity } from '../diagnostics/security.js';
 
 /**
  * @typedef {object} ScanOptions
@@ -56,7 +67,9 @@ export async function runScan(options = {}) {
   const runner = wrapRunner(baseRunner, guard);
 
   const permissions = await detectPermissionState(runner);
-  const registry = options.registry ?? buildDefaultRegistry();
+  /** @type {string[]} */
+  const registrationFailures = [];
+  const registry = options.registry ?? buildDefaultRegistry({ failures: registrationFailures });
 
   const { timeoutMs } = runnerOptions(settings);
   const diagnostic = new DiagnosticRunner({ registry, permissions, logger, runner, timeoutMs });
@@ -114,6 +127,9 @@ export async function runScan(options = {}) {
     .map((attempt) => `${attempt.task}: ${attempt.error}`);
 
   if (unknown.length > 0) errors.push(`Requested tasks that are not registered: ${unknown.join(', ')}`);
+  // A module that failed to register is a defect, not a machine limitation, so it
+  // is an error rather than a warning.
+  for (const failure of registrationFailures) errors.push(failure);
 
   const finishedAt = new Date().toISOString();
   const scan = {
@@ -215,15 +231,43 @@ export function wrapRunner(runner, guard) {
 /**
  * The registry the app ships with.
  *
- * Providers are registered lazily by the diagnostic modules so a failure in one
- * module cannot prevent the others from loading. Until those registrations land,
- * this returns an empty registry and `runScan` reports zero tasks — an honest
- * "nothing ran" rather than a fabricated sweep.
+ * Every diagnostic module registers its own providers and tasks. Registration is
+ * wrapped individually so one module throwing cannot stop the others loading: the
+ * scan then runs with the modules that did load, and the failure is reported as an
+ * issue rather than presented as "this machine has no GPU".
  *
+ * @param {{failures?: string[]}} [report] Receives a message per module that failed.
  * @returns {ProviderRegistry}
  */
-export function buildDefaultRegistry() {
-  return new ProviderRegistry();
+export function buildDefaultRegistry(report = {}) {
+  const registry = new ProviderRegistry();
+  /** @type {Array<[string, (r: ProviderRegistry) => void]>} */
+  const modules = [
+    ['system', registerSystem],
+    ['cpu', registerCpu],
+    ['memory', registerMemory],
+    ['motherboard', registerMotherboard],
+    ['gpu', registerGpu],
+    ['storage', registerStorage],
+    ['battery', registerBattery],
+    ['network', registerNetwork],
+    ['drivers', registerDrivers],
+    ['windows', registerWindows],
+    ['security', registerSecurity]
+  ];
+
+  const failures = report.failures ?? (report.failures = []);
+  let registered = 0;
+  for (const [name, register] of modules) {
+    try {
+      register(registry);
+      registered += 1;
+    } catch (error) {
+      failures.push(`${name} diagnostics failed to register: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  registry.registeredModuleCount = registered;
+  return registry;
 }
 
 /**

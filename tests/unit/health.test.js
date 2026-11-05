@@ -56,11 +56,57 @@ test('overall score excludes unrated components and reports coverage honestly', 
   const scored = buildComponentScore('cpu', [{ id: 'x', label: 'ok', delta: 0, status: 'PASS', source: null }]);
   const unrated = buildComponentScore('battery', []);
   const overall = assessOverall([scored, unrated]);
-  assert.equal(overall.score, 100, 'the unrated component does not inflate or deflate the score');
+  // The raw average still excludes the unrated component, but the headline number is
+  // capped because nearly half the weighted surface had no evidence. Publishing 100
+  // "Good" from one component is the failure mode this guards against.
+  assert.equal(overall.rawScore, 100, 'the unrated component does not inflate or deflate the raw average');
+  assert.equal(overall.score, 84, 'the published score is capped, never the raw 100');
+  assert.equal(overall.rating, 'Fair');
+  assert.equal(overall.capped, true);
+  assert.notEqual(overall.score, overall.rawScore);
   assert.equal(overall.ratedComponents, 1);
   assert.equal(overall.totalComponents, 2);
   assert.ok(overall.coveragePercent < 100);
   assert.match(overall.disclaimer, /not a certification/);
+});
+
+test('a score is withheld when most of the machine could not be assessed', () => {
+  const components = [
+    buildComponentScore('cpu', [{ id: 'x', label: 'ok', delta: 0, status: 'PASS', source: null }]),
+    ...['gpu', 'memory', 'storage', 'battery', 'drivers', 'security'].map((id) => buildComponentScore(id, []))
+  ];
+  const overall = assessOverall(components);
+  assert.equal(overall.score, null, 'one rated component out of seven must not become a score');
+  assert.equal(overall.rating, 'Unrated');
+  assert.equal(overall.status, 'UNRATED');
+  assert.equal(overall.gated, true);
+  assert.match(overall.gatingNote, /score is withheld/);
+  assert.match(overall.gatingNote, /would look like a verdict on the whole machine/);
+});
+
+test('a score built from a minority of the machine is capped below Good', () => {
+  const components = Array.from({ length: 8 }, (_, index) =>
+    buildComponentScore('cpu', index < 5 ? [{ id: `x${index}`, label: 'ok', delta: 0, status: 'PASS', source: null }] : [])
+  );
+  const overall = assessOverall(components);
+  assert.ok(overall.coveragePercent >= 50 && overall.coveragePercent < 80);
+  assert.equal(overall.gated, false, 'this much coverage is enough to publish a number');
+  assert.ok(overall.score <= 84, 'but not enough to call the machine Good');
+  assert.equal(overall.rating, 'Fair');
+  assert.equal(overall.capped, true);
+  assert.match(overall.gatingNote, /capped at 84/);
+});
+
+test('full coverage publishes the real score without a cap', () => {
+  const components = Array.from({ length: 8 }, () =>
+    buildComponentScore('cpu', [{ id: 'x', label: 'ok', delta: 0, status: 'PASS', source: null }])
+  );
+  const overall = assessOverall(components);
+  assert.equal(overall.coveragePercent, 100);
+  assert.equal(overall.score, 100);
+  assert.equal(overall.rating, 'Good');
+  assert.equal(overall.capped, false);
+  assert.equal(overall.gatingNote, null);
 });
 
 test('with nothing rated the overall score is null, not zero or 100', () => {

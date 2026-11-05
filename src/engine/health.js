@@ -196,17 +196,46 @@ export function assessOverall(components) {
   const totalWeight = list.reduce((sum, component) => sum + (component.weight ?? 1), 0);
   const ratedWeight = rated.reduce((sum, component) => sum + (component.weight ?? 1), 0);
 
-  const score = ratedWeight > 0 ? Math.round(rated.reduce((sum, component) => sum + component.score * (component.weight ?? 1), 0) / ratedWeight) : null;
+  const rawScore = ratedWeight > 0 ? Math.round(rated.reduce((sum, component) => sum + component.score * (component.weight ?? 1), 0) / ratedWeight) : null;
   const coveragePercent = totalWeight > 0 ? Math.round((ratedWeight / totalWeight) * 1000) / 10 : 0;
+
+  // ── Coverage gating ────────────────────────────────────────────────────────
+  //
+  // A weighted average over one rated component is not a picture of the machine.
+  // Measured on a host where only the CPU could be assessed, the ungated version
+  // produced "100 · Good" with 7 of 8 components unrated — the single most
+  // misleading thing this tool could print, and exactly what the brief forbids.
+  //
+  // Below MIN_COVERAGE the number is withheld entirely: the assessment is reported
+  // as Unrated with the reason. Between MIN_COVERAGE and FULL_COVERAGE it is shown
+  // but capped at "Fair", because a score built from a minority of the machine must
+  // never read as "Good".
+  const MIN_COVERAGE = 50;
+  const FULL_COVERAGE = 80;
+
+  const gated = rawScore !== null && coveragePercent < MIN_COVERAGE;
+  const capped = rawScore !== null && !gated && coveragePercent < FULL_COVERAGE && rawScore > 84;
+
+  const score = gated ? null : capped ? 84 : rawScore;
+  const rating = gated ? 'Unrated' : ratingFor(score);
 
   return {
     score,
-    rating: ratingFor(score),
-    status: statusForScore(score),
+    rawScore,
+    rating,
+    status: gated ? Status.UNRATED : capped ? Status.WARNING : statusForScore(score),
     coveragePercent,
     ratedComponents: rated.length,
     totalComponents: list.length,
     components: list,
+    gated,
+    capped,
+    gatingThresholds: { minimum: MIN_COVERAGE, full: FULL_COVERAGE },
+    gatingNote: gated
+      ? `Only ${coveragePercent}% of the weighted assessment surface could be measured (${rated.length} of ${list.length} components). A score is withheld: an average over such a small part of the machine would look like a verdict on the whole machine. The evidence that was collected is reported in full below.`
+      : capped
+        ? `Coverage is ${coveragePercent}%, so the score is capped at ${score} (Fair) rather than reported as Good. Components that could not be assessed are listed as unrated.`
+        : null,
     disclaimer:
       'This score summarises the evidence VERIDEX was able to collect. It is not a certification, a guarantee against future failure, or a substitute for physical inspection. Components without evidence are unrated and are excluded from the score rather than counted as healthy.'
   };
@@ -583,7 +612,11 @@ export function coverageStatement(assessment) {
   const rated = assessment.components.filter((component) => component.score !== null);
   const unrated = assessment.components.filter((component) => component.score === null);
   return {
-    headline: `${rated.length} of ${assessment.components.length} components could be assessed (${assessment.coveragePercent}% of the weighted assessment surface).`,
+    headline: assessment.gated
+      ? `A score is withheld: only ${rated.length} of ${assessment.components.length} components could be assessed (${assessment.coveragePercent}% of the weighted assessment surface).`
+      : `${rated.length} of ${assessment.components.length} components could be assessed (${assessment.coveragePercent}% of the weighted assessment surface).`,
+    gated: Boolean(assessment.gated),
+    gatingNote: assessment.gatingNote ?? null,
     rated: rated.map((component) => `${component.label}: ${component.score} (${component.rating})`),
     unrated: unrated.map((component) => `${component.label}: not rated — ${component.missing.join('; ')}`)
   };

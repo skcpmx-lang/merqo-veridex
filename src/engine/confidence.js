@@ -42,11 +42,24 @@ export const PROVIDER_TIERS = Object.freeze({
 });
 
 /**
+ * Provider ids are task-scoped (`cim-win32.cpu`, `nvme-health-log.storage`) so two
+ * modules can use the same mechanism without colliding in the registry. The tier is
+ * still a property of the *mechanism*, so the suffix is stripped before lookup —
+ * otherwise every real provider would fall through to "heuristic", which would
+ * understate confidence everywhere and is exactly the kind of quiet wrongness this
+ * rubric exists to prevent.
+ *
  * @param {string} providerId
  * @returns {string}
  */
 export function tierOf(providerId) {
-  return PROVIDER_TIERS[providerId] ?? SourceTier.HEURISTIC;
+  const id = String(providerId ?? '');
+  return PROVIDER_TIERS[id] ?? PROVIDER_TIERS[id.split('.')[0]] ?? SourceTier.HEURISTIC;
+}
+
+/** The mechanism behind a task-scoped provider id, for display. */
+export function mechanismOf(providerId) {
+  return String(providerId ?? '').split('.')[0];
 }
 
 /**

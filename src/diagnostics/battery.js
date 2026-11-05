@@ -20,7 +20,7 @@
  * Desktop machines with no battery produce NOT_APPLICABLE, not an error.
  */
 
-import { available, unavailable, notApplicable, field, failed } from '../core/field.js';
+import { available, unavailable, notApplicable, field, failed, unsupported } from '../core/field.js';
 import { Status } from '../core/status.js';
 import { cleanString, num, nonNegative, bool, date } from '../platform/parse.js';
 import { queryCim, runReadOnly, loadSystemInformation, failureToStatus, readRegistry } from '../platform/windows.js';
@@ -383,22 +383,22 @@ export function batteryApplicability(input) {
  */
 export function registerBattery(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.battery',
     title: 'Windows CIM (Win32_Battery)',
     priority: 1,
     collect: async (ctx) => {
       const battery = await queryCim(ctx.runner, 'Win32_Battery', { name: 'battery:win32', timeoutMs: ctx.timeoutMs });
       if (!battery.ok) {
-        if (battery.unavailable) return { present: notApplicable('Win32_Battery returned no instances. On a desktop this means no battery; on a laptop it can also mean the battery driver has not loaded.', 'cim-win32') };
+        if (battery.unavailable) return { present: notApplicable('Win32_Battery returned no instances. On a desktop this means no battery; on a laptop it can also mean the battery driver has not loaded.', 'cim-win32.battery') };
         const cause = failureToStatus(battery);
-        return { present: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32' }) : failed(battery.error, 'cim-win32') };
+        return { present: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.battery' }) : failed(battery.error, 'cim-win32.battery') };
       }
       return mapWin32Battery(battery.rows[0]);
     }
   });
 
   registry.registerProvider({
-    id: 'battery-firmware',
+    id: 'battery-firmware.battery',
     title: 'root\\wmi battery classes (capacity + cycles)',
     priority: 2,
     collect: async (ctx) => {
@@ -414,8 +414,8 @@ export function registerBattery(registry) {
       const anyAvailable = [staticData, fullCharged, status].some((result) => result.ok);
       if (!anyAvailable) {
         return {
-          designCapacity: notApplicable('The root\\wmi battery classes are absent, which is normal on a system with no battery', 'battery-firmware'),
-          fullChargeCapacity: notApplicable('The root\\wmi battery classes are absent', 'battery-firmware')
+          designCapacity: notApplicable('The root\\wmi battery classes are absent, which is normal on a system with no battery', 'battery-firmware.battery'),
+          fullChargeCapacity: notApplicable('The root\\wmi battery classes are absent', 'battery-firmware.battery')
         };
       }
 
@@ -430,11 +430,14 @@ export function registerBattery(registry) {
   });
 
   registry.registerProvider({
-    id: 'powercfg-report',
+    id: 'powercfg-report.battery',
     title: 'powercfg /batteryreport (XML)',
     priority: 3,
     collect: async (ctx) => {
-      if (!ctx.runner.isWindows) return {};
+      // Non-Windows and unreadable states must be stated, not returned as silence.
+      if (!ctx.runner.isWindows) {
+        return { designCapacity: unsupported('powercfg is a Windows tool and is not available on this platform', 'powercfg-report.battery') };
+      }
       const target = `${process.env.TEMP ?? process.env.TMP ?? '.'}\\veridex-battery-${Date.now()}.xml`;
       const run = await runReadOnly(ctx.runner, 'powercfg', ['/batteryreport', '/XML', '/OUTPUT', target], { timeoutMs: Math.max(ctx.timeoutMs, 30_000) });
       if (!run.ok) {
@@ -447,11 +450,11 @@ export function registerBattery(registry) {
         const parsed = parseBatteryReportXml(xml);
         const health = computeHealth(parsed.designCapacity, parsed.fullChargeCapacity);
         return {
-          designCapacity: parsed.designCapacity !== null ? available(parsed.designCapacity, 'powercfg-report', { unit: 'mWh', notes: ['Read from the powercfg battery report, a third independent source.'] }) : unavailable('The battery report contains no design capacity', 'powercfg-report'),
-          fullChargeCapacity: parsed.fullChargeCapacity !== null ? available(parsed.fullChargeCapacity, 'powercfg-report', { unit: 'mWh' }) : unavailable('The battery report contains no full-charge capacity', 'powercfg-report'),
-          cycleCount: parsed.cycleCount !== null && parsed.cycleCount > 0 ? available(parsed.cycleCount, 'powercfg-report', { unit: 'cycles' }) : unavailable('The battery report contains no cycle count', 'powercfg-report'),
-          reportChemistry: parsed.chemistry ? available(parsed.chemistry, 'powercfg-report') : unavailable('The battery report contains no chemistry', 'powercfg-report'),
-          capacityHistory: parsed.history.length > 0 ? available(parsed.history, 'powercfg-report', { notes: ['Full-charge capacity over time, as recorded by Windows whenever the battery report was generated.'] }) : unavailable('The battery report contains no capacity history', 'powercfg-report'),
+          designCapacity: parsed.designCapacity !== null ? available(parsed.designCapacity, 'powercfg-report.battery', { unit: 'mWh', notes: ['Read from the powercfg battery report, a third independent source.'] }) : unavailable('The battery report contains no design capacity', 'powercfg-report.battery'),
+          fullChargeCapacity: parsed.fullChargeCapacity !== null ? available(parsed.fullChargeCapacity, 'powercfg-report.battery', { unit: 'mWh' }) : unavailable('The battery report contains no full-charge capacity', 'powercfg-report.battery'),
+          cycleCount: parsed.cycleCount !== null && parsed.cycleCount > 0 ? available(parsed.cycleCount, 'powercfg-report.battery', { unit: 'cycles' }) : unavailable('The battery report contains no cycle count', 'powercfg-report.battery'),
+          reportChemistry: parsed.chemistry ? available(parsed.chemistry, 'powercfg-report.battery') : unavailable('The battery report contains no chemistry', 'powercfg-report.battery'),
+          capacityHistory: parsed.history.length > 0 ? available(parsed.history, 'powercfg-report.battery', { notes: ['Full-charge capacity over time, as recorded by Windows whenever the battery report was generated.'] }) : unavailable('The battery report contains no capacity history', 'powercfg-report.battery'),
           healthFromReport: health.health !== null ? available(health.health, 'computed', { unit: '%', status: health.status }) : field(null, { status: health.status, source: 'computed', error: health.reason })
         };
       } catch (error) {
@@ -461,16 +464,20 @@ export function registerBattery(registry) {
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.battery',
     title: 'systeminformation (battery counters)',
     priority: 4,
     collect: async () => {
       const loaded = await loadSystemInformation();
-      if (!loaded.ok) return {};
+      if (!loaded.ok) return { designCapacity: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation.battery') };
       try {
-        return mapSiBattery(await loaded.si.battery());
-      } catch {
-        return {};
+        const mapped = mapSiBattery(await loaded.si.battery());
+        if (Object.keys(mapped).length === 0) {
+          return { designCapacity: unavailable('systeminformation reported no battery', 'systeminformation.battery') };
+        }
+        return mapped;
+      } catch (error) {
+        return { designCapacity: failed(error instanceof Error ? error.message : String(error), 'systeminformation.battery') };
       }
     }
   });
@@ -480,7 +487,7 @@ export function registerBattery(registry) {
     module: 'battery',
     title: 'Battery & power',
     quick: true,
-    providers: ['cim-win32', 'battery-firmware', 'powercfg-report', 'systeminformation'],
+    providers: ['cim-win32.battery', 'battery-firmware.battery', 'powercfg-report.battery', 'systeminformation.battery'],
     validate: (fields) => {
       const problems = [];
       const design = fields.designCapacity?.value;

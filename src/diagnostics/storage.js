@@ -234,7 +234,7 @@ export function summariseDisks(disks) {
   const usb = list.filter((disk) => (disk.busType ?? '').toLowerCase().includes('usb')).length;
 
   return {
-    diskCount: list.length > 0 ? available(list.length, source) : unavailable('No physical disks were enumerated', 'cim-win32'),
+    diskCount: list.length > 0 ? available(list.length, source) : unavailable('No physical disks were enumerated', 'cim-win32.storage'),
     totalCapacity: list.length > 0 ? available(Math.round(totalCapacity * 10) / 10, source, { unit: 'GB' }) : unavailable('Total capacity not available', source),
     nvmeCount: list.length > 0 ? available(nvme, source) : unavailable('NVMe disk count not available', source),
     ssdCount: list.length > 0 ? available(ssd, source) : unavailable('SSD count not available', source),
@@ -249,7 +249,7 @@ export function summariseDisks(disks) {
  */
 export function registerStorage(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.storage',
     title: 'Windows Storage Management (MSFT_PhysicalDisk)',
     priority: 1,
     collect: async (ctx) => {
@@ -263,14 +263,14 @@ export function registerStorage(registry) {
           const cause = failureToStatus(fallback);
           return {
             disks: cause.kind === 'permission'
-              ? permissionRequired(cause.reason, 'cim-win32')
-              : failed(fallback.error ?? 'No storage devices could be enumerated', 'cim-win32')
+              ? permissionRequired(cause.reason, 'cim-win32.storage')
+              : failed(fallback.error ?? 'No storage devices could be enumerated', 'cim-win32.storage')
           };
         }
         fallback.rows.forEach((drive, index) => {
           const mapped = mapDiskDrive(drive, index);
           for (const [key, value] of Object.entries(mapped)) disks.push({ key: `disk${index + 1}.${key}`, value });
-          disks.push({ key: `disk${index + 1}.source`, value: available('Win32_DiskDrive (Storage Management unavailable)', 'cim-win32') });
+          disks.push({ key: `disk${index + 1}.source`, value: available('Win32_DiskDrive (Storage Management unavailable)', 'cim-win32.storage') });
         });
       } else {
         rows.forEach((disk, index) => {
@@ -300,27 +300,33 @@ export function registerStorage(registry) {
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.storage',
     title: 'systeminformation (disk layout)',
     priority: 2,
     collect: async () => {
       const loaded = await loadSystemInformation();
-      if (!loaded.ok) return {};
+      // An empty object would make the provider look like it answered without
+      // producing anything, and the runner would treat the chain as exhausted. Say
+      // why there is no data instead.
+      if (!loaded.ok) return { mediaType: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation.storage') };
       try {
         const layout = await loaded.si.diskLayout();
         /** @type {Record<string, import('../core/field.js').FieldValue>} */
         const fields = {};
         (Array.isArray(layout) ? layout : []).forEach((disk, index) => {
           const size = nonNegative(disk.size);
-          if (size !== null && size > 0) fields[`disk${index + 1}.capacity`] = available(bytesToGiB(size), 'systeminformation', { unit: 'GB' });
+          if (size !== null && size > 0) fields[`disk${index + 1}.capacity`] = available(bytesToGiB(size), 'systeminformation.storage', { unit: 'GB' });
           const type = cleanString(disk.type);
-          if (type) fields[`disk${index + 1}.mediaType`] = available(type, 'systeminformation');
+          if (type) fields[`disk${index + 1}.mediaType`] = available(type, 'systeminformation.storage');
           const iface = cleanString(disk.interfaceType);
-          if (iface) fields[`disk${index + 1}.busType`] = available(iface, 'systeminformation');
+          if (iface) fields[`disk${index + 1}.busType`] = available(iface, 'systeminformation.storage');
         });
+        if (Object.keys(fields).length === 0) {
+          return { mediaType: unavailable('systeminformation reported no disk layout', 'systeminformation.storage') };
+        }
         return fields;
-      } catch {
-        return {};
+      } catch (error) {
+        return { mediaType: failed(error instanceof Error ? error.message : String(error), 'systeminformation.storage') };
       }
     }
   });
@@ -330,7 +336,7 @@ export function registerStorage(registry) {
     module: 'storage',
     title: 'Storage devices',
     quick: true,
-    providers: ['cim-win32', 'systeminformation'],
+    providers: ['cim-win32.storage', 'systeminformation.storage'],
     validate: (fields) => {
       const problems = [];
       for (const [key, value] of Object.entries(fields)) {
@@ -344,13 +350,13 @@ export function registerStorage(registry) {
 
   // ── SATA / ATA SMART ─────────────────────────────────────────────────────────
   registry.registerProvider({
-    id: 'ata-smart',
+    id: 'ata-smart.storage',
     title: 'ATA SMART (DeviceIoControl 0x7C)',
     capability: 'storage.smart',
     priority: 1,
     collect: async (ctx) => {
       if (!ctx.permissions.isAdmin) {
-        return { smart: permissionRequired('SMART data requires DeviceIoControl access, which Windows grants only to elevated processes.', 'ata-smart') };
+        return { smart: permissionRequired('SMART data requires DeviceIoControl access, which Windows grants only to elevated processes.', 'ata-smart.storage') };
       }
       const result = await ctx.runner.powershellJson(
         `$ErrorActionPreference='SilentlyContinue'
@@ -377,8 +383,8 @@ $out`,
         const cause = failureToStatus({ error: result.error, accessDenied: /access|denied|privilege/i.test(result.error ?? '') });
         return {
           smart: cause.kind === 'permission'
-            ? permissionRequired(cause.reason, 'ata-smart')
-            : failed(result.error ?? 'SMART reliability counters could not be read', 'ata-smart')
+            ? permissionRequired(cause.reason, 'ata-smart.storage')
+            : failed(result.error ?? 'SMART reliability counters could not be read', 'ata-smart.storage')
         };
       }
 
@@ -390,35 +396,35 @@ $out`,
         const prefix = `disk${number + 1}.`;
         const wear = nonNegative(row.SmartStatus);
         if (wear !== null) {
-          fields[`${prefix}wear`] = available(wear, 'ata-smart', { unit: '%', status: wear >= 80 ? Status.WARNING : Status.PASS, notes: ['From the Windows storage reliability counter, which reports wear for both SATA SSDs and NVMe drives.'] });
+          fields[`${prefix}wear`] = available(wear, 'ata-smart.storage', { unit: '%', status: wear >= 80 ? Status.WARNING : Status.PASS, notes: ['From the Windows storage reliability counter, which reports wear for both SATA SSDs and NVMe drives.'] });
         }
         const temperature = nonNegative(row.Temperature);
         if (temperature !== null && temperature > 0 && temperature < 120) {
-          fields[`${prefix}temperature`] = available(temperature, 'ata-smart', { unit: '°C' });
+          fields[`${prefix}temperature`] = available(temperature, 'ata-smart.storage', { unit: '°C' });
         }
         const hours = nonNegative(row.PowerOnHours);
-        if (hours !== null && hours > 0) fields[`${prefix}powerOnHours`] = available(hours, 'ata-smart', { unit: 'hours' });
+        if (hours !== null && hours > 0) fields[`${prefix}powerOnHours`] = available(hours, 'ata-smart.storage', { unit: 'hours' });
         const readErrors = nonNegative(row.ReadErrorsTotal);
-        if (readErrors !== null) fields[`${prefix}readErrors`] = available(readErrors, 'ata-smart', { unit: 'count', status: readErrors > 0 ? Status.WARNING : Status.PASS });
+        if (readErrors !== null) fields[`${prefix}readErrors`] = available(readErrors, 'ata-smart.storage', { unit: 'count', status: readErrors > 0 ? Status.WARNING : Status.PASS });
         const writeErrors = nonNegative(row.WriteErrorsTotal);
-        if (writeErrors !== null) fields[`${prefix}writeErrors`] = available(writeErrors, 'ata-smart', { unit: 'count', status: writeErrors > 0 ? Status.WARNING : Status.PASS });
+        if (writeErrors !== null) fields[`${prefix}writeErrors`] = available(writeErrors, 'ata-smart.storage', { unit: 'count', status: writeErrors > 0 ? Status.WARNING : Status.PASS });
       });
 
       if (Object.keys(fields).length === 0) {
-        return { smart: unavailable('Windows storage reliability counters returned no usable values for any disk', 'ata-smart') };
+        return { smart: unavailable('Windows storage reliability counters returned no usable values for any disk', 'ata-smart.storage') };
       }
       return fields;
     }
   });
 
   registry.registerProvider({
-    id: 'nvme-health-log',
+    id: 'nvme-health-log.storage',
     title: 'NVMe SMART/Health Information log (page 0x02)',
     capability: 'storage.smart',
     priority: 1,
     collect: async (ctx) => {
       if (!ctx.permissions.isAdmin) {
-        return { nvmeHealth: permissionRequired('The NVMe health log is read through IOCTL_STORAGE_QUERY_PROPERTY, which Windows restricts to elevated processes.', 'nvme-health-log') };
+        return { nvmeHealth: permissionRequired('The NVMe health log is read through IOCTL_STORAGE_QUERY_PROPERTY, which Windows restricts to elevated processes.', 'nvme-health-log.storage') };
       }
       // Windows exposes the NVMe log through PowerShell's StorageReliabilityCounter
       // and, on newer builds, through the Get-StorageReliabilityCounter numeric
@@ -449,12 +455,12 @@ $out`,
       );
 
       if (!result.ok) {
-        return { nvmeHealth: failed(result.error ?? 'NVMe health counters could not be read', 'nvme-health-log') };
+        return { nvmeHealth: failed(result.error ?? 'NVMe health counters could not be read', 'nvme-health-log.storage') };
       }
 
       const rows = Array.isArray(result.data) ? result.data : [];
       if (rows.length === 0) {
-        return { nvmeHealth: unsupported('No NVMe drive is present, so the NVMe health log does not apply to this system.', 'nvme-health-log') };
+        return { nvmeHealth: unsupported('No NVMe drive is present, so the NVMe health log does not apply to this system.', 'nvme-health-log.storage') };
       }
 
       /** @type {Record<string, import('../core/field.js').FieldValue>} */
@@ -464,21 +470,21 @@ $out`,
         const prefix = `disk${number + 1}.`;
         const wear = nonNegative(row.Wear);
         if (wear !== null) {
-          fields[`${prefix}percentageUsed`] = available(wear, 'nvme-health-log', { unit: '%', status: wear >= 100 ? Status.FAIL : wear >= 80 ? Status.WARNING : Status.PASS, notes: ['Wear reported by the NVMe controller through the Windows storage reliability counter.'] });
+          fields[`${prefix}percentageUsed`] = available(wear, 'nvme-health-log.storage', { unit: '%', status: wear >= 100 ? Status.FAIL : wear >= 80 ? Status.WARNING : Status.PASS, notes: ['Wear reported by the NVMe controller through the Windows storage reliability counter.'] });
         }
         const temperature = nonNegative(row.Temperature);
-        if (temperature !== null && temperature > 0 && temperature < 120) fields[`${prefix}temperature`] = available(temperature, 'nvme-health-log', { unit: '°C' });
+        if (temperature !== null && temperature > 0 && temperature < 120) fields[`${prefix}temperature`] = available(temperature, 'nvme-health-log.storage', { unit: '°C' });
         const hours = nonNegative(row.PowerOnHours);
-        if (hours !== null && hours > 0) fields[`${prefix}powerOnHours`] = available(hours, 'nvme-health-log', { unit: 'hours' });
+        if (hours !== null && hours > 0) fields[`${prefix}powerOnHours`] = available(hours, 'nvme-health-log.storage', { unit: 'hours' });
         const uncorrected = nonNegative(row.ReadErrorsUncorrected);
-        if (uncorrected !== null) fields[`${prefix}mediaErrors`] = available(uncorrected, 'nvme-health-log', { unit: 'count', status: uncorrected > 0 ? Status.WARNING : Status.PASS });
+        if (uncorrected !== null) fields[`${prefix}mediaErrors`] = available(uncorrected, 'nvme-health-log.storage', { unit: 'count', status: uncorrected > 0 ? Status.WARNING : Status.PASS });
         const corrected = nonNegative(row.ReadErrorsCorrected);
-        if (corrected !== null) fields[`${prefix}correctedErrors`] = available(corrected, 'nvme-health-log', { unit: 'count', notes: ['Errors the controller corrected without data loss.'] });
+        if (corrected !== null) fields[`${prefix}correctedErrors`] = available(corrected, 'nvme-health-log.storage', { unit: 'count', notes: ['Errors the controller corrected without data loss.'] });
       });
 
       return Object.keys(fields).length > 0
         ? fields
-        : { nvmeHealth: unavailable('The NVMe controller returned no reliability counters on this system', 'nvme-health-log') };
+        : { nvmeHealth: unavailable('The NVMe controller returned no reliability counters on this system', 'nvme-health-log.storage') };
     }
   });
 
@@ -487,7 +493,7 @@ $out`,
     module: 'storageHealth',
     title: 'Storage health (SMART / NVMe)',
     quick: false,
-    providers: ['nvme-health-log', 'ata-smart'],
+    providers: ['nvme-health-log.storage', 'ata-smart.storage'],
     requiresCapability: 'storage.smart'
   });
 }

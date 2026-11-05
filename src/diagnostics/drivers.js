@@ -193,7 +193,7 @@ export function summariseDrivers(drivers) {
   const failedCritical = list.filter((driver) => driver.critical && (driver.health === 'FAILED' || driver.health === 'WARNING'));
 
   return {
-    driverCount: list.length > 0 ? available(list.length, source) : unavailable('No drivers were enumerated', 'cim-win32'),
+    driverCount: list.length > 0 ? available(list.length, source) : unavailable('No drivers were enumerated', 'cim-win32.drivers'),
     driversOk: available(count('OK'), source),
     driversWarning: available(count('WARNING'), source, { status: count('WARNING') > 0 ? Status.WARNING : Status.PASS }),
     driversFailed: available(count('FAILED'), source, { status: count('FAILED') > 0 ? Status.FAIL : Status.PASS }),
@@ -218,14 +218,14 @@ export function summariseDrivers(drivers) {
  */
 export function registerDrivers(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.drivers',
     title: 'Windows CIM (Win32_PnPSignedDriver)',
     priority: 1,
     collect: async (ctx) => {
       const signed = await queryCim(ctx.runner, 'Win32_PnPSignedDriver', { name: 'drivers:signed', timeoutMs: Math.max(ctx.timeoutMs, 30_000) });
       if (!signed.ok) {
         const cause = failureToStatus(signed);
-        return { drivers: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32' }) : failed(signed.error, 'cim-win32') };
+        return { drivers: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.drivers' }) : failed(signed.error, 'cim-win32.drivers') };
       }
 
       const now = new Date();
@@ -248,10 +248,20 @@ export function registerDrivers(registry) {
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.drivers',
     title: 'systeminformation (device status)',
     priority: 2,
-    collect: async () => ({})
+    // This provider exists as a documented fallback slot but performs no collection
+    // of its own: the CIM provider is authoritative for driver inventory, and
+    // systeminformation exposes no driver-level problem codes. Rather than ship a
+    // silent stub, it says so — a provider that pretends to answer is worse than one
+    // that states it has nothing to add.
+    collect: async () => ({
+      deviceStatus: unsupported(
+        'Driver inventory and problem codes come from CIM; the systeminformation fallback adds no driver-level detail on Windows.',
+        'systeminformation.drivers'
+      )
+    })
   });
 
   registry.registerTask({
@@ -259,20 +269,11 @@ export function registerDrivers(registry) {
     module: 'drivers',
     title: 'Driver & device status',
     quick: true,
-    providers: ['cim-win32', 'systeminformation']
-  });
-
-  registry.registerTask({
-    id: 'drivers.export',
-    module: 'driverBackup',
-    title: 'Driver export',
-    quick: false,
-    providers: ['driver-export'],
-    requiresCapability: 'drivers.export'
+    providers: ['cim-win32.drivers', 'systeminformation.drivers']
   });
 
   registry.registerProvider({
-    id: 'driver-export',
+    id: 'driver-export.drivers',
     title: 'pnputil /export-driver',
     capability: 'drivers.export',
     priority: 1,
@@ -280,9 +281,18 @@ export function registerDrivers(registry) {
       // This provider is only ever invoked from an explicit, user-initiated export
       // action; it never runs as part of a scan.
       return {
-        exportStatus: unsupported('Driver export runs only when you choose "Export drivers" and confirm the destination folder.', 'driver-export'),
-        commandTemplate: available('pnputil /export-driver * <destination>', 'driver-export', { notes: ['pnputil exports the driver packages currently installed. VERIDEX does not use it to install anything.'] })
+        exportStatus: unsupported('Driver export runs only when you choose "Export drivers" and confirm the destination folder.', 'driver-export.drivers'),
+        commandTemplate: available('pnputil /export-driver * <destination>', 'driver-export.drivers', { notes: ['pnputil exports the driver packages currently installed. VERIDEX does not use it to install anything.'] })
       };
     }
+  });
+
+  registry.registerTask({
+    id: 'drivers.export',
+    module: 'driverBackup',
+    title: 'Driver export',
+    quick: false,
+    providers: ['driver-export.drivers'],
+    requiresCapability: 'drivers.export'
   });
 }

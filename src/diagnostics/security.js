@@ -216,7 +216,7 @@ export function mapUacAndRecovery(input) {
  */
 export function registerSecurity(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.security',
     title: 'Windows security cmdlets (read-only)',
     priority: 1,
     collect: async (ctx) => {
@@ -235,12 +235,15 @@ export function registerSecurity(registry) {
         Object.assign(fields, mapDefender(Array.isArray(defender.data) ? defender.data[0] : defender.data));
       } else {
         Object.assign(fields, mapDefender(null));
-        fields.defenderError = field(defender.error ?? 'Get-MpComputerStatus could not be queried', { status: Status.WARNING, source: 'cim-win32', notes: ['A third-party antivirus commonly causes this; verify with Windows Security.'] });
+        fields.defenderError = field(defender.error ?? 'Get-MpComputerStatus could not be queried', { status: Status.WARNING, source: 'cim-win32.security', notes: ['A third-party antivirus commonly causes this; verify with Windows Security.'] });
       }
 
       Object.assign(fields, mapFirewall(firewall.ok ? firewall.data : []));
 
-      const values = new Map((lua.values ?? []).map((entry) => [entry.name, entry.value]));
+      // `lua` and `consent` were referenced here but the destructured names above are
+      // `enableLua` and `consent` — a ReferenceError that only surfaced once the
+      // module was actually registered and run.
+      const values = new Map((enableLua.values ?? []).map((entry) => [entry.name, entry.value]));
       const consentValue = new Map((consent.values ?? []).map((entry) => [entry.name, entry.value]));
       const reagentText = reagentc.ok ? reagentc.stdout : '';
       const winreEnabled = /Windows Recovery Environment.*?(Enabled|Disabled)/i.exec(reagentText)?.[1]?.toLowerCase() === 'enabled'
@@ -261,7 +264,7 @@ export function registerSecurity(registry) {
         Object.assign(fields, mapBitlocker('', false));
       } else {
         const bde = await runReadOnly(ctx.runner, 'manage-bde', ['-status', '-csv'], { timeoutMs: 30_000 });
-        Object.assign(fields, bde.ok ? mapBitlocker(bde.stdout, true) : { bitlocker: failed(bde.stderr || `manage-bde exited ${bde.code}`, 'cim-win32') });
+        Object.assign(fields, bde.ok ? mapBitlocker(bde.stdout, true) : { bitlocker: failed(bde.stderr || `manage-bde exited ${bde.code}`, 'cim-win32.security') });
       }
 
       return fields;
@@ -273,7 +276,7 @@ export function registerSecurity(registry) {
     module: 'security',
     title: 'Windows security posture',
     quick: true,
-    providers: ['cim-win32']
+    providers: ['cim-win32.security']
   });
 }
 

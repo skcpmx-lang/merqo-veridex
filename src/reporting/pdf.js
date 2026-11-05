@@ -151,16 +151,36 @@ export async function renderPdf(report, options = {}) {
       doc.font(FONTS.regular).fontSize(10).fillColor(COLOURS.inkSoft).text('/ 100', PAGE.margin + 16, boxTop + 54, { width: 130, lineBreak: false });
     }
 
-    doc.font(FONTS.bold).fontSize(11).fillColor(COLOURS.ink).text(assessment.rating, PAGE.margin + 156, boxTop + 16, { width: contentWidth - 172 });
+    // Withholding a score means not printing a rating word twice: the box already
+    // says "Unrated", so the caption explains the situation instead of repeating it.
+    const caption = assessment.score === null
+      ? assessment.gated
+        ? 'Insufficient evidence to score'
+        : 'No evidence was collected'
+      : assessment.rating;
+    doc.font(FONTS.bold).fontSize(11).fillColor(COLOURS.ink).text(caption, PAGE.margin + 156, boxTop + 16, { width: contentWidth - 172 });
     doc.font(FONTS.regular).fontSize(8.5).fillColor(COLOURS.inkSoft).text(
       `${assessment.ratedComponents} of ${assessment.totalComponents} components could be assessed (${assessment.coveragePercent}% of the weighted assessment surface). Components without evidence are unrated, never counted as healthy.`,
       PAGE.margin + 156,
       boxTop + 32,
       { width: contentWidth - 172 }
     );
-    doc.font(FONTS.italic).fontSize(7.5).fillColor(COLOURS.inkSoft).text(assessment.disclaimer, PAGE.margin + 156, boxTop + 62, { width: contentWidth - 172 });
+    const disclaimer = assessment.score === null
+      ? 'No score is reported because the collected evidence covers too little of this machine to support one. It is not a certification, and it is not a statement that the machine is healthy.'
+      : assessment.disclaimer;
+    doc.font(FONTS.italic).fontSize(7.5).fillColor(COLOURS.inkSoft).text(disclaimer, PAGE.margin + 156, boxTop + 62, { width: contentWidth - 172 });
 
     doc.y = boxTop + boxHeight + 14;
+
+    // A withheld or capped score must explain itself in the document, not only in
+    // the interface. Without this the reader sees "Unrated" and has to guess why.
+    if (assessment.gatingNote) {
+      ensureSpace(30);
+      doc.font(FONTS.bold).fontSize(8).fillColor(assessment.gated ? COLOURS.warn : COLOURS.inkSoft).text(assessment.gated ? 'Score withheld' : 'Score capped by coverage', PAGE.margin, doc.y, { width: contentWidth });
+      doc.y += 2;
+      doc.font(FONTS.regular).fontSize(8).fillColor(COLOURS.ink).text(assessment.gatingNote, PAGE.margin, doc.y, { width: contentWidth });
+      doc.y += 12;
+    }
 
     // Component grid, three per row.
     const cardWidth = (contentWidth - 16) / 3;

@@ -304,6 +304,7 @@ ${
   <div class="big">${assessment.score === null ? '<span class="unrated">Unrated</span>' : `${assessment.score}<small>/100</small>`}</div>
   <div class="summary">
     <p><strong>${escapeHtml(assessment.rating)}</strong> — ${assessment.ratedComponents} of ${assessment.totalComponents} components could be assessed (${assessment.coveragePercent}% coverage).</p>
+    ${assessment.gatingNote ? `<p class="gating"><strong>Coverage limit:</strong> ${escapeHtml(assessment.gatingNote)}</p>` : ''}
     <p>${escapeHtml(assessment.disclaimer)}</p>
   </div>
 </div>

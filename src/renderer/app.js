@@ -265,9 +265,14 @@ pages.dashboard = () => {
     healthCard.append(
       el('div', {
         class: 'vx-score vx-score--unrated',
-        children: [el('span', { class: 'vx-score__value', text: 'Unrated' })]
+        children: [el('span', { class: 'vx-score__value', text: assessment?.gated ? 'Score withheld' : 'Unrated' })]
       })
     );
+    if (assessment?.gated) {
+      // Say why the number is missing. "Unrated" alone leaves the reader wondering
+      // whether the machine is fine; the reason is the whole point.
+      healthCard.append(callout({ tone: 'warn', title: 'Not enough of the machine could be measured', body: assessment.gatingNote }));
+    }
     healthCard.append(
       el('p', {
         class: 'vx-dim',
@@ -296,6 +301,9 @@ pages.dashboard = () => {
         text: `${assessment.ratedComponents} of ${assessment.totalComponents} components could be assessed (${assessment.coveragePercent}% coverage). Components without evidence are unrated, never counted as healthy.`
       })
     );
+    if (assessment.gatingNote) {
+      healthCard.append(callout({ tone: 'warn', title: 'Score limited by coverage', body: assessment.gatingNote }));
+    }
     healthCard.append(el('p', { class: 'vx-dim vx-mono', text: assessment.disclaimer }));
   }
 

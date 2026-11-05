@@ -165,12 +165,12 @@ export function mapCimProcessor(cpu, caches = {}) {
     name: name ? available(name, source) : unavailable('Processor name not reported', source),
     manufacturer: manufacturer ? available(normaliseVendor(manufacturer), source) : unavailable('Manufacturer not reported', source),
     modelNumber: identity.modelNumber
-      ? available(identity.modelNumber, 'model-table', { notes: [`Decoded from the processor name using rule "${identity.rule}".`] })
-      : unavailable('Model number could not be decoded from the processor name', 'model-table'),
-    productLine: identity.productLine ? available(identity.productLine, 'model-table') : unavailable('Product line not decoded', 'model-table'),
+      ? available(identity.modelNumber, 'model-table.cpu', { notes: [`Decoded from the processor name using rule "${identity.rule}".`] })
+      : unavailable('Model number could not be decoded from the processor name', 'model-table.cpu'),
+    productLine: identity.productLine ? available(identity.productLine, 'model-table.cpu') : unavailable('Product line not decoded', 'model-table.cpu'),
     generation: identity.generationLabel
-      ? available(identity.generationLabel, 'model-table', { notes: [`Derived by rule "${identity.rule}" from the model number, not read from firmware.`] })
-      : unavailable('Generation could not be decoded from the model number', 'model-table'),
+      ? available(identity.generationLabel, 'model-table.cpu', { notes: [`Derived by rule "${identity.rule}" from the model number, not read from firmware.`] })
+      : unavailable('Generation could not be decoded from the model number', 'model-table.cpu'),
     architecture: decodeArchitecture(cpu.Architecture)
       ? available(decodeArchitecture(cpu.Architecture), source)
       : unavailable(`Unrecognised architecture code ${String(cpu.Architecture)}`, source),
@@ -191,8 +191,8 @@ export function mapCimProcessor(cpu, caches = {}) {
         ? field('Reported as disabled in firmware', { status: Status.WARNING, source })
         : unavailable('Virtualisation status not reported by this firmware', source),
     socket: socket
-      ? available(socket.socket, 'model-table', { notes: [`Derived from the desktop model number using rule "${socket.rule}". Mobile socket names are not published by Intel/AMD in a way Windows exposes, so they are left unavailable.`] })
-      : unavailable('Socket is not exposed by Windows and could not be derived confidently', 'model-table'),
+      ? available(socket.socket, 'model-table.cpu', { notes: [`Derived from the desktop model number using rule "${socket.rule}". Mobile socket names are not published by Intel/AMD in a way Windows exposes, so they are left unavailable.`] })
+      : unavailable('Socket is not exposed by Windows and could not be derived confidently', 'model-table.cpu'),
     processorId: cleanString(cpu.ProcessorId) ? available(cleanString(cpu.ProcessorId), source) : unavailable('Processor ID not reported', source),
     maxClockSpeedTolerance: num(cpu.CurrentVoltage) !== null ? available(num(cpu.CurrentVoltage) / 10, source, { unit: 'V' }) : unavailable('Core voltage not reported', source)
   };
@@ -307,7 +307,7 @@ export function mapCurrentLoad(load) {
  */
 export function registerCpu(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.cpu',
     title: 'Windows CIM (Win32_Processor)',
     priority: 1,
     collect: async (ctx) => {
@@ -318,7 +318,7 @@ export function registerCpu(registry) {
 
       if (!processor.ok) {
         const cause = failureToStatus(processor);
-        const make = cause.kind === 'permission' ? (reason) => field(null, { status: Status.PERMISSION_REQUIRED, error: reason, source: 'cim-win32', permissionRequired: true }) : cause.kind === 'unsupported' ? (reason) => unsupported(reason, 'cim-win32') : (reason) => failed(reason, 'cim-win32');
+        const make = cause.kind === 'permission' ? (reason) => field(null, { status: Status.PERMISSION_REQUIRED, error: reason, source: 'cim-win32.cpu', permissionRequired: true }) : cause.kind === 'unsupported' ? (reason) => unsupported(reason, 'cim-win32.cpu') : (reason) => failed(reason, 'cim-win32.cpu');
         return { name: make(processor.error ?? 'CPU identity unavailable') };
       }
 
@@ -328,12 +328,12 @@ export function registerCpu(registry) {
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.cpu',
     title: 'systeminformation (OS counters + CPUID)',
     priority: 2,
     collect: async () => {
       const loaded = await loadSystemInformation();
-      if (!loaded.ok) return { instructionSets: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation') };
+      if (!loaded.ok) return { instructionSets: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation.cpu') };
       try {
         const [info, load] = await Promise.all([loaded.si.cpu(), loaded.si.currentLoad()]);
         const fields = mapSystemInformationCpu(info);
@@ -342,16 +342,25 @@ export function registerCpu(registry) {
         fields.perCoreUtilization = utilisation.perCore;
         return fields;
       } catch (error) {
-        return { instructionSets: failed(error, 'systeminformation') };
+        return { instructionSets: failed(error, 'systeminformation.cpu') };
       }
     }
   });
 
   registry.registerProvider({
-    id: 'model-table',
+    id: 'model-table.cpu',
     title: 'VERIDEX model-number decoder',
     priority: 3,
-    collect: async () => ({})
+    // The decoder is a pure function applied by the CIM provider's mapping, not a
+    // separate data source. Registering it as an empty provider made it look like an
+    // independent corroboration, which would have inflated confidence. It states
+    // that it collects nothing instead.
+    collect: async () => ({
+      socket: unsupported(
+        'Socket and generation are derived from the processor name by the CIM provider; there is no independent model-table reading.',
+        'model-table.cpu'
+      )
+    })
   });
 
   registry.registerTask({
@@ -359,7 +368,7 @@ export function registerCpu(registry) {
     module: 'cpu',
     title: 'Processor',
     quick: true,
-    providers: ['cim-win32', 'systeminformation', 'model-table'],
+    providers: ['cim-win32.cpu', 'systeminformation.cpu', 'model-table.cpu'],
     validate: (fields) => {
       const problems = validateCoreCounts({
         physicalCores: fields.physicalCores?.value ?? null,

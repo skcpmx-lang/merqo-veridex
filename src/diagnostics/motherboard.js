@@ -146,7 +146,7 @@ export function mapSecureBoot(input) {
  */
 export function registerMotherboard(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.motherboard',
     title: 'Windows CIM (Win32_BaseBoard / Win32_BIOS / TPM)',
     priority: 1,
     capability: 'security.tpm',
@@ -163,15 +163,15 @@ export function registerMotherboard(registry) {
       const fields = {};
 
       if (board.ok) Object.assign(fields, mapBaseBoard(board.rows[0]));
-      else fields.boardManufacturer = unavailable(board.error ?? 'Motherboard identity unavailable', 'cim-win32');
+      else fields.boardManufacturer = unavailable(board.error ?? 'Motherboard identity unavailable', 'cim-win32.motherboard');
 
       // PEFirmwareType: 2 = UEFI, 1 = BIOS/legacy.
-      const firmwareValue = firmwareType.rows?.[0]?.PEFirmwareType ?? firmwareProbe.values?.find((entry) => entry.name === 'PEFirmwareType')?.value;
+      const firmwareValue = firmwareType.rows?.[0]?.PEFirmwareType ?? secureBootProbe.values?.find((entry) => entry.name === 'PEFirmwareType')?.value;
       const firmwareCode = num(firmwareValue);
       const bootMode = firmwareCode === 2 ? 'UEFI' : firmwareCode === 1 ? 'Legacy (BIOS/CSM)' : null;
 
       if (bios.ok) Object.assign(fields, mapBios(bios.rows[0], { bootMode }));
-      else fields.biosVersion = unavailable(bios.error ?? 'BIOS identity unavailable', 'cim-win32');
+      else fields.biosVersion = unavailable(bios.error ?? 'BIOS identity unavailable', 'cim-win32.motherboard');
 
       // Secure Boot: only meaningful in UEFI mode.
       if (bootMode === 'Legacy (BIOS/CSM)' || bootMode === null) {
@@ -198,23 +198,23 @@ export function registerMotherboard(registry) {
   });
 
   registry.registerProvider({
-    id: 'chipset-heuristic',
+    id: 'chipset-heuristic.motherboard',
     title: 'VERIDEX chipset heuristic',
     priority: 3,
     collect: async (ctx) => {
       // Chipset is genuinely not exposed by Windows. The only defensible source is
       // the PCI root-complex vendor/device ids, which identify a family at best.
       const pnp = await queryCim(ctx.runner, 'Win32_PnPEntity', { namespace: 'root/cimv2', name: 'chipset:pnp', timeoutMs: ctx.timeoutMs });
-      if (!pnp.ok) return { chipset: unavailable('PCI root complex not enumerable', 'chipset-heuristic') };
+      if (!pnp.ok) return { chipset: unavailable('PCI root complex not enumerable', 'chipset-heuristic.motherboard') };
       const ids = pnp.rows
         .map((row) => cleanString(row.DeviceID))
         .filter(Boolean)
         .filter((id) => /PCI\\VEN_/i.test(id));
       const intel = ids.some((id) => /VEN_8086.*DEV_(A|7A|51|9B|43)/i.test(id));
       const amd = ids.some((id) => /VEN_1022.*DEV_(14|79|74)/i.test(id));
-      if (intel) return { chipset: available('Intel platform controller (PCI root complex identified)', 'chipset-heuristic', { notes: ['Windows does not expose the chipset model. This is inferred from the PCI root-complex vendor and device identifier, so it names the family, not the exact part.'] }) };
-      if (amd) return { chipset: available('AMD platform controller (PCI root complex identified)', 'chipset-heuristic', { notes: ['Windows does not expose the chipset model. This is inferred from the PCI root-complex vendor and device identifier, so it names the family, not the exact part.'] }) };
-      return { chipset: unavailable('Chipset is not exposed by Windows and could not be inferred from the PCI root complex', 'chipset-heuristic') };
+      if (intel) return { chipset: available('Intel platform controller (PCI root complex identified)', 'chipset-heuristic.motherboard', { notes: ['Windows does not expose the chipset model. This is inferred from the PCI root-complex vendor and device identifier, so it names the family, not the exact part.'] }) };
+      if (amd) return { chipset: available('AMD platform controller (PCI root complex identified)', 'chipset-heuristic.motherboard', { notes: ['Windows does not expose the chipset model. This is inferred from the PCI root-complex vendor and device identifier, so it names the family, not the exact part.'] }) };
+      return { chipset: unavailable('Chipset is not exposed by Windows and could not be inferred from the PCI root complex', 'chipset-heuristic.motherboard') };
     }
   });
 
@@ -223,6 +223,6 @@ export function registerMotherboard(registry) {
     module: 'motherboard',
     title: 'Motherboard, firmware & platform security',
     quick: true,
-    providers: ['cim-win32', 'chipset-heuristic']
+    providers: ['cim-win32.motherboard', 'chipset-heuristic.motherboard']
   });
 }

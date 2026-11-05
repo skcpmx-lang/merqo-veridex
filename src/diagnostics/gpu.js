@@ -242,7 +242,7 @@ export function parseDxDiag(text) {
  */
 export function registerGpu(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.gpu',
     title: 'Windows CIM (Win32_VideoController)',
     priority: 1,
     collect: async (ctx) => {
@@ -251,8 +251,8 @@ export function registerGpu(registry) {
         const cause = failureToStatus(controllers);
         return {
           adapters: cause.kind === 'permission'
-            ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32' })
-            : failed(controllers.error ?? 'Graphics adapters unavailable', 'cim-win32')
+            ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.gpu' })
+            : failed(controllers.error ?? 'Graphics adapters unavailable', 'cim-win32.gpu')
         };
       }
 
@@ -270,8 +270,8 @@ export function registerGpu(registry) {
       });
 
       fields.adapterCount = adapters.length > 0
-        ? available(adapters.length, 'cim-win32', { notes: adapters.length > 1 ? ['Multiple display adapters detected (for example an integrated GPU plus a discrete GPU, or a virtual display).'] : [] })
-        : unavailable('No display adapters reported', 'cim-win32');
+        ? available(adapters.length, 'cim-win32.gpu', { notes: adapters.length > 1 ? ['Multiple display adapters detected (for example an integrated GPU plus a discrete GPU, or a virtual display).'] : [] })
+        : unavailable('No display adapters reported', 'cim-win32.gpu');
 
       const physical = adapters.filter((adapter) => classifyAdapter(cleanString(adapter.Name), cleanString(adapter.AdapterCompatibility)).kind !== 'virtual');
       fields.physicalAdapterCount = physical.length > 0 ? available(physical.length, 'vendor-heuristic', { notes: ['Count of adapters that are neither virtual nor basic display drivers.'] }) : unavailable('Could not determine physical adapter count', 'vendor-heuristic');
@@ -281,29 +281,29 @@ export function registerGpu(registry) {
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.gpu',
     title: 'systeminformation (GPU counters)',
     priority: 2,
     collect: async () => {
       const loaded = await loadSystemInformation();
-      if (!loaded.ok) return { utilization: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation') };
+      if (!loaded.ok) return { utilization: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation.gpu') };
       try {
         const graphics = await loaded.si.graphics();
         return mapGraphicsUtilisation(graphics);
       } catch (error) {
-        return { utilization: failed(error, 'systeminformation') };
+        return { utilization: failed(error, 'systeminformation.gpu') };
       }
     }
   });
 
   registry.registerProvider({
-    id: 'dxdiag',
+    id: 'dxdiag.gpu',
     title: 'DirectX Diagnostic Tool report (dxdiag /t)',
     priority: 3,
     collect: async (ctx) => {
       // dxdiag is slow (typically 5–25 s) and must never block the quick scan, so
       // this provider is only used by the dedicated DirectX task.
-      return { directxVersion: unsupported('The DirectX report is collected only by the dedicated DirectX task', 'dxdiag') };
+      return { directxVersion: unsupported('The DirectX report is collected only by the dedicated DirectX task', 'dxdiag.gpu') };
     }
   });
 
@@ -312,7 +312,7 @@ export function registerGpu(registry) {
     module: 'gpu',
     title: 'Graphics adapters',
     quick: true,
-    providers: ['cim-win32', 'systeminformation'],
+    providers: ['cim-win32.gpu', 'systeminformation.gpu'],
     validate: (fields) => {
       const problems = [];
       for (const [key, value] of Object.entries(fields)) {
@@ -327,28 +327,20 @@ export function registerGpu(registry) {
     }
   });
 
-  registry.registerTask({
-    id: 'gpu.directx',
-    module: 'directx',
-    title: 'DirectX runtime',
-    quick: false,
-    providers: ['directx-dxdiag']
-  });
-
   registry.registerProvider({
-    id: 'directx-dxdiag',
+    id: 'directx-dxdiag.gpu',
     title: 'dxdiag text report',
     priority: 1,
     collect: async (ctx) => {
       const target = `${process.env.TEMP ?? process.env.TMP ?? '.'}\\veridex-dxdiag-${Date.now()}.txt`;
-      if (!ctx.runner.isWindows) return { directxVersion: unsupported('dxdiag is only available on Windows', 'dxdiag') };
+      if (!ctx.runner.isWindows) return { directxVersion: unsupported('dxdiag is only available on Windows', 'dxdiag.gpu') };
 
-      const run = await runReadOnly(ctx.runner, 'dxdiag', ['/t', target, '/whql:off'], { timeoutMs: Math.max(ctx.timeoutMs, 45_000) });
+      const run = await runReadOnly(ctx.runner, 'dxdiag.gpu', ['/t', target, '/whql:off'], { timeoutMs: Math.max(ctx.timeoutMs, 45_000) });
       if (!run.ok) {
         return {
           directxVersion: field(null, {
             status: Status.ERROR,
-            source: 'dxdiag',
+            source: 'dxdiag.gpu',
             error: `dxdiag did not complete (${run.timedOut ? 'timed out' : `exit ${run.code}`}). The DirectX tool is slow on some systems; this does not indicate a GPU fault.`
           })
         };
@@ -360,13 +352,21 @@ export function registerGpu(registry) {
         await unlink(target).catch(() => {});
         const parsed = parseDxDiag(text);
         return {
-          directxVersion: parsed.directxVersion ? available(parsed.directxVersion, 'dxdiag') : unavailable('DirectX version not found in the dxdiag report', 'dxdiag'),
-          reportedDisplayMemory: parsed.displayMemory ? available(parsed.displayMemory, 'dxdiag') : unavailable('Display memory not found in the dxdiag report', 'dxdiag'),
-          monitors: parsed.monitors.length > 0 ? available(parsed.monitors, 'dxdiag') : unavailable('Monitor names not found in the dxdiag report', 'dxdiag')
+          directxVersion: parsed.directxVersion ? available(parsed.directxVersion, 'dxdiag.gpu') : unavailable('DirectX version not found in the dxdiag report', 'dxdiag.gpu'),
+          reportedDisplayMemory: parsed.displayMemory ? available(parsed.displayMemory, 'dxdiag.gpu') : unavailable('Display memory not found in the dxdiag report', 'dxdiag.gpu'),
+          monitors: parsed.monitors.length > 0 ? available(parsed.monitors, 'dxdiag.gpu') : unavailable('Monitor names not found in the dxdiag report', 'dxdiag.gpu')
         };
       } catch (error) {
         return { directxVersion: failed(`dxdiag report could not be read: ${error instanceof Error ? error.message : String(error)}`, 'dxdiag') };
       }
     }
+  });
+
+  registry.registerTask({
+    id: 'gpu.directx',
+    module: 'directx',
+    title: 'DirectX runtime',
+    quick: false,
+    providers: ['directx-dxdiag.gpu']
   });
 }

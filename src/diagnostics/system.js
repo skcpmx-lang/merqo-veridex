@@ -148,7 +148,7 @@ export function mapSystemIdentity(system, product, bios = null) {
  */
 export function registerSystem(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.system',
     title: 'Windows CIM (Win32_ComputerSystem)',
     priority: 1,
     collect: async (ctx) => {
@@ -159,15 +159,15 @@ export function registerSystem(registry) {
       ]);
       if (!system.ok && !product.ok) {
         const cause = failureToStatus(system);
-        if (cause.kind === 'permission') return { identity: field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32' }) };
-        return { identity: failed(system.error ?? 'Device identity unavailable', 'cim-win32') };
+        if (cause.kind === 'permission') return { identity: field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.system' }) };
+        return { identity: failed(system.error ?? 'Device identity unavailable', 'cim-win32.system') };
       }
       return mapSystemIdentity(system.rows[0] ?? null, product.rows[0] ?? null, bios.rows[0] ?? null);
     }
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.system',
     title: 'systeminformation (system identity)',
     priority: 2,
     collect: async () => {
@@ -176,8 +176,8 @@ export function registerSystem(registry) {
       try {
         const [osInfo, system] = await Promise.all([loaded.si.osInfo(), loaded.si.system()]);
         return {
-          hostname: cleanString(system?.hostname) ? available(cleanString(system.hostname), 'systeminformation', { notes: ['Sensitive identifier: redacted from reports unless enabled.'] }) : unavailable('Hostname not reported', 'systeminformation'),
-          osPlatform: cleanString(osInfo?.platform) ? available(cleanString(osInfo.platform), 'systeminformation') : unavailable('Platform not reported', 'systeminformation')
+          hostname: cleanString(system?.hostname) ? available(cleanString(system.hostname), 'systeminformation.system', { notes: ['Sensitive identifier: redacted from reports unless enabled.'] }) : unavailable('Hostname not reported', 'systeminformation.system'),
+          osPlatform: cleanString(osInfo?.platform) ? available(cleanString(osInfo.platform), 'systeminformation') : unavailable('Platform not reported', 'systeminformation.system')
         };
       } catch {
         return {};
@@ -190,7 +190,7 @@ export function registerSystem(registry) {
     module: 'system',
     title: 'System identity',
     quick: true,
-    providers: ['cim-win32', 'systeminformation']
+    providers: ['cim-win32.system', 'systeminformation.system']
   });
 }
 

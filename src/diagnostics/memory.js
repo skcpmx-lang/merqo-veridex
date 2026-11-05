@@ -136,7 +136,7 @@ export function summariseModules(modules, arrayInfo = null) {
  */
 function describeChannels(modules) {
   const locators = modules.map((module) => cleanString(module.DeviceLocator)).filter(Boolean);
-  if (locators.length === 0) return unavailable('Memory slot locators not reported', 'cim-win32');
+  if (locators.length === 0) return unavailable('Memory slot locators not reported', 'cim-win32.memory');
   if (locators.length === 1) return available('Single module — single-channel operation', 'vendor-heuristic', { notes: ['Inferred from there being one populated slot. On most consumer platforms a single module runs in single-channel mode.'] });
 
   // Look for the common "DIMM0/DIMM1" or "ChannelA-DIMM0" naming.
@@ -206,7 +206,7 @@ export function mapMemLayout(layout) {
  */
 export function registerMemory(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.memory',
     title: 'Windows CIM (Win32_PhysicalMemory)',
     priority: 1,
     collect: async (ctx) => {
@@ -218,7 +218,7 @@ export function registerMemory(registry) {
       if (!modules.ok) {
         const cause = failureToStatus(modules);
         return {
-          modules: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32' }) : failed(modules.error ?? 'Memory module data unavailable', 'cim-win32')
+          modules: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.memory' }) : failed(modules.error ?? 'Memory module data unavailable', 'cim-win32.memory')
         };
       }
 
@@ -240,12 +240,12 @@ export function registerMemory(registry) {
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.memory',
     title: 'systeminformation (memory counters)',
     priority: 2,
     collect: async () => {
       const loaded = await loadSystemInformation();
-      if (!loaded.ok) return { totalPhysical: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation') };
+      if (!loaded.ok) return { totalPhysical: unavailable(`systeminformation unavailable: ${loaded.error}`, 'systeminformation.memory') };
       try {
         const [mem, layout] = await Promise.all([loaded.si.mem(), loaded.si.memLayout()]);
         const totals = mapMemoryTotals(mem);
@@ -256,20 +256,20 @@ export function registerMemory(registry) {
         layoutMapped.modules.forEach((module, index) => {
           const size = nonNegative(module.size);
           if (size !== null && size > 0) {
-            fields[`fallbackModule${index + 1}.capacity`] = available(bytesToGiB(size), 'systeminformation', { unit: 'GB' });
+            fields[`fallbackModule${index + 1}.capacity`] = available(bytesToGiB(size), 'systeminformation.memory', { unit: 'GB' });
             const type = cleanString(module.type);
-            if (type) fields[`fallbackModule${index + 1}.type`] = available(type, 'systeminformation');
+            if (type) fields[`fallbackModule${index + 1}.type`] = available(type, 'systeminformation.memory');
             const clock = nonNegative(module.clockSpeed);
-            if (clock !== null) fields[`fallbackModule${index + 1}.configuredSpeed`] = available(clock, 'systeminformation', { unit: 'MT/s' });
+            if (clock !== null) fields[`fallbackModule${index + 1}.configuredSpeed`] = available(clock, 'systeminformation.memory', { unit: 'MT/s' });
             const manufacturer = cleanString(module.manufacturer);
-            if (manufacturer) fields[`fallbackModule${index + 1}.manufacturer`] = available(manufacturer, 'systeminformation');
+            if (manufacturer) fields[`fallbackModule${index + 1}.manufacturer`] = available(manufacturer, 'systeminformation.memory');
             const formFactor = cleanString(module.formFactor);
-            if (formFactor) fields[`fallbackModule${index + 1}.formFactor`] = available(formFactor, 'systeminformation');
+            if (formFactor) fields[`fallbackModule${index + 1}.formFactor`] = available(formFactor, 'systeminformation.memory');
           }
         });
         return fields;
       } catch (error) {
-        return { totalPhysical: failed(error, 'systeminformation') };
+        return { totalPhysical: failed(error, 'systeminformation.memory') };
       }
     }
   });
@@ -279,7 +279,7 @@ export function registerMemory(registry) {
     module: 'memory',
     title: 'Memory',
     quick: true,
-    providers: ['cim-win32', 'systeminformation'],
+    providers: ['cim-win32.memory', 'systeminformation.memory'],
     validate: (fields) => {
       const problems = [];
       const total = fields.totalCapacity?.value;

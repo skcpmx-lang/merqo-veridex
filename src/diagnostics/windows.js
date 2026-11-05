@@ -141,7 +141,7 @@ export function summariseServices(services) {
  */
 export function registerWindows(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.windows',
     title: 'Windows CIM (Win32_OperatingSystem) + licensing service',
     priority: 1,
     collect: async (ctx) => {
@@ -152,23 +152,23 @@ export function registerWindows(registry) {
 
       if (!os.ok) {
         const cause = failureToStatus(os);
-        return { os: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32' }) : failed(os.error, 'cim-win32') };
+        return { os: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.windows' }) : failed(os.error, 'cim-win32.windows') };
       }
 
       const fields = mapOperatingSystem(os.rows[0], new Date());
       const activationState = parseActivation(`${activation.stdout}\n${activation.stderr}`);
       fields.activation = activationState.activated === true
-        ? available(activationState.text ?? 'Activated', 'cim-win32')
+        ? available(activationState.text ?? 'Activated', 'cim-win32.windows')
         : activationState.activated === false
-          ? field(activationState.text ?? 'Not activated', { status: Status.WARNING, source: 'cim-win32', notes: ['Windows reports that the licence is not permanently activated. This limits personalisation and can disable updates.'] })
-          : unavailable('The licensing service did not return a recognisable activation state', 'cim-win32');
+          ? field(activationState.text ?? 'Not activated', { status: Status.WARNING, source: 'cim-win32.windows', notes: ['Windows reports that the licence is not permanently activated. This limits personalisation and can disable updates.'] })
+          : unavailable('The licensing service did not return a recognisable activation state', 'cim-win32.windows');
 
       return fields;
     }
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.windows',
     title: 'systeminformation (OS identity)',
     priority: 2,
     collect: async () => {
@@ -179,13 +179,13 @@ export function registerWindows(registry) {
         /** @type {Record<string, import('../core/field.js').FieldValue>} */
         const fields = {};
         const distro = cleanString(osInfo?.distro);
-        if (distro) fields.caption = available(distro, 'systeminformation');
+        if (distro) fields.caption = available(distro, 'systeminformation.windows');
         const release = cleanString(osInfo?.release);
-        if (release) fields.version = available(release, 'systeminformation');
+        if (release) fields.version = available(release, 'systeminformation.windows');
         const build = cleanString(osInfo?.build);
-        if (build) fields.build = available(build, 'systeminformation');
+        if (build) fields.build = available(build, 'systeminformation.windows');
         if (typeof osInfo?.uptime === 'number' && osInfo.uptime > 0) {
-          fields.uptimeSeconds = available(Math.floor(osInfo.uptime), 'systeminformation', { unit: 's' });
+          fields.uptimeSeconds = available(Math.floor(osInfo.uptime), 'systeminformation.windows', { unit: 's' });
         }
         return fields;
       } catch {
@@ -199,7 +199,7 @@ export function registerWindows(registry) {
     module: 'windows',
     title: 'Windows',
     quick: true,
-    providers: ['cim-win32', 'systeminformation'],
+    providers: ['cim-win32.windows', 'systeminformation.windows'],
     validate: (fields) => {
       const problems = [];
       const build = fields.build?.value;
@@ -210,16 +210,8 @@ export function registerWindows(registry) {
     }
   });
 
-  registry.registerTask({
-    id: 'windows.inventory',
-    module: 'windowsInventory',
-    title: 'Windows features, services & updates',
-    quick: false,
-    providers: ['system-features']
-  });
-
   registry.registerProvider({
-    id: 'system-features',
+    id: 'system-features.windows',
     title: 'Windows servicing inventory',
     priority: 1,
     collect: async (ctx) => {
@@ -235,17 +227,17 @@ export function registerWindows(registry) {
       const fields = {};
       const featureSummary = features.ok ? summariseFeatures(features.data) : null;
       fields.windowsFeatures = featureSummary
-        ? available(featureSummary.enabled, 'cim-win32', { notes: [`${featureSummary.enabled.length} of ${featureSummary.total} optional features are enabled.`] })
+        ? available(featureSummary.enabled, 'cim-win32.windows', { notes: [`${featureSummary.enabled.length} of ${featureSummary.total} optional features are enabled.`] })
         : ctx.permissions.isAdmin
-          ? unavailable(features.error ?? 'Optional features were not returned', 'cim-win32')
-          : field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: 'Enumerating Windows optional features requires administrative rights.', source: 'cim-win32' });
+          ? unavailable(features.error ?? 'Optional features were not returned', 'cim-win32.windows')
+          : field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: 'Enumerating Windows optional features requires administrative rights.', source: 'cim-win32.windows' });
 
       const serviceSummary = services.ok ? summariseServices(services.data) : null;
-      fields.servicesSummary = serviceSummary ? available(`${serviceSummary.running} running of ${serviceSummary.total}`, 'cim-win32') : failed(services.error ?? 'Services could not be enumerated', 'cim-win32');
+      fields.servicesSummary = serviceSummary ? available(`${serviceSummary.running} running of ${serviceSummary.total}`, 'cim-win32.windows') : failed(services.error ?? 'Services could not be enumerated', 'cim-win32.windows');
       if (serviceSummary && serviceSummary.automaticStopped.length > 0) {
         fields.servicesNotRunning = field(serviceSummary.automaticStopped.slice(0, 40), {
           status: Status.WARNING,
-          source: 'cim-win32',
+          source: 'cim-win32.windows',
           notes: ['A service set to Automatic that is not running may be failing to start. Check the System event log for service-control errors.']
         });
       }
@@ -254,12 +246,20 @@ export function registerWindows(registry) {
         ? updates.rows.map((row) => ({ hotfix: cleanString(row.HotFixID), installed: date(row.InstalledOn) })).filter((entry) => entry.hotfix)
         : [];
       fields.updates = updateList.length > 0
-        ? available(updateList.slice(0, 40), 'cim-win32', { notes: ['A partial view: cumulative updates are not always listed by this class.'] })
+        ? available(updateList.slice(0, 40), 'cim-win32.windows', { notes: ['A partial view: cumulative updates are not always listed by this class.'] })
         : updates.ok
-          ? unavailable('No updates were reported', 'cim-win32')
-          : failed(updates.error ?? 'Update history could not be queried', 'cim-win32');
+          ? unavailable('No updates were reported', 'cim-win32.windows')
+          : failed(updates.error ?? 'Update history could not be queried', 'cim-win32.windows');
 
       return fields;
     }
+  });
+
+  registry.registerTask({
+    id: 'windows.inventory',
+    module: 'windowsInventory',
+    title: 'Windows features, services & updates',
+    quick: false,
+    providers: ['system-features.windows']
   });
 }

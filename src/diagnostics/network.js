@@ -202,7 +202,7 @@ export function mapIpConfiguration(configurations, dnsServers = []) {
  */
 export function registerNetwork(registry) {
   registry.registerProvider({
-    id: 'cim-win32',
+    id: 'cim-win32.network',
     title: 'Windows CIM (Win32_NetworkAdapter + IP configuration)',
     priority: 1,
     collect: async (ctx) => {
@@ -214,7 +214,7 @@ export function registerNetwork(registry) {
 
       if (!adapters.ok) {
         const cause = failureToStatus(adapters);
-        return { adapters: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32' }) : failed(adapters.error, 'cim-win32') };
+        return { adapters: cause.kind === 'permission' ? field(null, { status: Status.PERMISSION_REQUIRED, permissionRequired: true, error: cause.reason, source: 'cim-win32.network' }) : failed(adapters.error, 'cim-win32.network') };
       }
 
       /** @type {Record<string, import('../core/field.js').FieldValue>} */
@@ -231,17 +231,17 @@ export function registerNetwork(registry) {
 
       Object.assign(fields, mapIpConfiguration(configurations.rows, dns.rows));
 
-      fields.wifiAdapterCount = available(counts.wifi, 'cim-win32', { notes: counts.wifi === 0 ? ['No Wi-Fi adapter was detected. This is expected on desktop boards without wireless, and is not a fault.'] : [] });
-      fields.bluetoothAdapterCount = available(counts.bluetooth, 'cim-win32', { notes: counts.bluetooth === 0 ? ['No Bluetooth adapter was detected. This is expected on many desktops.'] : [] });
-      fields.ethernetAdapterCount = available(counts.ethernet, 'cim-win32');
-      fields.virtualAdapterCount = available(counts.virtual, 'cim-win32', { notes: ['Virtual and tunnelling adapters are counted separately so they are never mistaken for hardware.'] });
+      fields.wifiAdapterCount = available(counts.wifi, 'cim-win32.network', { notes: counts.wifi === 0 ? ['No Wi-Fi adapter was detected. This is expected on desktop boards without wireless, and is not a fault.'] : [] });
+      fields.bluetoothAdapterCount = available(counts.bluetooth, 'cim-win32.network', { notes: counts.bluetooth === 0 ? ['No Bluetooth adapter was detected. This is expected on many desktops.'] : [] });
+      fields.ethernetAdapterCount = available(counts.ethernet, 'cim-win32.network');
+      fields.virtualAdapterCount = available(counts.virtual, 'cim-win32.network', { notes: ['Virtual and tunnelling adapters are counted separately so they are never mistaken for hardware.'] });
 
       return fields;
     }
   });
 
   registry.registerProvider({
-    id: 'systeminformation',
+    id: 'systeminformation.network',
     title: 'systeminformation (network interfaces)',
     priority: 2,
     collect: async () => {
@@ -261,7 +261,7 @@ export function registerNetwork(registry) {
     module: 'network',
     title: 'Network adapters',
     quick: true,
-    providers: ['cim-win32', 'systeminformation'],
+    providers: ['cim-win32.network', 'systeminformation.network'],
     validate: (fields) => {
       const problems = [];
       for (const [key, value] of Object.entries(fields)) {

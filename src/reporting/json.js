@@ -38,7 +38,11 @@ export function renderJson(report) {
     assessment: report.assessment
       ? {
           score: report.assessment.score,
+          rawScore: report.assessment.rawScore ?? report.assessment.score,
           rating: report.assessment.rating,
+          gated: Boolean(report.assessment.gated),
+          capped: Boolean(report.assessment.capped),
+          gatingNote: report.assessment.gatingNote ?? null,
           coveragePercent: report.assessment.coveragePercent,
           ratedComponents: report.assessment.ratedComponents,
           totalComponents: report.assessment.totalComponents,
