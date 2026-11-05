@@ -254,8 +254,13 @@ async function run() {
     window = await waitFor(() => BrowserWindow.getAllWindows()[0], 45_000, 'the application window');
     enter('the interface is up');
     record('ok', `window created (${BrowserWindow.getAllWindows().length} window(s))`);
-    await waitFor(() => window.isVisible(), 30_000, 'the window to become visible');
-    record('ok', `window visible: ${window.getBounds().width}×${window.getBounds().height}`);
+    // A first launch after a fresh install is slower than any other launch: the executable and
+    // its unpacked native modules are being read from disk for the first time and an unsigned
+    // binary is being scanned on execution. Measured on a Windows runner it exceeded 30s, which
+    // is a fact about cold start, not a defect - so it is measured rather than timed out on.
+    const visibleFrom = Date.now();
+    await waitFor(() => window.isVisible(), 120_000, 'the window to become visible');
+    record('ok', `window visible after ${Date.now() - visibleFrom}ms: ${window.getBounds().width}×${window.getBounds().height}${window.isMinimized() ? ' (minimised)' : ''}`);
 
     // The renderer must load from the asar, not from a development server or a missing file.
     const url = window.webContents.getURL();
