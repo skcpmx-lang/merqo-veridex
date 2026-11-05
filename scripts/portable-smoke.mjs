@@ -169,6 +169,7 @@ async function check() {
 
   const verdictPath = report;
   record('info', `portable wrapper exited ${exitCode.code}${exitCode.timedOut ? ' (timed out and was killed)' : ''} after ${Math.round((Date.now() - launchedAt) / 1000)}s`);
+  emit('notice', 'portable-smoke launch', `wrapper exit ${exitCode.code}${exitCode.timedOut ? ' after timeout' : ''} in ${Math.round((Date.now() - launchedAt) / 1000)}s`);
   if (exitCode.output?.trim()) {
     for (const line of exitCode.output.trim().split('\n').slice(-15)) console.log(`    [portable] ${line}`);
   } else {
@@ -191,6 +192,7 @@ async function check() {
     }
   } else {
     record('info', `no application log directory at ${logDir} — the application may never have started`);
+    emit('notice', 'portable-smoke log', `no log directory at ${logDir}: the application never initialised`);
   }
 
   // electron-builder's portable target extracts under the user's temp directory. If it is
@@ -199,6 +201,7 @@ async function check() {
   const temp = os.tmpdir();
   const extracted = readdirSync(temp).filter((name) => /^[0-9a-f]{6,}$|VERIDEX/i.test(name));
   record('info', `temp extraction candidates: ${extracted.slice(0, 8).join(', ') || '(none)'}`);
+  emit('notice', 'portable-smoke temp', `extraction candidates: ${extracted.slice(0, 6).join(', ') || '(none)'}`);
 
   if (!existsSync(verdictPath)) {
     record('fail', 'the portable executable did not write a verdict — it either failed to start or crashed');
