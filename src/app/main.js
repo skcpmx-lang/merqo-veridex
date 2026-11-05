@@ -162,8 +162,19 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
+  // Startup is logged step by step because a window that exists, whose page has loaded, and
+  // which never becomes visible has no other witness. The lines are small, they are useful to
+  // anyone debugging their own machine, and they were what distinguished "the application
+  // never asked to be shown" from "the desktop refused to show it".
+  await logger?.info('window created', { scope: 'startup', bounds: window.getBounds() });
+  window.webContents.once('did-finish-load', () => {
+    void logger?.info('renderer finished loading', { scope: 'startup', url: window.webContents.getURL() });
+  });
   await window.loadFile(path.join(ROOT, 'src', 'renderer', 'index.html'));
+  await logger?.info('renderer loaded', { scope: 'startup', readyState: 'complete' });
   window.show();
+  // Reported as observed, not as intended: show() returning is not the same as a visible window.
+  await logger?.info('window show requested', { scope: 'startup', visible: window.isVisible(), minimised: window.isMinimized() });
 }
 
 /** Render the report for one format. Shared by build and save. */
