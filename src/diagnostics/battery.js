@@ -23,7 +23,7 @@
 import { available, unavailable, notApplicable, field, failed, unsupported } from '../core/field.js';
 import { Status } from '../core/status.js';
 import { cleanString, num, nonNegative, bool, date } from '../platform/parse.js';
-import { queryCim, runReadOnly, loadSystemInformation, failureToStatus, readRegistry } from '../platform/windows.js';
+import { queryCim, runReadOnly, loadSystemInformation, failureToStatus, readRegistry, summariseToolOutput as toolOutputClause } from '../platform/windows.js';
 
 /** Plausibility window for a computed health percentage. */
 export const HEALTH_PLAUSIBLE_RANGE = Object.freeze({ min: 5, max: 115 });

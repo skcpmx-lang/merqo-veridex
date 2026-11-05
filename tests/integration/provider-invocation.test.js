@@ -153,3 +153,48 @@ test('a failed tool invocation carries the tool\'s own words, not just an exit c
   assert.match(fields.directxVersion.error, /exit 127/);
   assert.doesNotMatch(fields.directxVersion.error, /^dxdiag did not complete \(exit 127\)\./, 'a bare exit code is not an explanation');
 });
+
+test('a tool that fails with output says what it said — every provider that runs one', async () => {
+  // This branch had never executed in CI: with a NoopRunner the providers bail out earlier
+  // (non-Windows, or unprivileged), so a missing import inside it survived 448 passing tests
+  // and only surfaced on a real Windows host.
+  const { registerBattery } = await import('../../src/diagnostics/battery.js');
+  const { registerSecurity } = await import('../../src/diagnostics/security.js');
+  // The tool's stderr is what must reach the user, so make the spawn helper emit it.
+  const runner = new CommandRunner({
+    platform: 'win32',
+    spawnFn: (file, args) => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      setImmediate(() => {
+        child.stdout.end('');
+        child.stderr.end(`${file} is not available on this system`);
+        child.emit('close', 5);
+      });
+      return child;
+    }
+  });
+
+  const registry = new ProviderRegistry();
+  registerBattery(registry);
+  registerSecurity(registry);
+
+  const elevated = { ...windowsPermissions, isAdmin: true, mode: 'elevated' };
+  const results = [];
+  for (const [id, provider] of registry.providers) {
+    const fields = await provider.collect({ runner, permissions: elevated, logger: null, timeoutMs: 3_000 });
+    results.push([id, fields]);
+  }
+
+  const errored = results.flatMap(([id, fields]) => Object.entries(fields ?? {})
+    .filter(([, value]) => value?.status === 'ERROR')
+    .map(([key, value]) => ({ id, key, error: value.error })));
+
+  assert.ok(errored.length > 0, 'precondition: at least one provider reports an ERROR for a failing tool');
+  for (const entry of errored) {
+    assert.ok(entry.error && entry.error.length > 10, `${entry.id}.${entry.key} reports ERROR with no explanation`);
+    assert.match(entry.error, /not available on this system/, `${entry.id}.${entry.key} dropped the tool's own words`);
+  }
+});
