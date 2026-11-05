@@ -430,4 +430,10 @@ app.on('render-process-gone', (_event, _contents, details) => {
   void logger?.error('renderer process gone', { scope: 'app', reason: details.reason, exitCode: details.exitCode });
 });
 
+// The automated GUI smoke test attaches here, and only when a harness asks for it. A
+// normal launch never evaluates this import, so the real application is unchanged.
+if (process.env.VERIDEX_GUI_SMOKE === '1') {
+  await import('./gui-smoke.js');
+}
+
 export { CHANNELS };

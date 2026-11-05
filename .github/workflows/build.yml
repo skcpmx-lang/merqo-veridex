@@ -146,6 +146,37 @@ jobs:
       - name: Verify the artifacts
         run: npm run verify:artifacts
 
+      # Inspecting the unpacked application is the last check that needs no execution.
+      # It answers a different question from verify-artifacts: not "did a build come out",
+      # but "is the application inside it". A window with no renderer, a package with no
+      # preload, or an executable with no version metadata all pass a size check and all
+      # break for the user.
+      - name: Validate the packaged application
+        run: node scripts/verify-package.mjs --dir dist/win-unpacked --json package-validation.json
+
+      # The first time in this project's history that the application is actually launched.
+      # windows-latest has a desktop session, so this is a real BrowserWindow with a real
+      # renderer, and the harness drives it through every page, a sweep, history, live
+      # monitoring, settings, report generation, cancellation and shutdown.
+      #
+      # It runs the unpacked build rather than the installed copy, because installing needs
+      # an interactive desktop that a runner does not fully provide. The installer test
+      # below covers installation separately.
+      - name: GUI smoke test — unpacked application
+        run: node scripts/gui-smoke.mjs --dist dist/win-unpacked --json gui-smoke-unpacked.json
+        timeout-minutes: 8
+
+      - name: Upload GUI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veridex-gui-evidence
+          path: |
+            gui-smoke-unpacked.json
+            package-validation.json
+          if-no-files-found: ignore
+          retention-days: 30
+
       # The manifest is the evidence. Anyone reviewing this run can read the exact
       # artifacts and their digests without downloading 200 MB, and the file is uploaded
       # beside them so the two can be compared later. The `::notice` lines put the same

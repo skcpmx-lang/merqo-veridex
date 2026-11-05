@@ -156,3 +156,26 @@ test('a failing test reports its reason, not only its name', async () => {
   assert.match(stdout, /Field invariant violated/, 'the assertion message must be in the annotation');
   assert.match(stdout, /ERR_ASSERTION/, 'the failure code must be in the annotation');
 });
+
+test('the Windows job validates and launches the packaged application', () => {
+  // Before this, CI proved an installer came out of the build and nothing more. A package
+  // with no renderer, no preload or no version metadata passes a size check and breaks for
+  // the user, so the job must inspect the app and then run it.
+  const build = readWorkflow('build.yml');
+  assert.match(build, /verify-package\.mjs/, 'the packaged application must be inspected');
+  assert.match(build, /gui-smoke\.mjs/, 'the application must actually be launched');
+  assert.match(build, /--dist dist\/win-unpacked/, 'the smoke test must run the built app, not the sources');
+  assert.ok(existsSync(path.join(ROOT, 'scripts/verify-package.mjs')));
+  assert.ok(existsSync(path.join(ROOT, 'scripts/gui-smoke.mjs')));
+  assert.ok(existsSync(path.join(ROOT, 'src/app/gui-smoke.js')));
+});
+
+test('a GUI test that cannot run does not report success', () => {
+  // The distinction that matters: "this machine cannot run the test" is exit 2 and a
+  // warning; "the application is broken" is exit 1 and a failure. A CI job that treats
+  // them the same either goes green on a broken app or red on a healthy one.
+  const script = readFileSync(path.join(ROOT, 'scripts/gui-smoke.mjs'), 'utf8');
+  assert.match(script, /process\.exitCode = 2/, 'cannot-run must be distinguishable from failure');
+  assert.match(script, /CANNOT RUN GUI SMOKE/);
+  assert.match(script, /process\.exitCode = verdict\.problems\.length > 0 \? 1 : 0/);
+});
