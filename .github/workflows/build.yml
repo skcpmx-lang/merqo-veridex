@@ -91,12 +91,28 @@ jobs:
           # The assertion detail lives on the following indented lines of each TAP block.
           awk '/^not ok/{flag=1} flag&&/error:|timed out|expected|actual/{print} /^\.\.\.$/{flag=0}' test-output.tap | head -60
 
+      # On Windows the diagnostic layer is additionally exercised against the *real*
+      # interfaces: real WMI, real PowerShell, the real registry, and a real 15-task sweep.
+      # This is the only place in the project where a provider issues an actual command,
+      # and it runs on the real Electron build's target OS. It does not prove real hardware
+      # behaviour (a runner is a VM with synthetic devices), but it does prove that the
+      # command paths execute and that every field they produce is well formed.
+      - name: Live platform smoke test (real WMI, PowerShell, registry)
+        if: runner.os == 'Windows'
+        run: |
+          node scripts/live-smoke.mjs --json live-smoke.json
+          echo "exit=$?"
+        shell: bash
+        continue-on-error: false
+
       - name: Upload test output on failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}
-          path: test-output.tap
+          path: |
+            test-output.tap
+            live-smoke.json
           if-no-files-found: ignore
           retention-days: 7
 

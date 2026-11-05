@@ -21,6 +21,7 @@ const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 const WORKFLOWS = ['build.yml', 'release.yml'];
 const read = (name) => readFileSync(path.join(ROOT, '.github/workflows', name), 'utf8');
+const readWorkflow = read;
 
 test('both workflows exist and declare jobs', () => {
   for (const name of WORKFLOWS) {
@@ -103,4 +104,23 @@ test('the licence file exists, because both the installer and package.json requi
   const licence = readFileSync(path.join(ROOT, 'LICENSE'), 'utf8');
   assert.match(licence, /NO WARRANTY/i);
   assert.match(licence, /not a certification/i, 'the licence must not overstate what a report means');
+});
+
+test('the Windows job exercises the real interfaces, not only the test doubles', () => {
+  // The whole suite drives providers with a no-op runner, so on its own it never proves a
+  // command path executes. The smoke script is the only place a provider talks to real WMI.
+  const build = readWorkflow('build.yml');
+  assert.match(build, /live-smoke\.mjs/, 'the Windows job must run the live smoke script');
+  assert.match(build, /runner\.os == 'Windows'/, 'the smoke script must be gated to Windows');
+  assert.ok(existsSync(path.join(ROOT, 'scripts/live-smoke.mjs')), 'the smoke script must exist');
+});
+
+test('the build publishes an auditable manifest beside the artifacts', () => {
+  const build = readWorkflow('build.yml');
+  // A 234 MB artifact cannot always be fetched, so the build's own record of what it
+  // produced and its digests must be readable without downloading anything.
+  assert.match(build, /BUILD-MANIFEST\.txt/);
+  assert.match(build, /Get-FileHash/, 'the manifest must be built from real digests');
+  assert.match(build, /::notice/, 'the facts must reach the checks API as annotations');
+  assert.match(build, /NOT VERIFIED/i, 'the manifest must say the installer is unproven');
 });
