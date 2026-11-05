@@ -140,19 +140,34 @@ async function main() {
   // different facts. Ask the filesystem instead of inferring from an exit code.
   if (permissions.isWindows) {
     const probes = await runner.powershellJson(
-      "@('powercfg','dxdiag','manage-bde','pnputil','reagentc') | ForEach-Object { " +
-      "$p = Join-Path $env:SystemRoot ('System32\\' + $_ + '.exe'); " +
-      "if (-not (Test-Path $p)) { $p = Join-Path $env:SystemRoot ('System32\\' + $_ + '.exe') } " +
-      "[pscustomobject]@{ tool = $_; path = $p; present = (Test-Path $p) } } | ConvertTo-Json -Compress",
+      "$tools = @('powercfg','dxdiag','manage-bde','pnputil','reagentc','vssadmin'); " +
+      "$out = foreach ($t in $tools) { " +
+      "$p = (Get-Command $t -ErrorAction SilentlyContinue).Source; " +
+      "[pscustomobject]@{ tool = $t; path = $p; present = [bool]$p } }; " +
+      "$out | ConvertTo-Json -Compress",
       { name: 'smoke:tools', timeoutMs: 30_000 }
     );
     if (probes.ok) {
       const list = Array.isArray(probes.data) ? probes.data : [probes.data];
       for (const tool of list) {
-        record(tool.present ? 'ok' : 'warn', `tool ${tool.tool}: ${tool.present ? 'present' : 'NOT PRESENT on this host'} (${tool.path})`);
+        if (!tool || tool.tool === undefined) continue;
+        record(tool.present ? 'ok' : 'warn', `tool ${tool.tool}: ${tool.present ? 'present' : 'NOT PRESENT on this host'}${tool.path ? ` (${tool.path})` : ''}`);
       }
     } else {
       record('warn', `tool availability probe failed: ${probes.error}`);
+    }
+
+    // A .NET x64 build cannot tell emulated x86 from native x64: both report
+    // PROCESSOR_ARCHITECTURE=x64. If the image is not the native architecture, a pile of
+    // system tools will be absent from System32, and every absence in this run must be read
+    // in that light rather than as a product defect.
+    const emulation = await queryCim(runner, 'Win32_ComputerSystem', { properties: ['SystemType'] });
+    if (emulation.ok) {
+      const systemType = emulation.rows[0]?.SystemType ?? '(not reported)';
+      record('info', `Win32_ComputerSystem.SystemType = ${systemType}`);
+      if (/x86/i.test(systemType) && /x64/i.test(process.arch)) {
+        record('warn', 'This is an x86 Windows image running an x64 Node build under emulation. Tools under System32 are the 32-bit ones and some are absent; absences here are an artefact of the platform, not of the product.');
+      }
     }
 
     const batteryPresent = await queryCim(runner, 'Win32_Battery', { properties: ['Name', 'Status'] });

@@ -358,21 +358,30 @@ export function registerStorage(registry) {
       if (!ctx.permissions.isAdmin) {
         return { smart: permissionRequired('SMART data requires DeviceIoControl access, which Windows grants only to elevated processes.', 'ata-smart.storage') };
       }
+      // `(try { ... } catch { ... })` is not a valid PowerShell expression, and the runner
+      // wraps the whole body in `@(...)`, so the parser rejected the script outright:
+      // "The term 'try' is not recognized". Every reliability counter was therefore reported
+      // as ERROR, on every machine, and no fixture noticed because a fixture supplies the
+      // parsed rows rather than a PowerShell script.
+      //
+      // Counters are now fetched with one call and unwrapped by member access, which is
+      // valid everywhere. `$ErrorActionPreference` already makes a failure yield $null.
       const result = await ctx.runner.powershellJson(
         `$ErrorActionPreference='SilentlyContinue'
 $disks = Get-CimInstance -Namespace root/Microsoft/Windows/Storage -ClassName MSFT_PhysicalDisk
 $out = @()
 foreach ($d in $disks) {
+  $counter = Get-PhysicalDisk -DeviceNumber $d.DeviceId | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
   $out += [pscustomobject]@{
     Number = $d.DeviceId
     Model = $d.Model
     BusType = $d.BusType
     MediaType = $d.MediaType
-    SmartStatus = (try { (Get-PhysicalDisk -DeviceNumber $d.DeviceId | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue).Wear } catch { $null })
-    Temperature = (try { (Get-PhysicalDisk -DeviceNumber $d.DeviceId | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue).Temperature } catch { $null })
-    PowerOnHours = (try { (Get-PhysicalDisk -DeviceNumber $d.DeviceId | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue).PowerOnHours } catch { $null })
-    ReadErrorsTotal = (try { (Get-PhysicalDisk -DeviceNumber $d.DeviceId | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue).ReadErrorsTotal } catch { $null })
-    WriteErrorsTotal = (try { (Get-PhysicalDisk -DeviceNumber $d.DeviceId | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue).WriteErrorsTotal } catch { $null })
+    SmartStatus = $counter.Wear
+    Temperature = $counter.Temperature
+    PowerOnHours = $counter.PowerOnHours
+    ReadErrorsTotal = $counter.ReadErrorsTotal
+    WriteErrorsTotal = $counter.WriteErrorsTotal
   }
 }
 $out`,

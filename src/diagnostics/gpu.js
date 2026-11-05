@@ -324,7 +324,10 @@ export function registerGpu(registry) {
       const target = `${process.env.TEMP ?? process.env.TMP ?? '.'}\\veridex-dxdiag-${Date.now()}.txt`;
       if (!ctx.runner.isWindows) return { directxVersion: unsupported('dxdiag is only available on Windows', 'directx-dxdiag.gpu') };
 
-      const run = await runReadOnly(ctx.runner, 'directx-dxdiag.gpu', ['/t', target, '/whql:off'], { timeoutMs: Math.max(ctx.timeoutMs, 45_000) });
+      // The provider id was passed as the executable here, so this always failed with a
+      // spawn error and reported ERROR as though the GPU were at fault. Only a real host
+      // could show it: every fixture asserted on the parsed result, never on the argv.
+      const run = await runReadOnly(ctx.runner, 'dxdiag', ['/t', target, '/whql:off'], { timeoutMs: Math.max(ctx.timeoutMs, 45_000) });
       if (!run.ok) {
         return {
           directxVersion: field(null, {

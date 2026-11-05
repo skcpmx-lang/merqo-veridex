@@ -18,7 +18,7 @@ is the narrative summary of it.
 | Tested (automated) | 75 |
 | Implemented, untested | 11 |
 | Not started | 44 |
-| Automated tests | 441, all passing |
+| Automated tests | 446, all passing |
 | Source | 54 modules, ~16,500 lines |
 | Build | **produced** on Windows: installer 117.4 MiB + portable 106.5 MiB, unsigned |
 

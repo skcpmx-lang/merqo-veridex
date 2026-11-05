@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 441 · pass 441 · fail 0
+tests 446 · pass 446 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -75,7 +75,8 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults |
 | `tests/integration/artifacts.test.js` | 7 | release artifact verification: signatures, checksums, tampering |
 | `tests/integration/workflow.test.js` | 9 |
-| `tests/unit/smoke-regressions.test.js` | 9 | CI workflows reference scripts that exist; tests gate publishing |
+| `tests/unit/smoke-regressions.test.js` | 9 |
+| `tests/integration/provider-invocation.test.js` | 5 | CI workflows reference scripts that exist; tests gate publishing |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is
