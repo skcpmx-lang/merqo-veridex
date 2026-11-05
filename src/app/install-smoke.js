@@ -272,11 +272,15 @@ async function run() {
     // scanned on execution. Measured on a Windows runner it has exceeded two minutes, so this
     // waits with a running commentary rather than failing silently at the end.
     const visibleFrom = Date.now();
-    let visible = window.isVisible();
+    // Re-read the window each time: holding one object for ninety seconds assumes it is the
+    // only window and that it is never replaced, and this harness has already been wrong about
+    // what it was looking at once.
+    const currentWindow = () => BrowserWindow.getAllWindows()[0] ?? window;
+    let visible = currentWindow().isVisible();
     while (!visible && Date.now() - visibleFrom < 90_000) {
       await sleep(1_000);
       if (window.isDestroyed()) throw new Error('the window was destroyed before it appeared');
-      visible = window.isVisible();
+      visible = currentWindow().isVisible();
       const elapsed = Date.now() - visibleFrom;
       if (elapsed % 20_000 < 1_000) {
         let readyState = '(unavailable)';
@@ -285,7 +289,7 @@ async function run() {
         } catch (error) {
           readyState = `unavailable: ${error instanceof Error ? error.message : String(error)}`;
         }
-        record('info', `${Math.round(elapsed / 1000)}s: visible=${visible} minimised=${window.isMinimized()} loading=${window.webContents.isLoading()} readyState=${readyState} url=${window.webContents.getURL().slice(-40)}`);
+        record('info', `${Math.round(elapsed / 1000)}s: windows=${BrowserWindow.getAllWindows().length} visible=${visible} minimised=${currentWindow().isMinimized()} loading=${currentWindow().webContents.isLoading()} readyState=${readyState} url=${currentWindow().webContents.getURL().slice(-40)}`);
       }
     }
     if (!visible) {

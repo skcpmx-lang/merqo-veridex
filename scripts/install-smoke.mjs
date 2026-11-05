@@ -240,16 +240,26 @@ async function main() {
     record('info', `installed application exited ${launch.code} after ${Date.now() - launchedAt}ms`);
     if (launch.stdout.trim()) for (const line of launch.stdout.trim().split('\n').slice(-20)) console.log(`    [app] ${line}`);
 
-    // The application's own log is the only witness when it starts and then goes quiet. It is
-    // read here because the job log is not always reachable from where this is being reviewed.
+    // The application's own log is the only witness when it starts and then goes quiet. Only the
+    // lines written by THIS launch are reported: the log accumulates every run on the machine,
+    // and a truncated tail of somebody else's session is worse than nothing.
     const logDir = path.join(userData, 'logs');
     if (existsSync(logDir)) {
       const logs = readdirSync(logDir).filter((name) => name.endsWith('.log')).sort();
       const newest = logs.at(-1);
       if (newest) {
-        const lines = readFileSync(path.join(logDir, newest), 'utf8').trim().split('\n');
-        record('info', `application log ${newest}: ${lines.length} lines`);
-        emit('notice', 'install-smoke log', lines.slice(-8).join(' | ').slice(0, 1200));
+        const all = readFileSync(path.join(logDir, newest), 'utf8').trim().split('\n');
+        const since = new Date(launchedAt).toISOString().slice(0, 19);
+        const mine = all.filter((line) => {
+          try {
+            return JSON.parse(line).ts >= since;
+          } catch {
+            return false;
+          }
+        });
+        record('info', `application log ${newest}: ${all.length} lines, ${mine.length} from this launch`);
+        for (const line of mine.slice(0, 25)) console.log(`    [log] ${line}`);
+        emit('notice', 'install-smoke log', mine.map((line) => line.slice(0, 200)).join(' | ').slice(0, 4000));
       }
     } else {
       emit('notice', 'install-smoke log', `no log directory at ${logDir}`);
