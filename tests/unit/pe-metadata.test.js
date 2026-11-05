@@ -80,3 +80,36 @@ test('a file that is not an executable is rejected with a reason', () => {
   assert.equal(result.ok, false);
   assert.match(result.reason, /past the end|no PE/);
 });
+
+test('an empty value followed by the next key does not become the value', () => {
+  // The exact shape that produced "ProductVersion: FileDescription" on the real build: the
+  // version resource is a tree, and a node with an empty value is legal.
+  const parts = [];
+  const push = (text) => parts.push(align(Buffer.from(`${text}\u0000`, 'utf16le')));
+  push('ProductVersion');
+  push(''); // empty value
+  push('FileDescription');
+  push('VERIDEX hardware diagnostics');
+  push('FileVersion');
+  push('1.0.0');
+
+  const result = readVersionStrings(Buffer.concat(parts));
+  // Walking past the empty node reaches FileVersion's own block, so 1.0.0 is the right
+  // answer here. What matters is that the *next key name* is never adopted as a value.
+  assert.equal(result.productVersion, '1.0.0', 'the neighbouring key name must never be adopted');
+  assert.notEqual(result.productVersion, 'FileDescription');
+  assert.equal(result.fileDescription, 'VERIDEX hardware diagnostics');
+  assert.equal(result.fileVersion, '1.0.0');
+});
+
+test('a version key never adopts a non-version string', () => {
+  const parts = [];
+  const push = (text) => parts.push(align(Buffer.from(`${text}\u0000`, 'utf16le')));
+  push('ProductVersion');
+  push('not-a-version');
+  push('ProductVersion');
+  push('3.4.5');
+
+  const result = readVersionStrings(Buffer.concat(parts));
+  assert.equal(result.productVersion, '3.4.5', 'the first well-formed version wins');
+});

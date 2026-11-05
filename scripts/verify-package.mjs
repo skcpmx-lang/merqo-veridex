@@ -75,35 +75,69 @@ export function readPe(buffer) {
 }
 
 /**
+ * Every key that appears inside a VS_VERSIONINFO block.
+ *
+ * Used to reject a candidate value that is really the *next* key. On the real build,
+ * `ProductVersion` was followed by an empty value and then by `FileDescription`, so a parser
+ * that simply reads "the next string" reports FileDescription as the product version. That
+ * is not a quirk of one binary: the version resource is a tree, and a node with an empty
+ * value is perfectly legal.
+ */
+const VERSION_KEYS = new Set([
+  'VS_VERSION_INFO', 'StringFileInfo', 'VarFileInfo', 'Translation',
+  'CompanyName', 'FileDescription', 'FileVersion', 'InternalName',
+  'LegalCopyright', 'LegalTrademarks', 'OriginalFilename', 'PrivateBuild',
+  'ProductName', 'ProductVersion', 'SpecialBuild', 'Comments'
+]);
+
+/**
  * Read the strings from a PE VS_VERSIONINFO block.
  *
- * VS_VERSIONINFO stores `Key\0` followed by an aligned UTF-16LE value, so the text after a
- * key is NOT the value - the value sits after padding. A naive "search the UTF-16 text for
- * ProductVersion and take what follows" produced nonsense on the real build: it reported
- * "FileDescription" as the product version, because that is the next key that happened to
- * follow. Parse the structure properly: key, then align to 4, then the value.
+ * VS_VERSIONINFO is a tree of nodes: `wLength, wValueLength, wType, szKey\0, padding, value`.
+ * Values are aligned and NUL-terminated, and a node's value may be empty. Reading it
+ * properly means rejecting anything that is itself a key, and for the numeric entries
+ * insisting on something that looks like a version.
  *
  * @param {Buffer} buffer
  * @returns {Record<string, string|null>}
  */
 export function readVersionStrings(buffer) {
-  const wanted = ['CompanyName', 'FileDescription', 'FileVersion', 'ProductName', 'ProductVersion', 'OriginalFilename'];
+  /** @type {Record<string, string|null>} */
   const found = {};
 
-  // Locate each key as UTF-16LE, then read the value that follows its padding.
-  for (const key of wanted) {
+  /** All UTF-16 strings in the block that begin at or after `from`. */
+  const stringsAfter = (from, limit = 8) => {
+    const out = [];
+    let cursor = from;
+    while (out.length < limit && cursor + 1 < buffer.length) {
+      cursor += (4 - (cursor % 4)) % 4;
+      let end = cursor;
+      while (end + 1 < buffer.length && !(buffer[end] === 0 && buffer[end + 1] === 0)) end += 2;
+      if (end <= cursor) {
+        // An empty string: step past the terminator and keep looking.
+        cursor += 2;
+        continue;
+      }
+      out.push(buffer.subarray(cursor, end).toString('utf16le'));
+      cursor = end + 2;
+    }
+    return out;
+  };
+
+  for (const key of ['CompanyName', 'FileDescription', 'FileVersion', 'ProductName', 'ProductVersion', 'OriginalFilename']) {
     const needle = Buffer.from(`${key}\u0000`, 'utf16le');
     let index = buffer.indexOf(needle);
     let value = null;
     while (index !== -1 && value === null) {
-      // Everything after the NUL terminator is a sequence of aligned UTF-16 values.
-      let cursor = index + needle.length;
-      // Read the next non-empty UTF-16 string, skipping alignment padding.
-      cursor += (4 - (cursor % 4)) % 4;
-      let end = cursor;
-      while (end + 1 < buffer.length && !(buffer[end] === 0 && buffer[end + 1] === 0)) end += 2;
-      const candidate = buffer.subarray(cursor, end).toString('utf16le');
-      if (candidate && /^[\x20-\x7e]+$/.test(candidate) && candidate !== key) value = candidate;
+      const candidates = stringsAfter(index + needle.length);
+      const isVersionKey = key === 'FileVersion' || key === 'ProductVersion';
+      const chosen = candidates.find((candidate) => {
+        if (VERSION_KEYS.has(candidate)) return false;
+        if (!/^[\x20-\x7e]+$/.test(candidate)) return false;
+        // A version must look like one; a name must not.
+        return isVersionKey ? /^\d+(\.\d+)*/.test(candidate) : !/^\d+(\.\d+)*$/.test(candidate) || candidate.length > 8;
+      });
+      if (chosen !== undefined) value = chosen;
       index = buffer.indexOf(needle, index + 1);
     }
     found[key] = value;
