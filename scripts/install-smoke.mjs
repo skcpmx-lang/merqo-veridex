@@ -110,7 +110,7 @@ const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 function run(command, args, options = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
-      windowsHide: true, // the default; a caller that launches a GUI must override it
+      windowsHide: false,
       ...options,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -234,7 +234,9 @@ async function main() {
       // called, and the window is created invisible and stays invisible. It is meant for
       // suppressing the console window of a console program, and it is wrong for a GUI one.
       // This cost a run: the installed build reported readyState=complete, loading=false, and
-      // visible=false, forever.
+      // visible=false, forever - and the comment explaining the rule was here while the flag
+      // itself was missing, because writing the reason felt like making the change.
+      windowsHide: false,
       env: { ...process.env, VERIDEX_INSTALL_SMOKE: '1', VERIDEX_INSTALL_SMOKE_REPORT: smokeReport }
     });
     record('info', `installed application exited ${launch.code} after ${Date.now() - launchedAt}ms`);

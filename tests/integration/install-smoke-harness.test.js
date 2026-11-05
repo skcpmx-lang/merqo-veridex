@@ -108,10 +108,16 @@ test('neither launcher starts a GUI application with its window hidden', () => {
   // `windowsHide: true` sets STARTUPINFO to SW_HIDE, and Windows applies that to the process's
   // first window. The page loads, show() runs, and isVisible() stays false forever. It is a
   // console-program flag and it does not belong on an application being tested for visibility.
+  // Asserting the absence of `windowsHide: true` is not enough: the first version of this check
+  // passed while the flag was simply missing, because the default in run() was still true. The
+  // launch must say `windowsHide: false` in so many words.
   const launcher = readFileSync(path.join(ROOT, 'scripts', 'install-smoke.mjs'), 'utf8');
   const appLaunch = launcher.slice(launcher.indexOf('const launch = await run(installedExe'));
-  assert.match(appLaunch.slice(0, 600), /NOT windowsHide/, 'the app launch must explain why it is visible');
-  assert.doesNotMatch(appLaunch.slice(0, 600), /^\s*windowsHide: true,/m, 'the app launch must not hide its window');
+  assert.match(appLaunch.slice(0, 800), /windowsHide: false/, 'the app launch must ask for a visible window');
+  // And the shared helper must not default to hiding either, or a future caller inherits it.
+  const helper = launcher.slice(launcher.indexOf('function run(command, args, options = {})'), launcher.indexOf('// ── Find the installer'));
+  assert.match(helper, /windowsHide: false/);
+  assert.doesNotMatch(helper, /windowsHide: true/);
 
   const portable = readFileSync(path.join(ROOT, 'scripts', 'portable-smoke.mjs'), 'utf8');
   const spawnAt = portable.indexOf('const child = spawn(exe, [], {');
