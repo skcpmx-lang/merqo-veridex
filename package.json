@@ -1,0 +1,36 @@
+{
+  "name": "veridex",
+  "productName": "VERIDEX",
+  "version": "1.0.0",
+  "description": "VERIDEX — Advanced All-in-One Windows PC & Laptop Hardware Diagnostics and Inspection. A premium product by MERQO.",
+  "author": {
+    "name": "Shohan Khan",
+    "email": "merqoonline@gmail.com"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "type": "module",
+  "main": "src/app/main.js",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"tests/unit/*.test.js\" \"tests/integration/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
+    "test:integration": "node --test \"tests/integration/*.test.js\"",
+    "audit:requirements": "node scripts/audit-requirements.mjs",
+    "check": "node scripts/check.mjs",
+    "icon": "node scripts/build-icon.mjs",
+    "build:win": "electron-builder --win nsis portable --x64 --publish never",
+    "build:dir": "electron-builder --dir --win --x64",
+    "verify:artifacts": "node scripts/verify-artifacts.mjs"
+  },
+  "dependencies": {
+    "pdfkit": "^0.17.2"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}
