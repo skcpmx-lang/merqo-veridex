@@ -59,7 +59,14 @@ async function checkModules() {
   // Files that cannot be imported outside their runtime: the Electron main process
   // (CommonJS electron modules) and the renderer controller (needs a DOM). Both are
   // still syntax-checked, and their imports are verified statically below.
-  const ENTRY_POINTS = new Set(['src/app/main.js', 'src/app/gui-smoke.js', 'src/renderer/app.js']);
+  // Harnesses that import `electron` cannot be imported by these checks — there is no Electron
+// runtime here — so they are parsed and linted but not executed.
+  const ENTRY_POINTS = new Set([
+    'src/app/main.js',
+    'src/app/gui-smoke.js',
+    'src/app/install-smoke.js',
+    'src/renderer/app.js'
+  ]);
 
   for (const file of files) {
     const relative = path.relative(ROOT, file).split(path.sep).join('/');

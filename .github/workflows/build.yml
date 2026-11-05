@@ -169,6 +169,20 @@ jobs:
         # timeout that reports "did not report" while the app is still working.
         timeout-minutes: 20
 
+      # The portable build is a self-extracting wrapper: the executable the user double-clicks
+      # is not the one that runs. It is therefore checked separately, and against the real
+      # release artifact rather than the unpacked directory.
+      - name: Portable executable — launch check
+        run: node scripts/portable-smoke.mjs --exe "$(ls release/VERIDEX-*-portable-x64.exe | head -1)" --json portable-smoke.json
+        timeout-minutes: 12
+
+      # The installer has never been installed until this step runs. Everything above tests the
+      # unpacked build, which says nothing about whether the installer installs, the installed
+      # application starts from where it was installed, or the uninstaller removes it.
+      - name: Installer — silent install, launch, uninstall
+        run: node scripts/install-smoke.mjs --installer "$(ls release/VERIDEX-Setup-*.exe | head -1)" --json install-smoke.json
+        timeout-minutes: 20
+
       - name: Upload GUI evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -177,6 +191,8 @@ jobs:
           path: |
             gui-smoke-unpacked.json
             package-validation.json
+            portable-smoke.json
+            install-smoke.json
           if-no-files-found: ignore
           retention-days: 30
 

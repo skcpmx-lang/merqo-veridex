@@ -26,7 +26,9 @@
     "build:dir": "node scripts/build-icon.mjs && electron-builder --config electron-builder.config.mjs --dir --win --x64",
     "verify:artifacts": "node scripts/verify-artifacts.mjs",
     "smoke:live": "node scripts/live-smoke.mjs",
-    "smoke:gui": "node scripts/gui-smoke.mjs"
+    "smoke:gui": "node scripts/gui-smoke.mjs",
+    "smoke:install": "node scripts/install-smoke.mjs",
+    "smoke:portable": "node scripts/portable-smoke.mjs"
   },
   "dependencies": {
     "pdfkit": "^0.17.2",

@@ -436,4 +436,11 @@ if (process.env.VERIDEX_GUI_SMOKE === '1') {
   await import('./gui-smoke.js');
 }
 
+// The installed-application smoke test attaches the same way: install, launch the installed
+// build, check that it works, quit. It exists because a passing build of the unpacked
+// directory says nothing about whether the installer installs.
+if (process.env.VERIDEX_INSTALL_SMOKE === '1') {
+  await import('./install-smoke.js');
+}
+
 export { CHANNELS };
