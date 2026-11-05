@@ -52,8 +52,21 @@ function fakeRegistry() {
   return registry;
 }
 
+/**
+ * Every scan in this file runs as a pinned standard user. Auto-detection would read the
+ * host, so the same assertion would pass on a Linux container and fail on an elevated
+ * Windows runner — which is exactly what happened in CI.
+ */
+const STANDARD_SESSION = Object.freeze({
+  isAdmin: false,
+  isWindows: true,
+  mode: 'standard',
+  detectedAt: '2026-01-01T00:00:00.000Z',
+  detail: 'pinned for tests'
+});
+
 test('a scan assembles modules, assessment and issues into one finished object', async () => {
-  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, historyFile: null });
+  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, permissions: STANDARD_SESSION, historyFile: null });
 
   assert.equal(scan.taskCount, 2);
   assert.equal(scan.cancelled, false);
@@ -65,7 +78,18 @@ test('a scan assembles modules, assessment and issues into one finished object',
 });
 
 test('a privileged task in a standard session is reported, not silently dropped', async () => {
-  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, historyFile: null });
+  // The permission state is pinned. Auto-detection reads the host, and a Windows CI runner
+  // starts elevated, so this test used to assert the opposite of its own name there: it
+  // passed on Linux and failed on Windows for a reason that had nothing to do with the
+  // behaviour it covers.
+  const standardSession = Object.freeze({
+    isAdmin: false,
+    isWindows: true,
+    mode: 'standard',
+    detectedAt: '2026-01-01T00:00:00.000Z',
+    detail: 'pinned for this test'
+  });
+  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, historyFile: null, permissions: standardSession });
   const smart = scan.attempts.find((attempt) => attempt.task === 'storage.health');
   assert.ok(smart, 'the attempt must be recorded');
   assert.equal(smart.ok, false);
@@ -76,14 +100,14 @@ test('a privileged task in a standard session is reported, not silently dropped'
 });
 
 test('quick mode runs only the tasks marked quick', async () => {
-  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, quick: true, historyFile: null });
+  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, quick: true, permissions: STANDARD_SESSION, historyFile: null });
   assert.equal(scan.taskCount, 1);
   assert.ok(scan.modules.cpu);
   assert.equal(scan.modules.storageHealth, undefined);
 });
 
 test('a requested task that does not exist is an error, not a silent skip', async () => {
-  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, tasks: ['cpu.info', 'ghost.task'], historyFile: null });
+  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, tasks: ['cpu.info', 'ghost.task'], permissions: STANDARD_SESSION, historyFile: null });
   assert.ok(scan.issues.errors.some((error) => /ghost\.task/.test(error)));
 });
 
@@ -93,6 +117,7 @@ test('progress is reported per task so the UI can show a real bar', async () => 
     registry: fakeRegistry(),
     logger: new NullLogger(),
     settings: {},
+    permissions: STANDARD_SESSION,
     historyFile: null,
     onProgress: (progress) => seen.push(progress)
   });
@@ -104,7 +129,7 @@ test('progress is reported per task so the UI can show a real bar', async () => 
 test('a cancelled scan stops and says so', async () => {
   const controller = new AbortController();
   controller.abort();
-  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, signal: controller.signal, historyFile: null });
+  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, signal: controller.signal, permissions: STANDARD_SESSION, historyFile: null });
   assert.equal(scan.cancelled, true);
   assert.equal(scan.taskCount, 2, 'the requested task count is still known');
   assert.equal(Object.keys(scan.modules).length, 0);
@@ -133,6 +158,7 @@ test('history is not written when the user turned persistence off', async () => 
       registry: fakeRegistry(),
       logger: new NullLogger(),
       settings: { 'diagnostics.persistHistory': false },
+      permissions: STANDARD_SESSION,
       historyFile: file
     });
     assert.equal(scan.historyEntry, undefined);
@@ -159,7 +185,7 @@ test('the guard refuses a destructive command even when a provider asks for it',
 test('a scan converts into report input that carries provenance and manual results', async () => {
   const session = new InspectionSession();
   session.record('display.white', Status.PASS, { defects: 0, notes: ['clean panel'] });
-  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, session, historyFile: null });
+  const scan = await runScan({ registry: fakeRegistry(), logger: new NullLogger(), settings: {}, session, permissions: STANDARD_SESSION, historyFile: null });
 
   const input = reportInputFromScan(scan, { reportId: 'VX-RPT-SCAN-1' });
   const report = buildReport(input);
@@ -178,7 +204,7 @@ test('a scan converts into report input that carries provenance and manual resul
 
 test('a scan on a host with no diagnostics produces an unrated assessment, never a fake score', async () => {
   const empty = new ProviderRegistry();
-  const scan = await runScan({ registry: empty, logger: new NullLogger(), settings: {}, historyFile: null });
+  const scan = await runScan({ registry: empty, logger: new NullLogger(), settings: {}, permissions: STANDARD_SESSION, historyFile: null });
   assert.equal(scan.taskCount, 0);
   assert.equal(scan.assessment.score, null);
   assert.equal(scan.assessment.rating, 'Unrated');

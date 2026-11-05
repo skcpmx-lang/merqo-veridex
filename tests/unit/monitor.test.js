@@ -73,7 +73,15 @@ test('the monitor samples on an interval and stops cleanly', async () => {
   let callbacks = 0;
   monitor.onSample = () => { callbacks += 1; };
   monitor.start();
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  // Wait for a sample to arrive rather than for 1200 ms to pass. A fixed wait assumes the
+  // first poll completes quickly, which is true of a Linux container with no sensors to
+  // read and false of a Windows runner where every sensor is actually queried — the
+  // Windows CI job failed here while Linux passed.
+  const deadline = Date.now() + 10_000;
+  while (callbacks === 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
   monitor.stop();
   assert.ok(callbacks >= 1, 'at least one sample is delivered');
   assert.equal(monitor.running, false);

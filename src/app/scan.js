@@ -66,7 +66,11 @@ export async function runScan(options = {}) {
   // bypass the read-only policy by forgetting to ask.
   const runner = wrapRunner(baseRunner, guard);
 
-  const permissions = await detectPermissionState(runner);
+  // The permission state is auto-detected from the host unless the caller supplies one.
+  // Without this seam a test about privilege behaviour silently tests the CI machine
+  // instead: it passed on Linux, where the probe reports standard mode, and failed on
+  // Windows, where the same probe reports an elevated token.
+  const permissions = options.permissions ?? (await detectPermissionState(runner));
   /** @type {string[]} */
   const registrationFailures = [];
   const registry = options.registry ?? buildDefaultRegistry({ failures: registrationFailures });
