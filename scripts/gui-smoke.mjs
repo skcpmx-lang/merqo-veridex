@@ -149,11 +149,14 @@ async function execute(electron) {
   }
   if (verdict.complete === false) {
     // The verdict was written incrementally (so a crash still leaves evidence) but the run
-    // never reached its end. Say so, and treat it as a failure.
+    // never reached its end. Say so, name the last things it did, and treat it as a failure -
+    // "did not complete" without the last few findings is not a diagnosis.
+    const tail = (verdict.findings ?? []).slice(-6).map((finding) => finding.message);
     verdict.problems = [
       ...(verdict.problems ?? []),
-      `the run did not complete: it stopped after ${verdict.findings?.length ?? 0} finding(s)`
+      `the run did not complete: it stopped after ${verdict.findings?.length ?? 0} finding(s). Last: ${tail.join(' ;; ')}`
     ];
+    for (const message of tail) emit('notice', 'gui-smoke last steps', message);
   }
   const okCount = verdict.findings.filter((finding) => finding.level === 'ok').length;
   const warnCount = verdict.findings.filter((finding) => finding.level === 'warn').length;
