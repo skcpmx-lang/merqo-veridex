@@ -104,6 +104,16 @@ test('the installed harness never awaits readiness at module scope', () => {
   assert.deepEqual(offending, [], 'no module-scope statement may touch `app`');
 });
 
+test('the installed harness never reads the archive it is running out of', () => {
+  // Electron patches `fs` to serve paths inside an asar. Reading the archive file itself, from
+  // the application running out of it, hangs the process - no error, no exit, just a wedge that
+  // looks exactly like a broken build. The only fact wanted was the file's size, so `statSync`
+  // answers it without touching the archive at all.
+  const source = readFileSync(path.join(ROOT, 'src', 'app', 'install-smoke.js'), 'utf8');
+  assert.doesNotMatch(source, /readFileSync\(/, 'the harness must not readFileSync the asar');
+  assert.match(source, /statSync\(/, 'file sizes come from statSync');
+});
+
 test('both harnesses write their report atomically', () => {
   // The GUI harness lost four CI runs to a half-written verdict. These must not repeat it.
   for (const script of ['install-smoke.mjs', 'portable-smoke.mjs']) {

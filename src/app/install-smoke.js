@@ -20,7 +20,7 @@
  * @module
  */
 import { app, BrowserWindow } from 'electron';
-import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs';
+import { existsSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -115,6 +115,23 @@ function persist(complete) {
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 /**
+ * The size of a file, or null if it cannot be read.
+ *
+ * `statSync`, never `readFileSync`: Electron patches `fs` to serve paths inside an asar, and
+ * reading the archive file itself from the application that is running out of it hangs the
+ * process. That cost two runs, and the only thing wanted was the number of bytes.
+ * @param {string} file
+ * @returns {number|null}
+ */
+function fileSize(file) {
+  try {
+    return statSync(file).size;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Wait until `fn` returns a truthy value, or give up.
  * @template T
  * @param {() => T | Promise<T>} fn
@@ -179,9 +196,11 @@ async function run() {
   enter('inspecting the installed files');
 
   const appDir = path.join(installDir, 'resources', 'app.asar');
-  if (existsSync(appDir)) {
-    const size = readFileSync(appDir).length;
-    record('ok', `resources/app.asar present in the install directory (${size} bytes)`);
+  const asarSize = fileSize(appDir);
+  if (asarSize !== null && asarSize > 0) {
+    record('ok', `resources/app.asar present in the install directory (${asarSize} bytes)`);
+  } else if (existsSync(appDir)) {
+    record('warn', 'resources/app.asar exists but its size could not be read');
   } else {
     fail(`no resources/app.asar under ${installDir} — the installation is incomplete`);
   }
@@ -206,8 +225,8 @@ async function run() {
   } else {
     const uninstaller = readdirSync(installDir).find((name) => /^Uninstall .*\.exe$/i.test(name));
     if (uninstaller) {
-      const bytes = readFileSync(path.join(installDir, uninstaller), { encoding: null }).length;
-      record('ok', `uninstaller present: ${uninstaller} (${bytes} bytes)`);
+      const bytes = fileSize(path.join(installDir, uninstaller));
+      record('ok', `uninstaller present: ${uninstaller} (${bytes ?? 'unknown'} bytes)`);
     } else {
       // This is a failure, not a warning: an application that cannot be removed from Programs and
       // Features has no business being installed, and the brief requires a proper uninstaller.
