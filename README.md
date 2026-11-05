@@ -3,7 +3,7 @@
 **Advanced all-in-one Windows PC & laptop diagnostics.**
 Local. Read-only. Offline by construction. Honest about what it could not measure.
 
-> **Status: not yet released.** The code is substantially complete and 423 automated tests
+> **Status: not yet released.** The code is substantially complete and 430 automated tests
 > cover the logic, but **VERIDEX has never run on real Windows hardware.** No requirement
 > is marked verified. See [Project status](docs/PROJECT_STATUS.md) and
 > [Test status](docs/TEST_STATUS.md) before treating anything here as working.
@@ -63,7 +63,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 423 tests
+npm test            # 430 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```

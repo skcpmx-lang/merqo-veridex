@@ -24,7 +24,13 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const DIST = path.join(ROOT, 'dist');
+// `--dist <path>` lets the verification logic be tested against a fixture directory.
+// Without it there is no way to exercise this script except by producing a real Windows
+// build, which is exactly how a wrong assumption in it survived to CI.
+const distArgIndex = process.argv.indexOf('--dist');
+const DIST = distArgIndex > -1 && process.argv[distArgIndex + 1]
+  ? path.resolve(process.argv[distArgIndex + 1])
+  : path.join(ROOT, 'dist');
 const sumsPath = path.join(DIST, 'SHA256SUMS.txt');
 
 const findings = [];
@@ -62,10 +68,18 @@ async function main() {
   const exeFiles = entries.filter((name) => name.toLowerCase().endsWith('.exe'));
   const zipFiles = entries.filter((name) => name.toLowerCase().endsWith('.zip'));
 
+  // Record what is actually in dist/ before judging it. When a check fails, the log
+  // should show what the build produced instead of only what it did not.
+  note('ok', `dist/ contains ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}: ${entries.join(', ') || '(empty)'}`);
+
   // ── Installer ──────────────────────────────────────────────────────────────
-  const installer = exeFiles.find((name) => /setup|install/i.test(name)) ?? exeFiles[0] ?? null;
+  // The installer must be identified by its name. An earlier version fell back to
+  // "the first .exe in the directory", which meant that if the NSIS build failed but the
+  // portable build succeeded, verification picked up the portable, called it the
+  // installer, and passed — shipping a release with no installer in it.
+  const installer = exeFiles.find((name) => /setup|install/i.test(name)) ?? null;
   if (!installer) {
-    note('fail', 'No installer .exe was produced by the build.');
+    note('fail', `No installer .exe was produced by the build (looked for a name matching "setup" or "install"; found: ${exeFiles.join(', ') || 'no .exe files'}).`);
   } else {
     const info = await stat(path.join(DIST, installer));
     const handle = await open(path.join(DIST, installer), 'r');
@@ -83,10 +97,29 @@ async function main() {
     }
   }
 
-  // ── Portable zip ───────────────────────────────────────────────────────────
-  const portable = zipFiles.find((name) => /portable/i.test(name)) ?? zipFiles[0] ?? null;
+  // ── Portable build ─────────────────────────────────────────────────────────
+  //
+  // electron-builder's `portable` target produces a **single .exe**, not a zip. This
+  // script used to demand a .zip and therefore failed a build that had succeeded: the
+  // Windows job built both artifacts, then rejected them. Accepting either form - and
+  // saying which was found - is the correct check. A zip is still accepted because the
+  // target can be configured that way and a future change should not silently regress.
+  const portableCandidates = [...exeFiles, ...zipFiles].filter((name) => /portable/i.test(name));
+  const portable = portableCandidates[0] ?? null;
+
   if (!portable) {
-    note('fail', 'No portable .zip was produced by the build.');
+    note('fail', 'No portable build was produced by the build (expected a "portable" .exe or .zip).');
+  } else if (portable.toLowerCase().endsWith('.exe')) {
+    const info = await stat(path.join(DIST, portable));
+    const handle = await open(path.join(DIST, portable), 'r');
+    const header = Buffer.alloc(2);
+    await handle.read(header, 0, 2, 0);
+    await handle.close();
+    if (header.toString('latin1') !== 'MZ') {
+      note('fail', `${portable} is not a Windows executable (missing MZ header).`);
+    } else {
+      note('ok', `${portable} is a Windows executable (portable target), ${(info.size / 1_048_576).toFixed(1)} MiB.`);
+    }
   } else {
     const info = await stat(path.join(DIST, portable));
     const handle = await open(path.join(DIST, portable), 'r');

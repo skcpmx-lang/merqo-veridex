@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 423 · pass 423 · fail 0
+tests 430 · pass 430 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -73,6 +73,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/renderer.test.js` | 17 | all 15 pages render under jsdom; live-mode pages with a fake bridge |
 | `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults |
+| `tests/integration/artifacts.test.js` | 7 | release artifact verification: signatures, checksums, tampering |
 | `tests/integration/workflow.test.js` | 7 | CI workflows reference scripts that exist; tests gate publishing |
 
 Run in **Linux CI only**. Nothing in this table is evidence about Windows behaviour: the
