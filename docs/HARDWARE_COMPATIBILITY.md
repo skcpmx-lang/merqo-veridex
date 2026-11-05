@@ -56,7 +56,7 @@ about a real PC.
 | Memory | CIM `Win32_PhysicalMemory`, systeminformation | **L3** | Real module enumeration ran, and real totals were returned. A VM's SPD is synthetic; per-module fields on consumer DIMMs are still unproven. |
 | Motherboard / BIOS | CIM `Win32_BaseBoard`, `Win32_BIOS` | **L3** | Real queries returned data on the runner (a virtual board). |
 | TPM / Secure Boot | CIM, `Get-Tpm` | **L3** | The privileged read executed on the runner and reported honestly that the provider is unavailable there. |
-| GPU | CIM `Win32_VideoController`, dxdiag, vendor heuristic | **L3** | Real adapter enumeration ran. `dxdiag` is absent on the runner's image, which the provider now reports as `UNSUPPORTED` rather than an error. |
+| GPU | CIM `Win32_VideoController`, dxdiag, vendor heuristic | **L3** | Real adapter enumeration ran. `dxdiag` is present on the runner's image but cannot be executed there; that now reports `UNSUPPORTED` with the reason, not an error. |
 | Display | CIM, EDID | **L1** | Implemented; no display has been enumerated. |
 | Storage inventory | CIM `Win32_DiskDrive`, systeminformation | **L3** | Real disk enumeration ran on the runner. |
 | Storage health (SATA) | ATA SMART, storage reliability counters | **L3** | The reliability-counter path executes on the runner; the ATA/NVMe `DeviceIoControl` paths need elevation and real disks, and a VM provides neither. |
@@ -97,17 +97,18 @@ working across vendors, not evidence that it works on any of them.
 
 | Measure | Value |
 | --- | --- |
-| Fields produced | 1095 across 15 modules |
-| PASS / WARNING | 768 / 69 |
-| UNAVAILABLE / NOT_APPLICABLE / UNSUPPORTED | 251 / 4 / 2 |
-| ERROR | 1 — `dxdiag`, genuinely absent from that image |
+| Fields produced | 1024 across 15 modules |
+| PASS / WARNING | 718 / 63 |
+| UNAVAILABLE / NOT_APPLICABLE / UNSUPPORTED | 235 / 4 / 4 |
+| ERROR | 0 |
 | Structural problems | 0 |
 | Assessment | rated, 84, coverage 75 % |
 
-Two things about that table matter more than the numbers. First, the earlier runs of the
-same script found four defects that the test suite could not: a zero measurement that
-crashed the memory task, a provider killed by a budget it had already set, `dxdiag` spawned
-under a provider id, and a PowerShell script that could not parse. Second, a *rated* score
+Two things about that table matter more than the numbers. First, six earlier runs of the
+same script found six defects that the test suite could not: a zero measurement that crashed
+the memory task, a provider killed by a budget it had already set, `dxdiag` spawned under a
+provider id, a PowerShell script that could not parse, a missing import in a branch CI never
+executed, and a slow query that took a whole task down with it. Second, a *rated* score
 on a virtual machine says nothing about a real PC — the hardware is synthetic, and the
 devices a consumer machine exposes (a real battery, a real SSD with SMART attributes, a
 discrete GPU) are exactly the ones this run did not see.
@@ -139,9 +140,9 @@ touching it may be marked VER.
 | Fact | Value |
 | --- | --- |
 | Installer | `VERIDEX-Setup-1.0.0-x64.exe`, 117.4 MiB |
-| Installer SHA-256 | `a8377850b828f769f0492071f59758d20d6763ac00e05d72e68ca67baf09c613` |
+| Installer SHA-256 | `8650933234b3f4e22b3a8e2aabd2e48b2d2311d08cb8fd9573bfc528a848a0e9` |
 | Portable | `VERIDEX-1.0.0-portable-x64.exe`, 106.5 MiB |
-| Portable SHA-256 | `fe7338dca1de85c164195606c0825f6b098341043cf546a58069c9b19d6b9335` |
+| Portable SHA-256 | `6da0e220dfec25651e5c9e143ef7fbddb8c744fade85965683a0a7e641a9ffa7` |
 | Built by | `.github/workflows/build.yml`, job "Windows package" |
 | Signature | **None.** Unsigned; SmartScreen will warn. |
 

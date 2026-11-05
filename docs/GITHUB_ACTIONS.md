@@ -3,6 +3,11 @@
 Two workflows, both in `.github/workflows/`. This document explains what they do and —
 importantly — what has and has not been observed to work.
 
+**Digests are per-build, not per-version.** Every rebuild produces new bytes, because an
+unsigned Electron bundle embeds no reproducible timestamp. The digests recorded here are
+those of the run named beside them. Comparing them against a different run will always
+differ, and that is expected rather than a failed verification.
+
 ---
 
 ## 1. Status
@@ -17,7 +22,7 @@ Recorded runs:
 | --- | --- | --- |
 | [`42013425380`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42013425380) | push | ✅ first green run on Windows and Linux |
 | [`42014598911`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42014598911) | pull request | ✅ including a real Windows installer build |
-| [`42015386547`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42015386547) | pull request | ✅ build + artifact verification + build manifest |
+| [`42030263971`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42030263971) | pull request | ✅ build + artifact verification + build manifest |
 
 Before run 42013425380 the workflow had been **failing on every push since it was added**,
 and this document incorrectly said it had not run at all. That was wrong in a way worth

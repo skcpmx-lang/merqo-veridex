@@ -16,7 +16,7 @@ listed here as **NOT VERIFIED**.
 | | |
 | --- | --- |
 | Release candidate | `1.0.0`, built by CI only — never installed |
-| Build produced | **Yes** — Windows x64 installer and portable, CI run 42015386547 |
+| Build produced | **Yes** — Windows x64 installer and portable, CI run 42030263971 |
 | Verified on | **nothing** |
 | Verified by | — |
 | Result | **Built, not run. No physical Windows machine has executed this build.** |
@@ -31,8 +31,8 @@ tick marks nobody earned is worse than no document.
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `a8377850b828f769f0492071f59758d20d6763ac00e05d72e68ca67baf09c613` |
-| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `fe7338dca1de85c164195606c0825f6b098341043cf546a58069c9b19d6b9335` |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `8650933234b3f4e22b3a8e2aabd2e48b2d2311d08cb8fd9573bfc528a848a0e9` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `6da0e220dfec25651e5c9e143ef7fbddb8c744fade85965683a0a7e641a9ffa7` |
 
 - the full test suite passes on Windows as well as Linux (453 tests at the time of writing);
 - electron-builder produced both targets without error;
@@ -51,7 +51,7 @@ tick marks nobody earned is worse than no document.
   hiding four defects: a zero measurement that crashed the memory task, a provider killed by
   a budget it had already accounted for, `dxdiag` spawned under a provider id, and a
   PowerShell script that could not parse. `npm run smoke:live` now exercises the real
-  interfaces on the Windows runner. On run 42027223853 it produced 1095 fields across 15
+  interfaces on the Windows runner. On run 42027223853 it produced 1024 fields across 15
   modules, a rated score of 84 at 75% coverage, one remaining ERROR (a genuinely absent
   `dxdiag`), and zero structural problems. That is evidence about the **diagnostic layer**,
   on a virtual machine, with synthetic devices — not about a packaged application on a real
