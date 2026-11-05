@@ -373,6 +373,37 @@ function guardRefuseOrRun(guard, url, original, params, label) {
   return original.apply(null, params);
 }
 
+/**
+ * Build a guard from a settings store.
+ *
+ * `privacy.allowNetwork` is the only setting that can open the network path, and it
+ * is off by default. Keeping the read here means the guard's behaviour is traceable
+ * to a setting the user can see and change, rather than to a bit passed in from
+ * somewhere invisible.
+ *
+ * @param {import('../core/settings.js').SettingsStore|Record<string, unknown>} settings
+ * @param {{logger?: import('../core/logger.js').Logger|null}} [options]
+ */
+export function guardFromSettings(settings, options = {}) {
+  const read = (key, fallback) => {
+    try {
+      if (settings && typeof (/** @type {any} */ (settings).get) === 'function') {
+        const value = /** @type {any} */ (settings).get(key);
+        return value === undefined ? fallback : value;
+      }
+      const value = /** @type {Record<string, unknown>} */ (settings ?? {})[key];
+      return value === undefined ? fallback : value;
+    } catch {
+      return fallback;
+    }
+  };
+
+  return new SecurityGuard({
+    policy: { allowNetwork: read('privacy.allowNetwork', false) === true },
+    logger: options.logger ?? null
+  });
+}
+
 /** Convenience: the guard used when a caller does not supply one. */
 export const defaultGuard = new SecurityGuard();
 

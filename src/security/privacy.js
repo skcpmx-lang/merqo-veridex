@@ -131,6 +131,10 @@ export function redactField(value, key, includeSensitive) {
  * @returns {PrivacyPolicy}
  */
 export function buildPrivacyPolicy(settings = {}) {
+  // Guarded because this runs on a null settings object more often than you would
+  // like: a failed load, a first run, or a caller with no store at all.
+  const isStore = (candidate) => Boolean(candidate) && typeof (/** @type {any} */ (candidate).get) === 'function';
+
   const read = (key, fallback) => {
     try {
       if (typeof (/** @type {any} */ (settings).get) === 'function') {
@@ -150,7 +154,7 @@ export function buildPrivacyPolicy(settings = {}) {
     persistHistory: read('diagnostics.persistHistory', true) === true,
     includeManualResults: read('reports.includeManualResults', true) === true,
     historyLimit: Number(read('diagnostics.historyLimit', 50)) || 50,
-    source: typeof (/** @type {any} */ (settings).get) === 'function' ? 'settings store' : 'plain values'
+    source: isStore(settings) ? 'settings store' : 'plain values'
   });
 }
 

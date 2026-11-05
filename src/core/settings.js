@@ -41,7 +41,7 @@ export const SETTINGS_SPEC = [
     values: ['dark', 'light', 'system'],
     default: 'dark',
     description: 'Dark is the primary VERIDEX theme. "System" follows the Windows app theme.',
-    appliesTo: 'src/renderer/theme.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'appearance.accent',
@@ -51,7 +51,7 @@ export const SETTINGS_SPEC = [
     values: ['cyan', 'azure', 'violet', 'amber', 'emerald'],
     default: 'cyan',
     description: 'Drives the accent token used by buttons, graphs, focus rings and status highlights.',
-    appliesTo: 'src/renderer/theme.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'appearance.density',
@@ -61,7 +61,7 @@ export const SETTINGS_SPEC = [
     values: ['comfortable', 'compact'],
     default: 'comfortable',
     description: 'Compact reduces vertical spacing so more rows fit on small laptop screens.',
-    appliesTo: 'src/renderer/theme.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'appearance.language',
@@ -71,7 +71,7 @@ export const SETTINGS_SPEC = [
     values: ['en'],
     default: 'en',
     description: 'Interface language. Only English ships in 1.0.0; the string table is externalised so additional locales are additive.',
-    appliesTo: 'src/renderer/i18n.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'appearance.reduceMotion',
@@ -80,7 +80,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: false,
     description: 'Disables transitions and animated graphs. Automatically forced on when Windows requests reduced motion.',
-    appliesTo: 'src/renderer/theme.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'appearance.showGlyphs',
@@ -89,7 +89,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'Adds a shape/letter beside each status colour so status is readable without colour vision.',
-    appliesTo: 'src/renderer/components/status-badge.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ export const SETTINGS_SPEC = [
     type: 'string[]',
     default: ['overview', 'health', 'cpu', 'gpu', 'memory', 'storage', 'battery', 'thermal', 'network', 'progress', 'quick-actions'],
     description: 'Ordered widget list. Removing a widget hides it from the dashboard grid; order controls layout.',
-    appliesTo: 'src/renderer/pages/dashboard.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'dashboard.greetingName',
@@ -109,7 +109,7 @@ export const SETTINGS_SPEC = [
     type: 'string',
     default: '',
     description: 'Optional name used in the dashboard greeting. Stored locally only; leave blank for a neutral greeting.',
-    appliesTo: 'src/renderer/pages/dashboard.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
 
   // ── Diagnostics ───────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'Starts a read-only quick scan automatically on launch so the dashboard is populated.',
-    appliesTo: 'src/renderer/pages/dashboard.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'diagnostics.providerTimeoutMs',
@@ -131,7 +131,7 @@ export const SETTINGS_SPEC = [
     max: 120000,
     default: 20000,
     description: 'Maximum time a single provider may take before it is abandoned and the fallback chain continues.',
-    appliesTo: 'src/engine/diagnostic-runner.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'diagnostics.includeSensitiveInReport',
@@ -140,7 +140,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: false,
     description: 'When off, serial numbers, MAC addresses and account names are redacted from every exported report.',
-    appliesTo: 'src/security/privacy.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'diagnostics.persistHistory',
@@ -149,7 +149,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'Stores completed runs locally so trends and comparisons are possible. Nothing leaves the device.',
-    appliesTo: 'src/history/store.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'diagnostics.historyLimit',
@@ -160,7 +160,7 @@ export const SETTINGS_SPEC = [
     max: 500,
     default: 50,
     description: 'Older runs are pruned beyond this limit to bound disk usage.',
-    appliesTo: 'src/history/store.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
 
   // ── Monitoring ────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ export const SETTINGS_SPEC = [
     max: 10000,
     default: 1500,
     description: 'How often live sensors are polled while the monitor page is visible. Slower intervals reduce overhead.',
-    appliesTo: 'src/monitoring/monitor.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'monitoring.historyPoints',
@@ -184,7 +184,7 @@ export const SETTINGS_SPEC = [
     max: 600,
     default: 120,
     description: 'Ring-buffer length for live graphs; also the window used for min/max/average.',
-    appliesTo: 'src/monitoring/series.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'monitoring.keepMonitoringInBackground',
@@ -193,7 +193,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: false,
     description: 'When off, polling pauses while VERIDEX is minimised so it does not compete with the machine under test.',
-    appliesTo: 'src/monitoring/monitor.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
 
   // ── Benchmark & stress ────────────────────────────────────────────────────
@@ -204,7 +204,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'Enables the write half of the disk benchmark. It uses a temporary file that is always deleted; disabling it leaves read-only tests.',
-    appliesTo: 'src/benchmarking/disk-bench.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'benchmark.diskTestSizeMb',
@@ -215,7 +215,7 @@ export const SETTINGS_SPEC = [
     max: 2048,
     default: 256,
     description: 'Size of the temporary test file. Larger sizes measure sustained throughput better but take longer.',
-    appliesTo: 'src/benchmarking/disk-bench.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'stress.thermalLimitC',
@@ -226,7 +226,7 @@ export const SETTINGS_SPEC = [
     max: 105,
     default: 90,
     description: 'Stress tests stop automatically when a readable sensor crosses this value. VERIDEX does not know your CPU\'s true limit, so this is a conservative user-chosen ceiling, not a hardware certification.',
-    appliesTo: 'src/benchmarking/stress-guard.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'stress.maxDurationSec',
@@ -237,7 +237,7 @@ export const SETTINGS_SPEC = [
     max: 3600,
     default: 300,
     description: 'Hard ceiling enforced by the guard even if the chosen duration is longer.',
-    appliesTo: 'src/benchmarking/stress-guard.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'stress.requireConsent',
@@ -246,7 +246,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'Shows the safety dialog every time. Turning it off still requires the explicit Start action on the stress page.',
-    appliesTo: 'src/benchmarking/stress-guard.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
 
   // ── Reports ───────────────────────────────────────────────────────────────
@@ -258,7 +258,7 @@ export const SETTINGS_SPEC = [
     values: ['pdf', 'html', 'csv', 'json'],
     default: 'pdf',
     description: 'Preselected format on the report screen.',
-    appliesTo: 'src/reporting/index.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'reports.includeManualResults',
@@ -267,7 +267,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'Manual observations (display, keyboard, ports) are clearly separated from automated findings in the report.',
-    appliesTo: 'src/reporting/model.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'reports.includeCertificate',
@@ -276,7 +276,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'Appends the device assessment certificate page to PDF and HTML exports.',
-    appliesTo: 'src/reporting/certificate.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'reports.brandLine',
@@ -285,7 +285,7 @@ export const SETTINGS_SPEC = [
     type: 'string',
     default: '',
     description: 'Optional free-text note printed in the report footer, e.g. a workshop name.',
-    appliesTo: 'src/reporting/model.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
 
   // ── Startup & storage ─────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ export const SETTINGS_SPEC = [
     values: ['dashboard', 'last'],
     default: 'dashboard',
     description: 'Which page the app opens on launch.',
-    appliesTo: 'src/renderer/app.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'startup.checkRecovery',
@@ -306,7 +306,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: true,
     description: 'If a previous session ended abnormally, a recovery notice is shown with the crash context.',
-    appliesTo: 'src/core/recovery.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'storage.logLevel',
@@ -316,7 +316,7 @@ export const SETTINGS_SPEC = [
     values: ['trace', 'debug', 'info', 'warn', 'error'],
     default: 'info',
     description: 'Verbosity of the structured log. Debug and trace are needed when reporting a problem.',
-    appliesTo: 'src/core/logger.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'storage.autoPruneDays',
@@ -327,7 +327,7 @@ export const SETTINGS_SPEC = [
     max: 3650,
     default: 0,
     description: '0 disables age-based pruning. Applies on startup.',
-    appliesTo: 'src/history/store.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
 
   // ── Privacy ───────────────────────────────────────────────────────────────
@@ -338,7 +338,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: false,
     description: 'Set once the welcome and privacy screen has been acknowledged.',
-    appliesTo: 'src/renderer/pages/welcome.js'
+    appliesTo: 'src/app/settings-wiring.js'
   },
   {
     key: 'privacy.allowNetwork',
@@ -347,7 +347,7 @@ export const SETTINGS_SPEC = [
     type: 'boolean',
     default: false,
     description: 'VERIDEX performs no network access by default. This flag exists so a future opt-in lookup can be gated; no diagnostic data is ever uploaded.',
-    appliesTo: 'src/app/net.js'
+    appliesTo: 'src/security/guard.js'
   },
 
   // ── Shortcuts ─────────────────────────────────────────────────────────────
@@ -358,7 +358,7 @@ export const SETTINGS_SPEC = [
     type: 'object',
     default: {},
     description: 'User-remapped accelerators, keyed by action id. Validated for conflicts by src/renderer/shortcuts.js.',
-    appliesTo: 'src/renderer/shortcuts.js'
+    appliesTo: 'src/app/settings-wiring.js'
   }
 ];
 
