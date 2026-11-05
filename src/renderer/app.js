@@ -16,7 +16,8 @@
 
 import { createClient, PREVIEW_NOTE } from './bridge.js';
 import { themeTokens, statusPresentation } from './theme.js';
-import { el, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity } from './ui.js';
+import { SHORTCUTS, shortcutOf } from './shortcuts.js';
+import { el, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog } from './ui.js';
 
 const client = createClient();
 
@@ -28,7 +29,9 @@ const PAGES = [
   { id: 'storage', label: 'Storage', glyph: '⛁', group: 'Diagnostics' },
   { id: 'network', label: 'Network', glyph: '≋', group: 'Diagnostics' },
   { id: 'windows', label: 'Windows & security', glyph: '⛨', group: 'Diagnostics' },
+  { id: 'reliability', label: 'Reliability', glyph: '⌛', group: 'Diagnostics' },
   { id: 'drivers', label: 'Drivers & software', glyph: '⚙', group: 'Diagnostics' },
+  { id: 'processes', label: 'Processes', glyph: '⌗', group: 'Diagnostics' },
   { id: 'manual', label: 'Manual tests', glyph: '◎', group: 'Inspection' },
   { id: 'performance', label: 'Performance', glyph: '⚡', group: 'Inspection' },
   { id: 'monitor', label: 'Live monitoring', glyph: '⌁', group: 'Inspection' },
@@ -50,6 +53,7 @@ const state = {
   manualLoading: false,
   history: null,
   historyLoading: false,
+  comparison: { selected: [], result: null, loading: false, error: null },
   monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
   guard: null
 };
@@ -156,11 +160,24 @@ function buildTopbar() {
   });
   cancelButton.id = 'vx-cancel-scan';
 
+  const searchButton = button({
+    label: 'Search',
+    variant: 'ghost',
+    onClick: () => openSearch(),
+    title: 'Search pages, settings, runs and fields (Ctrl+K)'
+  });
+  searchButton.classList.add('vx-topbar__search');
+  searchButton.append(el('kbd', { class: 'vx-topbar__kbd', text: 'Ctrl K', attrs: { 'aria-hidden': 'true' } }));
+
+  const helpButton = button({ label: 'Shortcuts', variant: 'ghost', onClick: () => showShortcutReference(), title: 'Keyboard shortcut reference (F1)' });
+
   const bar = el('header', {
     class: 'vx-topbar',
     children: [
       el('div', { children: [title, subtitle] }),
       el('div', { class: 'vx-topbar__spacer' }),
+      searchButton,
+      helpButton,
       startButton,
       cancelButton
     ]
@@ -384,6 +401,30 @@ pages.dashboard = () => {
 };
 
 /** A generic module page: shows the section's fields for a given module id. */
+/**
+ * Compose several page builders into one page.
+ *
+ * A page is a stack of modules rather than one module, because "Windows" is not one question:
+ * the OS build, the servicing inventory and the component-store flag are three answers that a
+ * reader wants to see together, and three separate sidebar entries would bury them.
+ * @param {Array<() => HTMLElement>} builders
+ */
+function stackPages(builders) {
+  return () => {
+    const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
+    for (const builder of builders) {
+      const section = builder();
+      // Each child page renders its own progress card; one copy is enough.
+      for (const child of Array.from(section.children)) {
+        if (child.classList?.contains('vx-card') && child.textContent?.startsWith('Scan progress')) continue;
+        wrapper.append(child);
+      }
+    }
+    wrapper.append(scanProgressCard());
+    return wrapper;
+  };
+}
+
 function modulePage(moduleId, title, description, emptyHint) {
   return () => {
     const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
@@ -434,8 +475,26 @@ pages.hardware = modulePage('cpu', 'Processor and system', 'Identity and capabil
 pages.battery = modulePage('battery', 'Battery', 'Design capacity, full-charge capacity and cycle count, as reported by the battery controller. VERIDEX never estimates a missing value.', 'Run a scan. Battery data requires a battery that reports its own health registers.');
 pages.storage = modulePage('storage', 'Storage', 'Drives, capacity and SMART/NVMe health. SMART log pages usually require administrator rights and are reported as blocked, not as missing hardware.', 'Run a scan. SMART data may need an elevated session.');
 pages.network = modulePage('network', 'Network', 'Adapters, addressing and link state. Addresses are redacted in exports unless you enable them in Privacy.', 'Run a scan to enumerate adapters.');
-pages.windows = modulePage('windows', 'Windows and security', 'OS build, activation, Secure Boot, Defender and firewall state. Read-only: VERIDEX never changes a security setting.', 'Run a scan to collect operating-system state.');
-pages.drivers = modulePage('drivers', 'Drivers and software', 'Driver inventory with dates and problem codes, plus installed-software summary. Driver export is consent-gated.', 'Run a scan to enumerate drivers.');
+pages.windows = stackPages([
+  modulePage('windows', 'Windows and security', 'OS build, activation, Secure Boot, Defender and firewall state. Read-only: VERIDEX never changes a security setting.', 'Run a scan to collect operating-system state.'),
+  modulePage('windowsInventory', 'Windows features & services', 'Optional features, service state and installed updates.', 'Run a scan to enumerate Windows servicing state.'),
+  modulePage('windowsHealth', 'Component-store health', 'The servicing stack\'s own record of component-store corruption, read with a read-only DISM check. A healthy flag means no corruption has been recorded; it is not a file-by-file scan, and VERIDEX never runs a repair.', 'Run a scan as an administrator to read the component-store flag.')
+]);
+pages.drivers = stackPages([
+  modulePage('drivers', 'Drivers and devices', 'Driver inventory with dates, signing state and problem codes. Driver export is consent-gated and never installs anything.', 'Run a scan to enumerate drivers.'),
+  modulePage('software', 'Installed software & startup', 'Applications registered for uninstall, and the programs Windows starts at sign-in. Read-only: nothing is launched or removed.', 'Run a scan to read the installed-software registry.')
+]);
+
+// Windows component health belongs beside the rest of the Windows state: it answers the
+// question a reader has after seeing a driver problem - "are the system files themselves
+// intact?" - and answers it with the servicing stack's own flag.
+pages.reliability = stackPages([
+  modulePage('events', 'Reliability & crash history', 'Critical and error events from the System and Application logs, bugchecks and application crashes. Message text is never collected: only the provider, the id, the level and the time.', 'Run a scan to read the event log.')
+]);
+
+pages.processes = stackPages([
+  modulePage('processes', 'Running processes', 'A single snapshot of what is running on this machine, grouped by name, with memory and processor time. Command lines are deliberately not collected.', 'Run a scan to take a process snapshot.')
+]);
 
 pages.manual = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
@@ -779,11 +838,60 @@ pages.history = () => {
       );
     }
 
-    row.append(label, value);
+    const marked = state.comparison.selected.includes(entry.id);
+    const mark = button({
+      label: marked ? 'Marked' : 'Mark',
+      variant: marked ? 'primary' : 'ghost',
+      onClick: () => {
+        const selected = state.comparison.selected;
+        state.comparison.selected = selected.includes(entry.id)
+          ? selected.filter((id) => id !== entry.id)
+          : [...selected, entry.id].slice(-2);
+        // A new pair invalidates the old answer; showing a stale diff beside fresh marks is
+        // how a reader ends up attributing one run's changes to another.
+        state.comparison.result = null;
+        state.comparison.error = null;
+        render();
+      }
+    });
+    mark.classList.add('vx-row__mark');
+    mark.setAttribute('aria-pressed', String(marked));
+
+    row.append(label, value, mark);
     rows.append(row);
   }
 
+  // ── Comparison (R-24-02) ──
+  // Two runs are marked, then compared field by field. Marking rather than "click a row"
+  // keeps the rows usable for reading, and makes it visible which two runs are about to be
+  // compared before anything is fetched.
+  const comparison = state.comparison;
+  const markBar = el('div', { class: 'vx-compare-bar' });
+  markBar.append(
+    el('p', {
+      class: 'vx-dim',
+      text:
+        comparison.selected.length === 0
+          ? 'Mark two runs to compare them field by field.'
+          : comparison.selected.length === 1
+            ? 'One run marked. Mark one more.'
+            : 'Two runs marked.'
+    })
+  );
+  const compareButton = button({
+    label: 'Compare marked runs',
+    variant: 'primary',
+    disabled: comparison.selected.length !== 2 || comparison.loading,
+    onClick: () => void runComparison()
+  });
+  markBar.append(compareButton);
+  card.append(markBar);
+
   card.append(rows);
+
+  if (comparison.result) card.append(renderComparison(comparison.result));
+  else if (comparison.error) card.append(callout({ tone: 'bad', title: 'Comparison failed', body: comparison.error }));
+  else if (comparison.loading) card.append(el('p', { class: 'vx-dim', text: 'Comparing the two runs…' }));
 
   card.append(
     el('p', {
@@ -942,7 +1050,9 @@ const PAGE_BUILDERS = {
   storage: pages.storage,
   network: pages.network,
   windows: pages.windows,
+  reliability: pages.reliability,
   drivers: pages.drivers,
+  processes: pages.processes,
   manual: pages.manual,
   performance: pages.performance,
   monitor: pages.monitor,
@@ -953,10 +1063,333 @@ const PAGE_BUILDERS = {
   about: pages.about
 };
 
+// ── History comparison (R-24-02) ────────────────────────────────────────────
+
+/**
+ * Ask the main process to compare the two marked runs.
+ *
+ * The comparison maths lives in `src/history/compare.js` and is unit-tested there; the
+ * interface only renders its answer. Recomputing a diff in the renderer would give two
+ * implementations of the same rule and eventually two different answers.
+ */
+async function runComparison() {
+  const [aId, bId] = state.comparison.selected;
+  if (!aId || !bId) return;
+
+  state.comparison.loading = true;
+  state.comparison.error = null;
+  state.comparison.result = null;
+  render();
+
+  const result = await client.invoke('history:compare', { aId, bId });
+  state.comparison.loading = false;
+  if (result.ok) {
+    state.comparison.result = result.data;
+  } else {
+    state.comparison.error = result.error?.message ?? 'The main process refused the comparison.';
+  }
+  render();
+}
+
+/**
+ * Render a comparison. Deliberately shows what did *not* change as a count rather than a
+ * list: a machine with 400 unchanged fields would otherwise bury the four that moved.
+ * @param {any} comparison
+ */
+function renderComparison(comparison) {
+  const card = el('div', { class: 'vx-card vx-compare' });
+  const before = comparison.before ?? {};
+  const after = comparison.after ?? {};
+  const summary = comparison.summary ?? {};
+
+  card.append(el('h3', { class: 'vx-card__title', text: 'Comparison' }));
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: `${formatTimestamp(before.finishedAt)} (${before.score === null ? 'unrated' : `score ${before.score}`}) compared with ${formatTimestamp(after.finishedAt)} (${after.score === null ? 'unrated' : `score ${after.score}`}).`
+    })
+  );
+
+  card.append(
+    coverageStrip([
+      { label: 'Changed', value: summary.changed ?? 0 },
+      { label: 'Added', value: summary.added ?? 0 },
+      { label: 'Removed', value: summary.removed ?? 0 },
+      { label: 'Degraded', value: summary.degraded ?? 0 },
+      { label: 'Improved', value: summary.improved ?? 0 },
+      { label: 'Unchanged', value: summary.neutral ?? 0 }
+    ])
+  );
+
+  const top = Array.isArray(comparison.top) ? comparison.top : [];
+  if (top.length === 0) {
+    card.append(
+      emptyState(
+        'Nothing measurable changed',
+        'Both runs recorded the same values for every field they share. Differences below the 0.5% noise floor are ignored on purpose: a fan reading that moved by one RPM is noise, not a finding.'
+      )
+    );
+    return card;
+  }
+
+  const rows = el('div', { class: 'vx-rows' });
+  for (const difference of top) {
+    const verdict = difference.verdict ?? 'neutral';
+    const row = el('div', { class: 'vx-row vx-row--diff' });
+    row.append(
+      el('div', {
+        class: 'vx-row__label',
+        children: [
+          el('span', { text: difference.path }),
+          el('span', { class: `vx-diff__verdict vx-diff__verdict--${verdict}`, text: verdict })
+        ]
+      })
+    );
+
+    const value = el('div', { class: 'vx-row__value' });
+    const beforeText = difference.before === null ? 'absent' : formatValue(difference.before);
+    const afterText = difference.after === null ? 'absent' : formatValue(difference.after);
+    value.append(el('span', { class: 'vx-row__text', text: `${beforeText} → ${afterText}` }));
+    if (difference.delta !== null && difference.delta !== undefined) {
+      const sign = difference.delta > 0 ? '+' : '';
+      value.append(
+        el('span', {
+          class: 'vx-dim',
+          text: `${sign}${difference.delta}${difference.percent === null ? '' : ` (${difference.percent > 0 ? '+' : ''}${difference.percent}%)`}`
+        })
+      );
+    }
+    row.append(value);
+    rows.append(row);
+  }
+  card.append(rows);
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Verdicts come from each field\'s declared direction: for a fan speed, higher is better; for a CPU temperature, lower is. A field whose direction VERIDEX does not know is marked neutral rather than guessed.'
+    })
+  );
+  return card;
+}
+
+// ── Global search (R-22-01) ──────────────────────────────────────────────────
+
+/**
+ * The searchable inventory.
+ *
+ * Search covers what the application knows before a scan (pages, settings, stored runs) and
+ * what it learned during the last one (field labels, and the module they came from). It is
+ * built from live state each time it opens rather than cached, because the whole point is to
+ * find something added by the scan that just finished.
+ *
+ * @returns {Array<{id: string, label: string, detail: string, kind: 'page'|'setting'|'run'|'field', page: string, keywords: string}>}
+ */
+function buildSearchIndex() {
+  const index = [];
+  for (const page of PAGES) {
+    index.push({ id: `page:${page.id}`, label: page.label, detail: page.group, kind: 'page', page: page.id, keywords: `${page.id} ${page.group}` });
+  }
+
+  const specs = state.settings?.specs ?? {};
+  const values = state.settings?.values ?? {};
+  const entries = Array.isArray(specs) ? specs.map((spec) => [spec.key, spec]) : Object.entries(specs);
+  for (const [key, spec] of entries) {
+    index.push({
+      id: `setting:${key}`,
+      label: spec?.label ?? key,
+      detail: `${key} — ${String(values[key] ?? spec?.default ?? '')}`,
+      kind: 'setting',
+      page: 'settings',
+      keywords: `${key} ${spec?.description ?? ''}`
+    });
+  }
+
+  for (const entry of state.history?.entries ?? []) {
+    index.push({
+      id: `run:${entry.id}`,
+      label: `Run ${entry.id}`,
+      detail: `${formatTimestamp(entry.finishedAt)} · ${entry.assessment?.score ?? 'unrated'}`,
+      kind: 'run',
+      page: 'history',
+      keywords: `${entry.id} ${entry.finishedAt ?? ''}`
+    });
+  }
+
+  const modules = state.scan.modules ?? {};
+  for (const [moduleId, module] of Object.entries(modules)) {
+    for (const [key, value] of Object.entries(module?.fields ?? {})) {
+      const label = key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (character) => character.toUpperCase());
+      index.push({
+        id: `field:${moduleId}:${key}`,
+        label,
+        detail: `${moduleId} — ${formatValue(value?.value, value?.unit)}`,
+        kind: 'field',
+        page: PAGES.find((page) => moduleId.startsWith(page.id.slice(0, 4)))?.id ?? 'dashboard',
+        keywords: `${moduleId} ${key}`
+      });
+    }
+  }
+  return index;
+}
+
+/**
+ * Filter an index by a query. Empty query returns the pages, which is a useful landing state.
+ * @param {ReturnType<typeof buildSearchIndex>} index
+ * @param {string} query
+ */
+function searchIndex(index, query) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return index.filter((entry) => entry.kind === 'page');
+  const words = needle.split(/\s+/).filter(Boolean);
+  return index
+    .map((entry) => {
+      const haystack = `${entry.label} ${entry.detail} ${entry.keywords}`.toLowerCase();
+      if (!words.every((word) => haystack.includes(word))) return null;
+      // Prefix matches on the label rank above matches buried in the keywords.
+      const score = entry.label.toLowerCase().startsWith(needle) ? 3 : entry.label.toLowerCase().includes(needle) ? 2 : 1;
+      return { entry, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.entry.label.localeCompare(b.entry.label))
+    .slice(0, 30)
+    .map((scored) => scored.entry);
+}
+
+/** Keyboard-driven search palette. One at a time, Escape closes. */
+let searchOpen = false;
+
+function openSearch() {
+  if (searchOpen || !document.body) return;
+  searchOpen = true;
+
+  const input = el('input', {
+    class: 'vx-search__input',
+    attrs: { type: 'search', placeholder: 'Search pages, settings, runs and collected fields…', 'aria-label': 'Search', autocomplete: 'off' }
+  });
+  const results = el('div', { class: 'vx-search__results', attrs: { role: 'listbox', 'aria-label': 'Search results' } });
+  const index = buildSearchIndex();
+  /** @type {HTMLElement[]} */
+  let current = [];
+  let selected = 0;
+
+  const paint = () => {
+    results.replaceChildren();
+    current = searchIndex(index, input.value).map((entry) => {
+      const node = el('button', {
+        class: 'vx-search__result',
+        attrs: { type: 'button', role: 'option' },
+        children: [
+          el('span', { class: 'vx-search__label', text: entry.label }),
+          el('span', { class: 'vx-search__detail', text: entry.detail }),
+          el('span', { class: 'vx-search__kind', text: entry.kind })
+        ]
+      });
+      node.addEventListener('click', () => {
+        navigate(entry.page);
+        handle.close();
+      });
+      return node;
+    });
+    if (current.length === 0) {
+      results.append(el('p', { class: 'vx-search__empty', text: 'Nothing matched. Search covers pages, settings, stored runs and the fields collected by the last scan.' }));
+    }
+    for (const node of current) results.append(node);
+    selected = 0;
+    current[0]?.classList.add('is-selected');
+  };
+
+  const move = (delta) => {
+    if (current.length === 0) return;
+    current[selected]?.classList.remove('is-selected');
+    selected = (selected + delta + current.length) % current.length;
+    current[selected].classList.add('is-selected');
+    current[selected].scrollIntoView?.({ block: 'nearest' });
+  };
+
+  input.addEventListener('input', paint);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); move(1); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); move(-1); }
+    else if (event.key === 'Enter') {
+      event.preventDefault();
+      current[selected]?.click();
+    }
+  });
+
+  paint();
+  const body = el('div', { class: 'vx-search', children: [input, results] });
+  const handle = dialog({
+    title: 'Search VERIDEX',
+    body,
+    onClose: () => { searchOpen = false; }
+  });
+  input.focus?.();
+}
+
+// ── Keyboard shortcuts (R-21-01) ─────────────────────────────────────────────
+
+/** The shortcut reference. Rendered from the same table the handler reads. */
+function showShortcutReference() {
+  const table = el('div', { class: 'vx-keys' });
+  for (const shortcut of SHORTCUTS) {
+    table.append(
+      el('div', {
+        class: 'vx-keys__row',
+        children: [
+          el('kbd', { class: 'vx-keys__combo', text: shortcut.keys }),
+          el('span', { class: 'vx-keys__label', text: shortcut.label })
+        ]
+      })
+    );
+  }
+  dialog({
+    title: 'Keyboard shortcuts',
+    body: [
+      table,
+      el('p', {
+        class: 'vx-dim',
+        text: 'Shortcuts are fixed rather than rebindable: this list is generated from the same table the handler uses, so the two cannot disagree.'
+      })
+    ]
+  });
+}
+
+/**
+ * Install the global keyboard handler. Called once at boot.
+ */
+function installShortcuts() {
+  if (typeof document === 'undefined') return;
+  document.addEventListener('keydown', (event) => {
+    const target = /** @type {HTMLElement} */ (event.target);
+    const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+    const combo = shortcutOf(event);
+
+    if (combo === 'Escape') {
+      // Dialogs handle their own Escape first; this is the unhandled case, which is a scan.
+      if (state.scan.running) void cancelScan();
+      return;
+    }
+    if (combo === 'F1') { event.preventDefault(); showShortcutReference(); return; }
+    if (typing) return;
+
+    if (combo === 'Ctrl+K' || combo === 'Ctrl+F') { event.preventDefault(); openSearch(); return; }
+    if (combo === 'Ctrl+,') { event.preventDefault(); navigate('settings'); return; }
+    if (combo === 'Ctrl+H') { event.preventDefault(); navigate('history'); return; }
+    if (combo === 'Ctrl+Shift+R') { event.preventDefault(); void startScan(); return; }
+
+    const numbered = combo.match(/^Ctrl\+([1-9])$/);
+    if (numbered) {
+      const page = PAGES[Number(numbered[1]) - 1];
+      if (page) { event.preventDefault(); navigate(page.id); }
+    }
+  });
+}
+
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 async function startScan() {
   if (!client.live || state.scan.running) return;
+  toast({ tone: 'info', title: 'Scan started', body: 'Collecting evidence from this machine. Anything that cannot be read is reported as unavailable, never assumed good.' });
   state.scan = { running: true, done: 0, total: 0, taskId: null, finished: null, error: null };
   updateScanButtons();
   render();
@@ -972,12 +1405,14 @@ async function startScan() {
 }
 
 async function cancelScan() {
+  toast({ tone: 'warn', title: 'Cancelling', body: 'Telling the scan to stop. Whatever was collected up to this point is kept.' });
   if (!client.live) return;
   await client.invoke('scan:cancel');
   updateScanButtons();
 }
 
 async function saveReport(format) {
+  toast({ tone: 'info', title: `Preparing ${String(format).toUpperCase()}`, body: 'Rendering from the last completed scan.' });
   const status = document.getElementById('vx-report-status');
   if (status) status.textContent = `Preparing ${format.toUpperCase()}…`;
   const result = await client.invoke('report:save', format);
@@ -1099,6 +1534,14 @@ function subscribe() {
   client.on('scan:finished', (payload) => {
     state.scan.running = false;
     state.scan.finished = payload;
+    const failed = (payload?.issues?.errors?.length ?? 0) > 0;
+    toast({
+      tone: failed ? 'warn' : 'good',
+      title: payload?.cancelled ? 'Scan cancelled' : 'Scan finished',
+      body: payload?.cancelled
+        ? 'The run was stopped early. The report says which tasks never ran.'
+        : `Finished in ${formatDuration(payload?.durationMs ?? 0)}. Open Reports to export the evidence.`
+    });
     void (async () => {
       const full = await client.invoke('scan:state');
       await loadManual();
@@ -1127,6 +1570,7 @@ function subscribe() {
 
   client.on('app:error', (payload) => {
     state.scan.error = payload?.message ?? 'An error occurred in the main process.';
+    toast({ tone: 'bad', title: 'The main process reported an error', body: state.scan.error });
     render();
   });
 }
@@ -1155,13 +1599,18 @@ async function boot() {
   app.append(buildSidebar(), main);
 
   subscribe();
+  installShortcuts();
   navigate('dashboard');
   await loadManual();
   navigate(state.page);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => void boot());
-} else {
-  void boot();
+// Booting needs a document. The module is also imported by tests that only want the
+// shortcut table, and by static analysis, in both of which there is no DOM at all.
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => void boot());
+  } else {
+    void boot();
+  }
 }

@@ -60,28 +60,33 @@ Artifacts — record the digest of the exact files used, not the version string:
 - [ ] Resize the window; nothing overlaps or clips
 - [ ] **Screenshot**: dashboard before any scan
 
-## 3. A standard-user scan — all 15 tasks
+## 3. A standard-user scan — all 20 tasks
 
 Run the full diagnostic and record each task's terminal state. This is the sweep the GUI
-smoke test deliberately bounds to three tasks; a person with time must run all fifteen.
+smoke test deliberately bounds to three tasks; a person with time must run all twenty.
 
 | # | Task | State | Notable fields, and anything unavailable with its reason |
 | --- | --- | --- | --- |
 | 1 | `system.identity` | | |
 | 2 | `cpu.info` | | |
 | 3 | `memory.info` | | |
-| 4 | `storage.health` | | |
-| 5 | `storage.inventory` | | |
-| 6 | `battery.health` | | |
-| 7 | `gpu.info` | | |
-| 8 | `display.info` | | |
-| 9 | `network.info` | | |
-| 10 | `windows.info` | | |
+| 4 | `motherboard.info` | | |
+| 5 | `gpu.info` | | |
+| 6 | `gpu.directx` | | |
+| 7 | `storage.inventory` | | |
+| 8 | `storage.health` | | |
+| 9 | `battery.info` | | |
+| 10 | `network.info` | | |
 | 11 | `drivers.inventory` | | |
-| 12 | `security.posture` | | |
-| 13 | `services.health` | | |
-| 14 | `startup.inventory` | | |
-| 15 | `perf.snapshot` | | |
+| 12 | `drivers.export` | | |
+| 13 | `windows.info` | | |
+| 14 | `windows.inventory` | | |
+| 15 | `windows.componentHealth` | | |
+| 16 | `windows.events` | | |
+| 17 | `software.installed` | | |
+| 18 | `software.startup` | | |
+| 19 | `processes.snapshot` | | |
+| 20 | `security.posture` | | |
 
 - [ ] Every task reached a terminal state; none was left spinning
 - [ ] The whole sweep finished — record the wall-clock time

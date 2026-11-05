@@ -26,7 +26,7 @@ scan becomes a report. It is written from the code, and every file it names exis
     │                      │                      │
 ┌───┴─────────┐   ┌────────┴────────┐   ┌─────────┴─────────────────┐
 │ Diagnostics │   │    Engine       │   │  Reporting                │
-│ 11 modules  │──▶│ registry, merge │──▶│  model → json/html/pdf/   │
+│ 15 modules  │──▶│ registry, merge │──▶│  model → json/html/pdf/   │
 │             │   │ confidence,     │   │  csv/certificate          │
 │             │   │ health          │   │                           │
 └───┬─────────┘   └─────────────────┘   └───────────────────────────┘
@@ -49,12 +49,12 @@ module and the integration tests exercise the direction.
 
 ### 2.1 Registry construction — `src/app/scan.js`
 
-`buildDefaultRegistry()` imports all eleven diagnostic modules and calls each one's
+`buildDefaultRegistry()` imports all fifteen diagnostic modules and calls each one's
 `registerX(registry)` function inside its own `try/catch`. A module that throws while
 registering is recorded as a failure and the scan continues with the rest. This is
 deliberate: one broken module must not blank the whole report.
 
-Result on a healthy build: **11 modules, 15 tasks, 29 providers**.
+Result on a healthy build: **15 modules, 20 tasks, 34 providers**.
 
 | Task | Providers, in priority order |
 | --- | --- |
@@ -72,6 +72,11 @@ Result on a healthy build: **11 modules, 15 tasks, 29 providers**.
 | `drivers.export` | `driver-export.drivers` |
 | `windows.info` | `cim-win32.windows` → `systeminformation.windows` |
 | `windows.inventory` | `system-features.windows` |
+| `windows.componentHealth` | `dism.checkhealth` |
+| `windows.events` | `powershell.eventlog` |
+| `software.installed` | `registry.uninstall` |
+| `software.startup` | `powershell.startup` |
+| `processes.snapshot` | `powershell.processes` |
 | `security.posture` | `cim-win32.security` |
 
 Two of these providers are deliberately not measurements. `model-table.cpu` decodes a
@@ -88,7 +93,10 @@ next provider. A provider that returns `{}` is a bug: it looks like an answer th
 produced nothing, which is indistinguishable from "this machine has no such component".
 `tests/integration/providers.test.js` fails the build if any provider does that.
 
-Measured on a host without Windows: **15 tasks, 28 provider attempts, ~770 ms**.
+Measured on a host without Windows: **20 tasks, 33 of 34 provider attempts, ~800 ms on the
+first run and ~200 ms once the modules are loaded** (the host has no Windows, so every
+command returns "not available here" immediately — this is the floor, not a forecast for a
+real machine, where CIM and PowerShell calls dominate).
 
 ### 2.3 Field values — `src/core/field.js`
 

@@ -252,3 +252,131 @@ export function sortBySeverity(rows) {
     return difference !== 0 ? difference : a.label.localeCompare(b.label);
   });
 }
+
+// ── Transient feedback (R-20-02) ─────────────────────────────────────────────
+//
+// A diagnostic run takes minutes and can end in three very different ways. The topbar's
+// progress bar answers "how far along", not "did it work", and a user who has navigated away
+// from the dashboard gets no answer at all. Toasts carry the answer to wherever they are.
+//
+// Deliberately restrained: no stacking beyond four, no icons that pulse, no sound. A toast
+// that is not read is noise, so each one names one thing that happened and disappears.
+
+/** @type {HTMLElement|null} */
+let toastHost = null;
+
+/** Maximum simultaneous toasts. Beyond this the oldest is removed rather than queued. */
+const TOAST_LIMIT = 4;
+
+/**
+ * The toast container, created once and appended to the document body.
+ * @returns {HTMLElement|null}
+ */
+function ensureToastHost() {
+  if (typeof document === 'undefined' || !document.body) return null;
+  if (toastHost && toastHost.isConnected) return toastHost;
+  toastHost = el('div', { class: 'vx-toasts', attrs: { role: 'region', 'aria-live': 'polite', 'aria-label': 'Notifications' } });
+  document.body.append(toastHost);
+  return toastHost;
+}
+
+/**
+ * Show a transient notification.
+ *
+ * @param {{tone?: 'info'|'good'|'warn'|'bad', title: string, body?: string, timeoutMs?: number}} options
+ * @returns {() => void} a function that dismisses it early
+ */
+export function toast(options) {
+  const host = ensureToastHost();
+  if (!host) return () => {};
+
+  const tone = options.tone ?? 'info';
+  const node = el('div', {
+    class: `vx-toast vx-toast--${tone}`,
+    attrs: { role: tone === 'bad' ? 'alert' : 'status' }
+  });
+  node.append(el('p', { class: 'vx-toast__title', text: options.title }));
+  if (options.body) node.append(el('p', { class: 'vx-toast__body', text: options.body }));
+
+  const dismiss = () => {
+    node.classList.add('is-leaving');
+    // Removed on a timer rather than immediately so the transition can run; the element is
+    // still removed synchronously when the document is going away.
+    const remove = () => node.remove();
+    if (typeof setTimeout === 'function') setTimeout(remove, 180); else remove();
+  };
+
+  const close = el('button', {
+    class: 'vx-toast__close',
+    text: '×',
+    attrs: { type: 'button', 'aria-label': `Dismiss: ${options.title}` }
+  });
+  close.addEventListener('click', dismiss);
+  node.append(close);
+
+  host.append(node);
+  while (host.children.length > TOAST_LIMIT) host.children[0].remove();
+
+  const timeout = options.timeoutMs ?? (tone === 'bad' ? 12_000 : 6_000);
+  if (timeout > 0 && typeof setTimeout === 'function') setTimeout(dismiss, timeout);
+  return dismiss;
+}
+
+// ── Modal dialog (R-21-01 shortcut reference, first-run notice) ──────────────
+
+/**
+ * Open a modal dialog. Focus moves into it, Escape closes it, and focus returns to
+ * whatever had it before — three things that are always skipped when written inline.
+ *
+ * @param {{title: string, body: Node|Node[], label?: string, onClose?: () => void}} options
+ * @returns {{close: () => void, node: HTMLElement}|null}
+ */
+export function dialog(options) {
+  if (typeof document === 'undefined' || !document.body) return null;
+
+  const previouslyFocused = document.activeElement;
+  const panel = el('div', { class: 'vx-dialog', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': options.title } });
+  const heading = el('h2', { class: 'vx-dialog__title', text: options.title, attrs: { id: 'vx-dialog-title' } });
+
+  const closeButton = button({ label: 'Close', variant: 'ghost', onClick: () => close() });
+  const bodyNode = el('div', { class: 'vx-dialog__body' });
+  const children = Array.isArray(options.body) ? options.body : [options.body];
+  for (const child of children) if (child) bodyNode.append(/** @type {any} */ (child));
+
+  panel.append(heading, bodyNode, el('div', { class: 'vx-dialog__actions', children: [closeButton] }));
+
+  const backdrop = el('div', { class: 'vx-dialog-backdrop' });
+  backdrop.append(panel);
+
+  let closed = false;
+  function close() {
+    if (closed) return;
+    closed = true;
+    backdrop.remove();
+    document.removeEventListener('keydown', onKeydown, true);
+    if (previouslyFocused && typeof (/** @type {any} */ (previouslyFocused).focus) === 'function') {
+      /** @type {any} */ (previouslyFocused).focus();
+    }
+    options.onClose?.();
+  }
+
+  /** @param {KeyboardEvent} event */
+  function onKeydown(event) {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      close();
+    }
+  }
+
+  backdrop.addEventListener('click', (event) => {
+    if (event.target === backdrop) close();
+  });
+  document.addEventListener('keydown', onKeydown, true);
+  document.body.append(backdrop);
+  // Focus the panel so a screen reader announces the title, and so Escape reaches the handler
+  // through the document even before the user tabs anywhere.
+  panel.setAttribute('tabindex', '-1');
+  /** @type {any} */ (panel).focus?.();
+
+  return { close, node: panel };
+}

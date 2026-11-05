@@ -968,7 +968,7 @@
       "ui": "windows",
       "test": "n/a",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "IM"
     },
     {
       "id": "R-10-02",
@@ -981,7 +981,7 @@
       "ui": "windows",
       "test": "n/a",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "IM"
     },
     {
       "id": "R-10-03",
@@ -991,36 +991,38 @@
       "primary": "Get-MpComputerStatus, Get-NetFirewallProfile, manage-bde, Get-CimInstance",
       "alt": "registry",
       "perm": "admin for several",
-      "ui": "security",
+      "ui": "windows",
       "test": "tests/unit/security.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-10-04",
       "mod": "10 Windows",
       "req": "SFC/DISM component-store health: read-only verification first, confirmation before any repair",
-      "impl": "n/a",
-      "primary": "DISM /Online /Cleanup-Image /CheckHealth and /ScanHealth (read-only), SFC /VERIFYONLY",
-      "alt": "CBS.log summary",
-      "perm": "admin",
-      "ui": "windows-health",
-      "test": "n/a",
-      "doc": "docs/SECURITY.md",
-      "st": "NS"
+      "impl": "src/diagnostics/windowshealth.js",
+      "primary": "dism.exe /Online /Cleanup-Image /CheckHealth (read-only)",
+      "alt": "CBS.log scan (not run: it is a log, not a verdict)",
+      "perm": "administrator",
+      "ui": "windows",
+      "test": "tests/unit/windows-extended.test.js",
+      "doc": "docs/KNOWN_LIMITATIONS.md",
+      "st": "TS",
+      "note": "Read-only DISM check only. sfc /scannow and /RestoreHealth are never invoked, and an unrecognised DISM response maps to UNKNOWN, never to healthy."
     },
     {
       "id": "R-10-05",
       "mod": "10 Windows",
       "req": "Event logs, critical/warning errors, BSOD history, crash reports, startup programs",
-      "impl": "n/a",
-      "primary": "Get-WinEvent filtered queries + Minidump listing + Win32_StartupCommand",
-      "alt": "registry Run keys",
-      "perm": "admin (some logs)",
-      "ui": "windows-health",
-      "test": "n/a",
+      "impl": "src/diagnostics/events.js",
+      "primary": "Get-WinEvent (System + Application, levels 1-2, 7-day window, -MaxEvents 400)",
+      "alt": "none",
+      "perm": "none (reading the System log may need elevation on hardened builds)",
+      "ui": "reliability",
+      "test": "tests/unit/windows-extended.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "TS",
+      "note": "Message bodies are deliberately not retained: only provider, id, level and time."
     },
     {
       "id": "R-11-01",
@@ -1065,40 +1067,42 @@
       "id": "R-12-01",
       "mod": "12 Inventory",
       "req": "Installed applications: name, version, publisher, install date, location, uninstall info",
-      "impl": "n/a",
-      "primary": "Uninstall registry hives (64/32-bit + per-user)",
-      "alt": "Win32_Product (avoided — slow, triggers MSI reconfiguration)",
+      "impl": "src/diagnostics/software.js",
+      "primary": "HKLM/HKLM\\WOW6432Node/HKCU Uninstall registry keys",
+      "alt": "Win32_Product (rejected: it triggers MSI reconfiguration)",
       "perm": "none",
-      "ui": "software",
-      "test": "n/a",
+      "ui": "drivers",
+      "test": "tests/unit/windows-extended.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-12-02",
       "mod": "12 Inventory",
       "req": "Windows components, startup apps, background processes, running services, scheduled tasks, features",
-      "impl": "n/a",
+      "impl": "src/diagnostics/software.js#registerSoftware (startup keys)",
       "primary": "CIM + Get-ScheduledTask",
       "alt": "schtasks /query",
       "perm": "none",
-      "ui": "software",
-      "test": "n/a",
+      "ui": "drivers",
+      "test": "tests/unit/windows-extended.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "IP",
+      "note": "Startup entries from the Run/RunOnce keys are implemented and tested. Scheduled tasks, running services and Windows components are still missing."
     },
     {
       "id": "R-12-03",
       "mod": "12 Inventory",
       "req": "Process monitoring: name, PID, CPU, RAM, disk; no unnecessary retention of sensitive process data",
-      "impl": "n/a",
+      "impl": "src/diagnostics/processes.js",
       "primary": "systeminformation processes",
       "alt": "CIM Win32_PerfFormattedData_PerfProc_Process",
       "perm": "none",
-      "ui": "software",
-      "test": "n/a",
+      "ui": "processes",
+      "test": "tests/unit/windows-extended.test.js",
       "doc": "docs/SECURITY.md",
-      "st": "NS"
+      "st": "TS",
+      "note": "A single snapshot; no background polling and no command lines."
     },
     {
       "id": "R-13-01",
@@ -1312,40 +1316,40 @@
       "id": "R-17-01",
       "mod": "17 UI",
       "req": "Premium futuristic dashboard with device overview, health, hardware summary, live CPU/GPU/RAM/disk/battery/temp/network widgets, scan progress, alerts, quick actions",
-      "impl": "n/a",
+      "impl": "src/renderer/app.js#pages.dashboard",
       "primary": "component system",
       "alt": "n/a",
       "perm": "n/a",
       "ui": "dashboard",
-      "test": "n/a",
+      "test": "tests/integration/renderer.test.js",
       "doc": "docs/DESIGN_SYSTEM.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-17-02",
       "mod": "17 UI",
       "req": "Dark theme (primary) and fully implemented light theme with glass panels, glow, gradients, professional typography",
-      "impl": "n/a",
+      "impl": "src/renderer/theme.js",
       "primary": "CSS custom-property token system",
       "alt": "n/a",
       "perm": "n/a",
-      "ui": "all",
-      "test": "n/a",
+      "ui": "settings",
+      "test": "tests/integration/renderer.test.js",
       "doc": "docs/DESIGN_SYSTEM.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-18-01",
       "mod": "18 Layout",
       "req": "Resizable window, min/max size, responsive grid, no overlap/clipping/overflow at supported sizes; verified by automated layout audit",
-      "impl": "n/a",
+      "impl": "src/app/main.js#WINDOW_DEFAULTS, src/renderer/styles.css",
       "primary": "container-query fluid grid + static layout audit",
       "alt": "n/a",
       "perm": "n/a",
-      "ui": "all",
+      "ui": "n/a",
       "test": "n/a",
       "doc": "docs/DESIGN_SYSTEM.md",
-      "st": "NS"
+      "st": "IM"
     },
     {
       "id": "R-18-02",
@@ -1364,14 +1368,14 @@
       "id": "R-19-01",
       "mod": "19 Animation",
       "req": "Animation system for startup, page transitions, cards, modals, progress + mandatory reduced-motion option",
-      "impl": "n/a",
+      "impl": "src/renderer/styles.css",
       "primary": "CSS transitions gated by preference",
       "alt": "n/a",
       "perm": "n/a",
-      "ui": "all",
-      "test": "n/a",
+      "ui": "n/a",
+      "test": "tests/integration/renderer.test.js",
       "doc": "docs/DESIGN_SYSTEM.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-19-02",
@@ -1403,66 +1407,67 @@
       "id": "R-20-02",
       "mod": "20 Notifications",
       "req": "Toast notifications and progress feedback for diagnostic start/complete/fail, warnings, permission needs, report generation",
-      "impl": "n/a",
+      "impl": "src/renderer/ui.js#toast",
       "primary": "event bus → toasts",
       "alt": "n/a",
       "perm": "n/a",
-      "ui": "all",
-      "test": "n/a",
+      "ui": "dashboard",
+      "test": "tests/integration/ui-features.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-21-01",
       "mod": "21 Shortcuts",
       "req": "Keyboard shortcut system with reference screen, conflict detection and customization",
-      "impl": "n/a",
+      "impl": "src/renderer/shortcuts.js",
       "primary": "central registry + matcher",
       "alt": "n/a",
       "perm": "n/a",
-      "ui": "shortcuts",
-      "test": "n/a",
+      "ui": "n/a",
+      "test": "tests/integration/ui-features.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-22-01",
       "mod": "22 Search",
       "req": "Global search across pages, tests, settings, history and reports with suggestions",
-      "impl": "n/a",
+      "impl": "src/renderer/app.js#openSearch",
       "primary": "in-memory scored index",
       "alt": "n/a",
       "perm": "n/a",
-      "ui": "search",
-      "test": "n/a",
+      "ui": "n/a",
+      "test": "tests/integration/ui-features.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-22-02",
       "mod": "22 Search",
       "req": "Sidebar/category navigation, breadcrumbs, quick access menu",
-      "impl": "n/a",
+      "impl": "src/renderer/app.js#buildSidebar",
       "primary": "route table",
       "alt": "n/a",
       "perm": "n/a",
-      "ui": "all",
-      "test": "n/a",
+      "ui": "n/a",
+      "test": "tests/integration/renderer.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "IP",
+      "note": "Sidebar navigation and page grouping are implemented and smoke-tested. Breadcrumbs and a quick-access menu are still missing."
     },
     {
       "id": "R-23-01",
       "mod": "23 Settings",
       "req": "Settings centre where every setting has a real, persisted effect (appearance, theme, accent, language, layout, notifications, motion, diagnostics, reports, startup, storage, privacy, monitoring interval, benchmark, stress safety, shortcuts, about)",
-      "impl": "n/a",
+      "impl": "src/app/settings-wiring.js",
       "primary": "schema-validated store with effect wiring",
       "alt": "n/a",
       "perm": "n/a",
       "ui": "settings",
-      "test": "n/a",
+      "test": "tests/integration/settings-wiring.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-24-01",
@@ -1486,9 +1491,9 @@
       "alt": "n/a",
       "perm": "n/a",
       "ui": "history",
-      "test": "n/a",
+      "test": "tests/integration/ui-features.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-24-03",
@@ -1624,14 +1629,14 @@
       "id": "R-31-01",
       "mod": "31 About",
       "req": "About screen with brand, founder, contact, version, build, copyright, licence, runtime, architecture, acknowledgements, third-party licences",
-      "impl": "n/a",
+      "impl": "src/renderer/app.js#pages.about",
       "primary": "build metadata injection",
       "alt": "n/a",
       "perm": "n/a",
       "ui": "about",
-      "test": "n/a",
+      "test": "tests/integration/ui-features.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-32-01",

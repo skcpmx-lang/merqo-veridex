@@ -18,7 +18,7 @@ is the narrative summary of it.
 | Tested (automated) | 75 |
 | Implemented, untested | 11 |
 | Not started | 44 |
-| Automated tests | 488, all passing |
+| Automated tests | 523, all passing |
 | Source | 54 modules, ~16,500 lines |
 | Build | **produced** on Windows: installer 117.4 MiB + portable 106.5 MiB, unsigned |
 
@@ -36,7 +36,7 @@ the strength of a virtual machine.
 These are genuinely done: implemented, wired, and covered by tests that execute the code.
 
 ### Diagnostics
-- 11 modules, 15 tasks, 29 providers, all registering cleanly.
+- 15 modules, 20 tasks, 34 providers, all registering cleanly.
 - Provider chains fall through correctly; a provider that cannot answer explains why
   rather than returning an empty object.
 - Parsers for CIM/WMI output, `powercfg` battery reports, ATA SMART, NVMe health logs,
@@ -121,7 +121,7 @@ class of bug.
 
 | Defect | How it surfaced | Fix |
 | --- | --- | --- |
-| All 11 modules registered provider `cim-win32`; 10 failed as duplicates | Registering the real modules into the scan | Task-scoped ids + suffix-aware `tierOf()` |
+| All 11 initial modules registered provider `cim-win32`; 10 failed as duplicates | Registering the real modules into the scan | Task-scoped ids + suffix-aware `tierOf()` |
 | 3 modules registered a task before its provider, so the module never registered | Same | Tasks moved after providers |
 | 5 providers returned `{}` when they had no data | New provider-execution test | Explicit `unavailable`/`unsupported` field with a reason |
 | `security.js` threw `ReferenceError: lua is not defined` on every scan | Real end-to-end scan | Correct destructured names |

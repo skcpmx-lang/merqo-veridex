@@ -48,6 +48,13 @@ export const PROVIDER_TIERS = Object.freeze({
   // request and contributes no health evidence. Listed explicitly so it does not fall
   // through to the heuristic default by accident.
   'driver-export': SourceTier.DERIVED,
+  // DISM asks the servicing stack about its own component store. That is the OS reporting on
+  // itself, not a guess, and it is the only source for this question.
+  'dism': SourceTier.AUTHORITATIVE,
+  // Event log, uninstall registry, startup Run keys and the process table, read through
+  // PowerShell. The same rule as 'system-features': PowerShell is the transport, and the
+  // thing on the other end is a Windows subsystem reporting its own state.
+  'powershell': SourceTier.AUTHORITATIVE,
   'vendor-heuristic': SourceTier.HEURISTIC,
   'chipset-heuristic': SourceTier.HEURISTIC
 });

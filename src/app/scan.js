@@ -28,6 +28,10 @@ import { registerBattery } from '../diagnostics/battery.js';
 import { registerNetwork } from '../diagnostics/network.js';
 import { registerDrivers } from '../diagnostics/drivers.js';
 import { registerWindows } from '../diagnostics/windows.js';
+import { registerWindowsHealth } from '../diagnostics/windowshealth.js';
+import { registerEvents } from '../diagnostics/events.js';
+import { registerSoftware } from '../diagnostics/software.js';
+import { registerProcesses } from '../diagnostics/processes.js';
 import { registerSecurity } from '../diagnostics/security.js';
 
 /**
@@ -256,6 +260,10 @@ export function buildDefaultRegistry(report = {}) {
     ['network', registerNetwork],
     ['drivers', registerDrivers],
     ['windows', registerWindows],
+    ['windowsHealth', registerWindowsHealth],
+    ['events', registerEvents],
+    ['software', registerSoftware],
+    ['processes', registerProcesses],
     ['security', registerSecurity]
   ];
 

@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 488 · pass 488 · fail 0
+tests 523 · pass 523 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -78,6 +78,8 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/pe-metadata.test.js` | 6 |
 | `tests/unit/ipc-arity.test.js` | 7 |
 | `tests/unit/health-cap.test.js` | 9 |
+| `tests/unit/windows-extended.test.js` | 22 |
+| `tests/integration/ui-features.test.js` | 10 |
 | `tests/integration/install-smoke-harness.test.js` | 9 |
 | `tests/unit/smoke-regressions.test.js` | 9 |
 | `tests/integration/provider-invocation.test.js` | 13 | CI workflows reference scripts that exist; tests gate publishing |
@@ -131,7 +133,7 @@ Stated plainly, because this is the section that matters:
    silently on the Windows runner, launches the installed application, checks its window,
    title, preload bridge, one IPC round trip and all 15 pages, then runs the uninstaller and
    confirms the files, directory and shortcuts are gone. 16 checks, no problems.
-5. **That performance is acceptable on real hardware.** The ~770 ms figure comes from
+5. **That performance is acceptable on real hardware.** The ~800 ms cold / ~200 ms warm figure comes from
    this container running providers that mostly return `UNSUPPORTED` immediately. It says
    nothing about a Windows machine running 28 real queries.
 

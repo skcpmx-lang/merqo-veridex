@@ -21,7 +21,7 @@ Local. Read-only. Offline by construction. Honest about what it could not measur
 VERIDEX reads hardware and operating-system state from the machine it runs on, scores the
 evidence it was able to collect, and writes a report you can keep.
 
-- **11 diagnostic modules, 15 tasks, 29 providers** — processor, memory, motherboard,
+- **15 diagnostic modules, 20 tasks, 34 providers** — processor, memory, motherboard,
   GPU, storage, battery, network, drivers, Windows servicing, system identity, security
   posture
 - **8 health components** with evidence-based scoring
@@ -69,7 +69,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 488 tests
+npm test            # 523 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```

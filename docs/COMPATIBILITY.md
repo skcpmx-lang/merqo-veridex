@@ -40,7 +40,7 @@ equivalent elsewhere. `Get-WindowsOptionalFeature` is not a Windows-shaped versi
 something on Linux; it is a Windows concept.
 
 On any non-Windows platform every provider returns `UNSUPPORTED` with that reason. This is
-tested: a scan on Linux completes with 15 tasks, 28 provider attempts and **zero errors**,
+tested: a scan on Linux completes with 20 tasks, 33 provider attempts and **zero errors**,
 because "not Windows" is an answer, not a failure.
 
 ---

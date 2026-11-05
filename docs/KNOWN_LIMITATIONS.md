@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 488
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 523
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -36,7 +36,7 @@ thing on macOS" is not a translation — the underlying data does not exist in t
 form.
 
 On any other platform every provider returns `UNSUPPORTED` with that reason. Nothing
-crashes and nothing pretends. A scan on Linux reports 15 tasks, 28 provider attempts and
+crashes and nothing pretends. A scan on Linux reports 20 tasks, 33 provider attempts and
 no errors, precisely because "not Windows" is an answer and not a failure.
 
 ---
