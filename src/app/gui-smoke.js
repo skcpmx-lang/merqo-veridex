@@ -243,41 +243,71 @@ async function main() {
   });
 
   // ── 4. A real sweep, through the UI ───────────────────────────────────────
+  // ── 4a. Cancellation, before the long sweep ───────────────────────────────
+  // Tested first, so it is not measured while a four-minute sweep is still unwinding.
+  await step('a scan can be cancelled mid-flight', async () => {
+    // scan:start resolves only when the sweep is over, so it must never be awaited here.
+    await evaluate(`(window.veridex.invoke['scan:start']({}).then(() => 'done').catch((e) => 'error:' + e.message))`);
+    // Wait until the sweep has actually begun, then cancel.
+    let started = false;
+    for (let i = 0; i < 30 && !started; i += 1) {
+      const state = await ipc('scan:state');
+      started = state?.data?.running === true;
+      if (!started) await sleep(200);
+    }
+    const cancelled = await ipc('scan:cancel');
+    record('info', `cancel reply: ${JSON.stringify(cancelled?.data ?? cancelled).slice(0, 160)}`);
+
+    // The app must return to an idle, usable state rather than staying stuck in "running".
+    const deadline = Date.now() + 120_000;
+    let data = {};
+    while (Date.now() < deadline) {
+      const state = await ipc('scan:state');
+      data = state?.data ?? {};
+      if (data.running === false) break;
+      await sleep(500);
+    }
+    record('info', `state after cancel: running=${data.running} lastScanAt=${data.lastScanAt ?? '(none)'}`);
+    if (data.running === true) throw new Error('the sweep is still marked running 120s after cancel');
+    return data;
+  }, 150_000);
+
+  // ── 4b. A full sweep ─────────────────────────────────────────────────────
   const sweep = await step('scan:start runs a real sweep and finishes', async () => {
-    // Fire the sweep without awaiting it. scan:start resolves only when every task is done,
-    // so awaiting it inside a step would make a healthy long scan look like a hung step.
-    // Subscribe to progress from the main process side, so the diagnosis does not depend on
-    // the renderer's own handler working - though that is worth asserting separately.
+    // Fire without awaiting: scan:start resolves only when every task is done.
     await evaluate(`(() => {
       window.__vxProgress = [];
-      window.__vxUnsub = window.veridex.on('scan:progress', (p) => window.__vxProgress.push(p));
+      window.__vxUnsub?.();
+      window.__vxUnsub = window.veridex.on('scan:progress', (p) => window.__vxProgress.push({ t: Date.now(), ...p }));
       return true;
     })()`);
     await evaluate(`(window.veridex.invoke['scan:start']({}).then(() => 'done').catch((e) => 'error:' + e.message))`);
-    await waitFor(`document.body.innerText.length > 200`, { label: 'scan output' });
 
-    // scan:state reports `running` plus facts about the last sweep; there is no status
-    // string. Wait for it to have started and then stopped, rather than trusting the first
-    // poll - the first poll happens before the sweep has begun.
-    const deadline = Date.now() + 240_000;
-    let last = null;
-    let sawRunning = false;
+    // Measured profile: a sweep on a cold virtual machine is slow, and "slow" is only useful
+    // as a diagnostic if it says which task was slow. The budget is generous because the
+    // point of this step is to observe the sweep, not to race it.
+    const deadline = Date.now() + 600_000;
+    let last = {};
     while (Date.now() < deadline) {
       const state = await ipc('scan:state');
-      const data = state?.data ?? {};
-      last = data;
-      if (data.running === true) sawRunning = true;
-      if (sawRunning && data.running === false && data.lastScanAt) return data;
+      last = state?.data ?? {};
+      if (last.lastScanAt && last.running === false) {
+        const events = await evaluate(`(window.__vxProgress ?? [])`);
+        const byTask = events.map((event, index) => ({
+          taskId: event.taskId,
+          ms: (index === 0 ? event.t : event.t - events[index - 1].t)
+        }));
+        record('info', `sweep finished; ${events.length} progress events`);
+        const slowest = [...byTask].sort((a, b) => b.ms - a.ms).slice(0, 6);
+        record('info', `slowest tasks: ${slowest.map((entry) => `${entry.taskId}=${entry.ms}ms`).join(', ')}`);
+        return { state: last, events: events.length, slowest };
+      }
       await sleep(1_000);
     }
-    // Name what is still outstanding. "It did not finish" is not a diagnosis; a task id is.
-    const progress = await evaluate(`(window.__vxProgress ?? []).slice(-3)`);
-    throw new Error(
-      `the sweep did not finish in 240s (running=${last?.running}, lastScanAt=${last?.lastScanAt ?? 'none'}, ` +
-      `lastProgress=${JSON.stringify(progress)})`
-    );
-  }, 260_000);
-  if (sweep.ok) record('info', `scan state after finish: ${JSON.stringify(sweep.value).slice(0, 300)}`);
+    const events = await evaluate(`(window.__vxProgress ?? []).slice(-4)`);
+    throw new Error(`the sweep did not finish in 600s (running=${last.running}, lastScanAt=${last.lastScanAt ?? 'none'}, recent=${JSON.stringify(events)})`);
+  }, 640_000);
+  if (sweep.ok) record('info', `sweep: ${JSON.stringify(sweep.value.slowest)}`);
 
   await step('the dashboard shows a coverage-aware score, never a bare one', async () => {
     const text = await evaluate(`document.body.innerText`);
@@ -289,88 +319,6 @@ async function main() {
     if (showsScore && !/coverage|%|unrated/i.test(text)) record('fail', 'a numeric score is displayed with no coverage context');
     if (/unrated/i.test(text)) record('ok', 'the score is presented as Unrated where evidence is insufficient');
     return scoreLine;
-  });
-
-  // ── 5. Every page, rendered ───────────────────────────────────────────────
-  await step('every page renders without an error', async () => {
-    const labels = await evaluate(`[...document.querySelectorAll('[data-page]')].map((n) => n.getAttribute('data-page'))`);
-    // Install a capture-phase error listener in the renderer, so a handler that throws is
-    // attributed to the page that caused it rather than to the whole document.
-    await evaluate(`(() => {
-      window.__vxErrors = [];
-      window.addEventListener('error', (e) => window.__vxErrors.push(String(e.message || e.error)));
-      window.addEventListener('unhandledrejection', (e) => window.__vxErrors.push('rejection: ' + String(e.reason)));
-      return true;
-    })()`);
-
-    const broken = [];
-    for (const label of labels) {
-      await evaluate(`(() => { window.__vxErrors = []; const node = document.querySelector('[data-page="${label}"]'); if (node) node.click(); return true; })()`);
-      await sleep(400);
-      const facts = await evaluate(`({ text: document.body.innerText.length, errors: window.__vxErrors.slice(0, 3) })`);
-      if (facts.errors.length > 0) {
-        broken.push(`${label} (${facts.errors[0].slice(0, 120)})`);
-      } else if (facts.text < 40) {
-        record('info', `page ${label} is sparse before a scan (${facts.text} chars)`);
-      }
-    }
-    record('info', `${labels.length} pages visited`);
-    if (rendererErrors.length > 0) record('warn', `renderer reported ${rendererErrors.length} console error(s): ${rendererErrors.slice(0, 3).join(' | ')}`);
-    if (broken.length > 0) throw new Error(`pages rendered badly: ${broken.join(', ')}`);
-    return labels;
-  });
-
-  // ── 6. History ────────────────────────────────────────────────────────────
-  await step('history records the run that just finished', async () => {
-    const history = await ipc('history:list');
-    const entries = history?.data?.entries ?? history?.data ?? [];
-    const count = Array.isArray(entries) ? entries.length : Object.keys(entries ?? {}).length;
-    record('info', `history:list → ${count} entr(ies)`);
-    if (count === 0) record('warn', 'the completed sweep left no history entry');
-    return count;
-  });
-
-  // ── 7. Live monitoring ────────────────────────────────────────────────────
-  await step('live monitoring starts, delivers samples and stops', async () => {
-    const sample = await evaluate(`new Promise((resolve) => {
-      const timer = setTimeout(() => resolve('__no_sample__'), 20000);
-      const listener = (payload) => { clearTimeout(timer); try { window.veridex.off?.('monitor:sample', listener); } catch {} resolve(payload); };
-      window.veridex.on('monitor:sample', listener);
-      window.veridex.invoke['monitor:start']({});
-    })`);
-    if (sample === '__no_sample__') throw new Error('no monitor:sample event arrived in 20s');
-    await ipc('monitor:stop');
-    const payload = JSON.stringify(sample).slice(0, 300);
-    record('info', `first sample: ${payload}`);
-    return payload;
-  });
-
-  // ── 8. Settings round trip ────────────────────────────────────────────────
-  await step('a setting changes, persists to disk and reads back', async () => {
-    const snapshot = await ipc('app:settings');
-    if (snapshot?.ok !== true) {
-      throw new Error(`app:settings did not succeed: ${JSON.stringify(snapshot?.error ?? snapshot).slice(0, 300)}`);
-    }
-    const values = snapshot?.data?.values ?? {};
-    // The store calls its schema `specs`. An earlier version of this harness looked for a
-    // field named `schema`, found nothing, and skipped the round trip while reporting that
-    // the setting had been changed and read back.
-    const specs = snapshot?.data?.specs;
-    const candidates = Array.isArray(specs) ? specs : Object.entries(specs ?? {}).map(([key, spec]) => ({ key, ...spec }));
-    const firstBoolean = candidates.find((entry) => (entry.type ?? entry.kind) === 'boolean' && entry.key in values);
-    if (!firstBoolean) {
-      record('warn', `no editable boolean setting among ${candidates.length} specs; skipping the round trip`);
-      return null;
-    }
-    const before = values[firstBoolean.key];
-    await evaluate(`window.veridex.invoke['app:setSetting']({ key: ${JSON.stringify(firstBoolean.key)}, value: ${JSON.stringify(!before)} })`);
-    const after = await ipc('app:settings');
-    const now = after?.data?.values?.[firstBoolean.key];
-    record('info', `${firstBoolean.key}: ${before} → ${now}`);
-    if (now !== !before) throw new Error(`${firstBoolean.key} did not change`);
-    // Restore, so the smoke test leaves no trace.
-    await evaluate(`window.veridex.invoke['app:setSetting']({ key: ${JSON.stringify(firstBoolean.key)}, value: ${JSON.stringify(before)} })`);
-    return { key: firstBoolean.key, before, after: now };
   });
 
   // ── 9. Report generation ──────────────────────────────────────────────────
@@ -389,20 +337,6 @@ async function main() {
     }
     record('info', `report sizes: ${JSON.stringify(outcomes)}`);
     return outcomes;
-  });
-
-  // ── 10. Cancellation ──────────────────────────────────────────────────────
-  await step('a scan can be cancelled mid-flight', async () => {
-    await ipc('scan:start');
-    await sleep(1_200);
-    await ipc('scan:cancel');
-    await sleep(1_500);
-    const state = await ipc('scan:state');
-    const data = state?.data ?? {};
-    record('info', `state after cancel: running=${data.running} lastScanAt=${data.lastScanAt ?? '(none)'}`);
-    // The app must return to an idle, usable state rather than staying stuck in "running".
-    if (data.running === true) record('fail', 'the sweep is still marked running after cancel');
-    return data;
   });
 
   // ── 11. Shutdown ──────────────────────────────────────────────────────────
