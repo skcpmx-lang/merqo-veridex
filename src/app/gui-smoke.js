@@ -145,6 +145,17 @@ async function main() {
   console.log(`  electron ${process.versions.electron} · chromium ${process.versions.chrome} · node ${process.versions.node}`);
   console.log(`  platform ${process.platform} ${process.arch}`);
 
+  // Collect anything the renderer throws. Pattern-matching body text for the word
+  // "typeerror" found nothing while a page was genuinely blank, because a thrown click
+  // handler leaves no text behind - only an uncaught error.
+  const rendererErrors = [];
+  app.on('web-contents-created', (_event, contents) => {
+    contents.on('console-message', (_e, level, message) => {
+      if (level >= 2) rendererErrors.push(message);
+    });
+    contents.on('render-process-gone', (_e, details) => rendererErrors.push(`renderer gone: ${details.reason}`));
+  });
+
   // ── 1. Boot ───────────────────────────────────────────────────────────────
   record('info', `windows open at startup: ${BrowserWindow.getAllWindows().length}`);
   const booted = await step('a window exists and has loaded the dashboard', async () => {
@@ -235,6 +246,13 @@ async function main() {
   const sweep = await step('scan:start runs a real sweep and finishes', async () => {
     // Fire the sweep without awaiting it. scan:start resolves only when every task is done,
     // so awaiting it inside a step would make a healthy long scan look like a hung step.
+    // Subscribe to progress from the main process side, so the diagnosis does not depend on
+    // the renderer's own handler working - though that is worth asserting separately.
+    await evaluate(`(() => {
+      window.__vxProgress = [];
+      window.__vxUnsub = window.veridex.on('scan:progress', (p) => window.__vxProgress.push(p));
+      return true;
+    })()`);
     await evaluate(`(window.veridex.invoke['scan:start']({}).then(() => 'done').catch((e) => 'error:' + e.message))`);
     await waitFor(`document.body.innerText.length > 200`, { label: 'scan output' });
 
@@ -252,7 +270,12 @@ async function main() {
       if (sawRunning && data.running === false && data.lastScanAt) return data;
       await sleep(1_000);
     }
-    throw new Error(`the sweep did not finish in 240s (running=${last?.running}, lastScanAt=${last?.lastScanAt ?? 'none'})`);
+    // Name what is still outstanding. "It did not finish" is not a diagnosis; a task id is.
+    const progress = await evaluate(`(window.__vxProgress ?? []).slice(-3)`);
+    throw new Error(
+      `the sweep did not finish in 240s (running=${last?.running}, lastScanAt=${last?.lastScanAt ?? 'none'}, ` +
+      `lastProgress=${JSON.stringify(progress)})`
+    );
   }, 260_000);
   if (sweep.ok) record('info', `scan state after finish: ${JSON.stringify(sweep.value).slice(0, 300)}`);
 
@@ -271,18 +294,28 @@ async function main() {
   // ── 5. Every page, rendered ───────────────────────────────────────────────
   await step('every page renders without an error', async () => {
     const labels = await evaluate(`[...document.querySelectorAll('[data-page]')].map((n) => n.getAttribute('data-page'))`);
+    // Install a capture-phase error listener in the renderer, so a handler that throws is
+    // attributed to the page that caused it rather than to the whole document.
+    await evaluate(`(() => {
+      window.__vxErrors = [];
+      window.addEventListener('error', (e) => window.__vxErrors.push(String(e.message || e.error)));
+      window.addEventListener('unhandledrejection', (e) => window.__vxErrors.push('rejection: ' + String(e.reason)));
+      return true;
+    })()`);
+
     const broken = [];
     for (const label of labels) {
-      await evaluate(`(() => { const node = document.querySelector('[data-page="${label}"]'); if (node) node.click(); return true; })()`);
-      await sleep(250);
-      // Only a thrown render is a failure. Some pages are legitimately sparse before a scan
-      // (a battery page on a machine with no battery), so text length is context, not a
-      // verdict - the first version flagged the performance page for being short.
-      const facts = await evaluate(`({ text: document.body.innerText.length, error: /cannot read|undefined is not|typeerror/i.test(document.body.innerText) })`);
-      if (facts.error) broken.push(label);
-      else if (facts.text < 40) record('info', `page ${label} is sparse before a scan (${facts.text} chars)`);
+      await evaluate(`(() => { window.__vxErrors = []; const node = document.querySelector('[data-page="${label}"]'); if (node) node.click(); return true; })()`);
+      await sleep(400);
+      const facts = await evaluate(`({ text: document.body.innerText.length, errors: window.__vxErrors.slice(0, 3) })`);
+      if (facts.errors.length > 0) {
+        broken.push(`${label} (${facts.errors[0].slice(0, 120)})`);
+      } else if (facts.text < 40) {
+        record('info', `page ${label} is sparse before a scan (${facts.text} chars)`);
+      }
     }
     record('info', `${labels.length} pages visited`);
+    if (rendererErrors.length > 0) record('warn', `renderer reported ${rendererErrors.length} console error(s): ${rendererErrors.slice(0, 3).join(' | ')}`);
     if (broken.length > 0) throw new Error(`pages rendered badly: ${broken.join(', ')}`);
     return labels;
   });
