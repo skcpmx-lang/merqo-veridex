@@ -234,6 +234,21 @@ async function main() {
     record('info', `installed application exited ${launch.code} after ${Date.now() - launchedAt}ms`);
     if (launch.stdout.trim()) for (const line of launch.stdout.trim().split('\n').slice(-20)) console.log(`    [app] ${line}`);
 
+    // The application's own log is the only witness when it starts and then goes quiet. It is
+    // read here because the job log is not always reachable from where this is being reviewed.
+    const logDir = path.join(userData, 'logs');
+    if (existsSync(logDir)) {
+      const logs = readdirSync(logDir).filter((name) => name.endsWith('.log')).sort();
+      const newest = logs.at(-1);
+      if (newest) {
+        const lines = readFileSync(path.join(logDir, newest), 'utf8').trim().split('\n');
+        record('info', `application log ${newest}: ${lines.length} lines`);
+        emit('notice', 'install-smoke log', lines.slice(-8).join(' | ').slice(0, 1200));
+      }
+    } else {
+      emit('notice', 'install-smoke log', `no log directory at ${logDir}`);
+    }
+
     if (!existsSync(smokeReport)) {
       fail(`the installed application exited ${launch.code} without writing a verdict. Output: ${launch.stdout.trim().slice(-500) || '(none)'}`);
     } else {
@@ -246,6 +261,9 @@ async function main() {
       if (verdict) {
         record('info', `installed build reported ${verdict.findings?.length ?? 0} finding(s), ${verdict.problems?.length ?? 0} problem(s)`);
         for (const finding of (verdict.findings ?? []).slice(-40)) record(finding.level, `[installed] ${finding.message}`);
+        // The last few findings are the ones that describe where it stopped, so they go into
+        // annotations where they survive an unreachable log.
+        emit('notice', 'install-smoke installed-build', (verdict.findings ?? []).slice(-6).map((f) => f.message).join(' | ').slice(0, 1200));
         for (const problem of verdict.problems ?? []) fail(`[installed] ${problem}`);
         if (verdict.complete !== true) {
           const lastPhase = [...(verdict.findings ?? [])].reverse().find((finding) => finding.message.startsWith('→ '));
