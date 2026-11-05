@@ -23,7 +23,7 @@
  */
 
 import { app, BrowserWindow } from 'electron';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
 const STEP_TIMEOUT_MS = 45_000;
@@ -48,14 +48,50 @@ async function step(name, fn, timeoutMs = STEP_TIMEOUT_MS) {
       new Promise((_, reject) => setTimeout(() => reject(new Error(`${name} exceeded ${timeoutMs}ms`)), timeoutMs))
     ]);
     record('ok', `${name} (${Date.now() - started}ms)`);
+    await persist();
     return { ok: true, value };
   } catch (error) {
     record('fail', `${name} threw: ${error instanceof Error ? error.message : String(error)}`);
+    await persist();
     return { ok: false, value: null };
   }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let reportTarget = null;
+let runStartedAt = null;
+
+/**
+ * Persist the verdict so far.
+ *
+ * Written after every step, not once at the end. The first version wrote only at the end,
+ * and the shutdown step closed the window - which makes the app quit - so the process died
+ * with thirteen passing steps and no file on disk. Evidence that disappears when the thing
+ * it describes stops is not evidence.
+ */
+async function persist(final = false) {
+  if (!reportTarget) return;
+  const payload = {
+    generatedAt: runStartedAt,
+    finishedAt: final ? new Date().toISOString() : null,
+    complete: final,
+    electron: process.versions.electron,
+    chromium: process.versions.chrome,
+    node: process.versions.node,
+    platform: process.platform,
+    arch: process.arch,
+    packaged: app.isPackaged,
+    findings,
+    problems
+  };
+  try {
+    await mkdir(path.dirname(reportTarget), { recursive: true });
+    await writeFile(reportTarget, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (error) {
+    console.error(`could not write the verdict: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
 /**
  * Poll the renderer until `expression` is truthy.
@@ -102,7 +138,9 @@ async function ipc(channel, payload) {
 
 async function main() {
   const reportPath = process.env.VERIDEX_GUI_SMOKE_REPORT ?? path.join(app.getPath('temp'), 'veridex-gui-smoke.json');
-  const startedAt = new Date().toISOString();
+  reportTarget = reportPath;
+  runStartedAt = new Date().toISOString();
+  const startedAt = runStartedAt;
   console.log('VERIDEX GUI smoke test');
   console.log(`  electron ${process.versions.electron} · chromium ${process.versions.chrome} · node ${process.versions.node}`);
   console.log(`  platform ${process.platform} ${process.arch}`);
@@ -266,6 +304,9 @@ async function main() {
   // ── 8. Settings round trip ────────────────────────────────────────────────
   await step('a setting changes, persists to disk and reads back', async () => {
     const snapshot = await evaluate(`ipc('app:settings')`);
+    if (snapshot?.ok !== true) {
+      throw new Error(`app:settings did not succeed: ${JSON.stringify(snapshot?.error ?? snapshot).slice(0, 300)}`);
+    }
     const values = snapshot?.data?.values ?? {};
     // The store calls its schema `specs`. An earlier version of this harness looked for a
     // field named `schema`, found nothing, and skipped the round trip while reporting that
@@ -321,6 +362,8 @@ async function main() {
   });
 
   // ── 11. Shutdown ──────────────────────────────────────────────────────────
+  // This step closes the window, which makes main.js quit. Everything up to here has
+  // already been written to disk by persist(), so a clean shutdown cannot erase the record.
   await step('the app survives a window close and quits cleanly', async () => {
     const before = BrowserWindow.getAllWindows().length;
     target.close();
@@ -332,21 +375,7 @@ async function main() {
   });
 
   // ── Verdict ───────────────────────────────────────────────────────────────
-  const result = {
-    generatedAt: startedAt,
-    finishedAt: new Date().toISOString(),
-    electron: process.versions.electron,
-    chromium: process.versions.chrome,
-    node: process.versions.node,
-    platform: process.platform,
-    arch: process.arch,
-    packaged: app.isPackaged,
-    findings,
-    problems
-  };
-
-  await mkdir(path.dirname(reportPath), { recursive: true }).catch(() => {});
-  await writeFile(reportPath, JSON.stringify(result, null, 2), 'utf8');
+  await persist(true);
   console.log('');
   console.log(`${findings.length} finding(s), ${problems.length} problem(s)`);
   console.log(`verdict written to ${reportPath}`);
@@ -354,11 +383,6 @@ async function main() {
   console.log('NOT PROVEN BY THIS SCRIPT: that the installer installs, that the app works on a');
   console.log('real desktop, or that any diagnostic value is correct. It proves the window opens,');
   console.log('the pages render, the IPC contract holds and the report paths produce bytes.');
-  try {
-    await readFile(reportPath);
-  } catch {
-    /* the write above already reported */
-  }
   process.exitCode = problems.length > 0 ? 1 : 0;
 }
 

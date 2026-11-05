@@ -132,6 +132,14 @@ async function execute(electron) {
 
   /** @type {{problems:string[], findings:Array<{level:string,message:string}>, electron:string, packaged:boolean}} */
   const verdict = JSON.parse(readFileSync(reportPath, 'utf8'));
+  if (verdict.complete === false) {
+    // The verdict was written incrementally (so a crash still leaves evidence) but the run
+    // never reached its end. Say so, and treat it as a failure.
+    verdict.problems = [
+      ...(verdict.problems ?? []),
+      `the run did not complete: it stopped after ${verdict.findings?.length ?? 0} finding(s)`
+    ];
+  }
   const okCount = verdict.findings.filter((finding) => finding.level === 'ok').length;
   const warnCount = verdict.findings.filter((finding) => finding.level === 'warn').length;
 
