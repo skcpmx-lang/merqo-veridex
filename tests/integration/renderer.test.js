@@ -25,6 +25,33 @@ try {
   JSDOM = null;
 }
 
+/**
+ * Wait until `predicate` is true, then carry on.
+ *
+ * These tests previously used fixed sleeps ("wait 120 ms, then assert"). That passes on a
+ * fast Linux container and fails on a slower or loaded runner, which is exactly what
+ * happened: the Windows CI job failed while Ubuntu passed. A fixed delay encodes an
+ * assumption about machine speed; polling for the condition encodes the actual
+ * requirement and is both faster and correct.
+ *
+ * The timeout is generous on purpose. When it expires the assertion that follows reports
+ * what was actually on the page, which is more useful than "the sleep was too short".
+ */
+async function waitFor(predicate, { timeoutMs = 5000, intervalMs = 10, label = 'condition' } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    let ok = false;
+    try {
+      ok = Boolean(predicate());
+    } catch {
+      ok = false;
+    }
+    if (ok) return;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${label} after ${timeoutMs} ms`);
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 /** Build a DOM and boot the real controller inside it. */
 async function bootRenderer() {
   const html = await readFile(path.join(ROOT, 'src/renderer/index.html'), 'utf8');
@@ -40,7 +67,8 @@ async function bootRenderer() {
   // No `veridex` global on purpose: this is the preview path.
 
   await import(`../../src/renderer/app.js?boot=${Date.now()}`);
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  // The shell is built asynchronously; wait for it rather than guessing how long that takes.
+  await waitFor(() => window.document.querySelectorAll('.vx-nav__item').length > 0, { label: 'the application shell' });
 
   return {
     window,
@@ -91,7 +119,8 @@ test('every page builds without throwing', { skip: JSDOM === null && 'jsdom not 
     for (const page of pages) {
       const button = document.querySelector(`.vx-nav__item[data-page="${page}"]`);
       button.click();
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      // The page swaps synchronously, but wait for a rendered child rather than assume it.
+      await waitFor(() => document.querySelector('.vx-content')?.children.length > 0, { label: `the ${page} page` });
       const content = document.querySelector('.vx-content');
       assert.ok(content, `${page}: content region must exist`);
       assert.ok(content.children.length > 0, `${page}: page must render something`);
@@ -108,7 +137,7 @@ test('the UI never claims a benchmark or monitor is running when it is not', { s
   const { document, restore } = await bootRenderer();
   try {
     document.querySelector('.vx-nav__item[data-page="performance"]').click();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitFor(() => /Performance/.test(document.querySelector('.vx-topbar__title')?.textContent ?? ''), { label: 'the performance page' });
     const text = document.querySelector('.vx-content').textContent;
     assert.match(text, /not wired to this page yet/);
     // The safety warnings must be present regardless of wiring state.
@@ -119,7 +148,7 @@ test('the UI never claims a benchmark or monitor is running when it is not', { s
     // The monitor page is wired now, but in preview mode it must still refuse: there is
     // no main process to sample from, so it says so instead of showing gauges at zero.
     document.querySelector('.vx-nav__item[data-page="monitor"]').click();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitFor(() => /Live monitoring/.test(document.querySelector('.vx-topbar__title')?.textContent ?? ''), { label: 'the monitor page' });
     const monitorText = document.querySelector('.vx-content').textContent;
     assert.match(monitorText, /needs the main process/);
     assert.ok(!/Sampling is not running/.test(monitorText), 'preview mode must not imply sampling could be started');
@@ -133,7 +162,7 @@ test('the reports page refuses to export when no scan has run', { skip: JSDOM ==
   const { document, restore } = await bootRenderer();
   try {
     document.querySelector('.vx-nav__item[data-page="reports"]').click();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitForText('No scan to export', 'the empty reports page');
     const text = document.querySelector('.vx-content').textContent;
     assert.match(text, /No scan to export/);
     assert.match(text, /will not generate a document from nothing/);
@@ -211,7 +240,8 @@ async function bootWithBridge(answers) {
   globalThis.veridex = window.veridex;
 
   await import(`../../src/renderer/app.js?boot=${Date.now()}&bridge=1`);
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await waitFor(() => window.document.querySelectorAll('.vx-nav__item').length > 0, { label: 'the application shell (live mode)' });
+  await waitFor(() => window.document.querySelector('.vx-content') !== null, { label: 'the content region' });
 
   return {
     window,
@@ -245,12 +275,30 @@ const baseAnswers = (history) => ({
   'history:list': history
 });
 
+/** Wait until the content region contains `text`. */
+async function waitForText(text, label = `text matching ${text}`) {
+  await waitFor(() => new RegExp(text).test(document.querySelector('.vx-content')?.textContent ?? ''), { label });
+}
+
+/**
+ * The history page is settled when it shows rows, or a terminal message. The transient
+ * "Reading stored runs…" placeholder does not count: it looks the same whether the data
+ * is about to arrive or never will.
+ */
+function historySettled() {
+  const content = document.querySelector('.vx-content');
+  if (!content) return false;
+  if (content.querySelectorAll('.vx-rows .vx-row').length > 0) return true;
+  const text = content.textContent;
+  return /No runs stored yet|History could not be read/.test(text);
+}
+
 test('the history page lists stored runs with their real scores', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
   const { document, restore } = await bootWithBridge(baseAnswers({ ok: true, data: { entries: [run('VX-1', 87), run('VX-2', null)] } }));
   try {
     const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
     nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await waitFor(historySettled, { label: 'the history page to finish loading' });
 
     const text = document.body.textContent;
     assert.match(text, /87/, 'a real score must be shown');
@@ -269,7 +317,7 @@ test('a withheld score reads as withheld in history, never as 0', { skip: JSDOM 
   try {
     const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
     nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await waitFor(historySettled, { label: 'the history page to finish loading' });
 
     // Scope to the history rows: the shell elsewhere legitimately contains numerals
     // (task counts, coverage of zero), so a whole-body check would be meaningless.
@@ -288,7 +336,7 @@ test('an empty history says so rather than showing a blank area', { skip: JSDOM 
   try {
     const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
     nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await waitFor(historySettled, { label: 'the history page to finish loading' });
     assert.match(document.body.textContent, /No runs stored yet/);
   } finally {
     restore();
@@ -304,7 +352,7 @@ test('several stored runs each render, not just the newest', { skip: JSDOM === n
   try {
     const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
     nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await waitFor(historySettled, { label: 'the history page to finish loading' });
 
     const rows = document.querySelectorAll('.vx-rows .vx-row');
     assert.equal(rows.length, 4, 'every stored run must appear');
@@ -328,7 +376,7 @@ test('a failed history read is reported, not disguised as "no runs"', { skip: JS
   try {
     const nav = [...document.querySelectorAll('.vx-nav__item')].find((node) => node.textContent.includes('History'));
     nav.dispatchEvent(new document.defaultView.MouseEvent('click', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await waitFor(historySettled, { label: 'the history page to finish loading' });
 
     const text = document.body.textContent;
     assert.match(text, /History could not be read/);
@@ -374,7 +422,7 @@ test('the monitor page starts sampling, shows unavailable sensors honestly, and 
   const { document, restore } = await bootWithBridge(answers);
   try {
     document.querySelector('.vx-nav__item[data-page="monitor"]').click();
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await waitForText('Sampling is not running', 'the idle monitor page');
 
     // Before starting: say that nothing is sampling.
     assert.match(document.querySelector('.vx-content').textContent, /Sampling is not running/);
@@ -382,7 +430,7 @@ test('the monitor page starts sampling, shows unavailable sensors honestly, and 
     const startButton = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Start sampling'));
     assert.ok(startButton, 'a start control must exist');
     startButton.click();
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await waitForText('Waiting for the first sample', 'the monitor waiting state');
 
     // After starting but before the first sample: waiting, not running blind.
     assert.match(document.querySelector('.vx-content').textContent, /Waiting for the first sample/);
@@ -431,14 +479,20 @@ test('a live sample renders values and explains an unavailable sensor', { skip: 
 
   try {
     await import(`../../src/renderer/app.js?boot=${Date.now()}&monitor=1`);
-    await new Promise((resolve) => setTimeout(resolve, 180));
+    await waitFor(() => window.document.querySelectorAll('.vx-nav__item').length > 0, { label: 'the shell (monitor)' });
 
     window.document.querySelector('.vx-nav__item[data-page="monitor"]').click();
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await waitFor(
+      () => [...window.document.querySelectorAll('button')].some((b) => b.textContent.includes('Start sampling')),
+      { label: 'the start control' }
+    );
 
     const startButton = [...window.document.querySelectorAll('button')].find((b) => b.textContent.includes('Start sampling'));
     startButton.click();
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await waitFor(
+      () => /Waiting for the first sample/.test(window.document.querySelector('.vx-content')?.textContent ?? ''),
+      { label: 'the monitor waiting state' }
+    );
 
     const emit = listeners.get('monitor:sample');
     assert.ok(emit, 'the controller must subscribe to monitor:sample');
@@ -450,7 +504,10 @@ test('a live sample renders values and explains an unavailable sensor', { skip: 
         'cpu.temp': { value: null, source: null, status: 'UNAVAILABLE', reason: 'ACPI thermal zones need administrative rights' }
       }
     });
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await waitFor(
+      () => /12\.5 %/.test(window.document.querySelector('.vx-content')?.textContent ?? ''),
+      { label: 'the live sample to render' }
+    );
 
     const text = window.document.querySelector('.vx-content').textContent;
     assert.match(text, /12\.5 %/, 'the live value must be shown with its unit');
@@ -477,9 +534,12 @@ test('a refused monitor start is reported rather than shown as running', { skip:
   const { document, restore } = await bootWithBridge(answers);
   try {
     document.querySelector('.vx-nav__item[data-page="monitor"]').click();
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await waitFor(
+      () => [...document.querySelectorAll('button')].some((b) => b.textContent.includes('Start sampling')),
+      { label: 'the start control' }
+    );
     [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Start sampling')).click();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await waitForText('Sampling stopped', 'the reported failure');
 
     const text = document.querySelector('.vx-content').textContent;
     assert.match(text, /Sampling stopped/);

@@ -66,18 +66,37 @@ jobs:
       - name: Generate the application icon
         run: npm run icon
 
+      # The test output is written to a file as well as the console. When a test fails on
+      # a runner nobody can attach to, the log is the only evidence - and GitHub's log
+      # download endpoint is not always reachable from every environment. Writing the raw
+      # TAP output to a file, then surfacing each failure as an annotation, keeps the
+      # failure visible in the checks API where it can always be read.
       - name: Unit and integration tests
-        run: npm test
+        run: |
+          npm test > test-output.tap 2>&1 || TEST_FAILED=1
+          cat test-output.tap
+          exit ${TEST_FAILED:-0}
         shell: bash
 
-      - name: Upload test output on failure
+      - name: Surface failing tests as annotations
         if: failure()
+        shell: bash
+        run: |
+          echo "::group::Failing tests"
+          grep -E "^not ok" test-output.tap || echo "no TAP failure lines found"
+          echo "::endgroup::"
+          grep -E "^not ok" test-output.tap | head -40 | while IFS= read -r line; do
+            echo "::error title=Test failed::${line}"
+          done
+          # The assertion detail lives on the following indented lines of each TAP block.
+          awk '/^not ok/{flag=1} flag&&/error:|timed out|expected|actual/{print} /^\.\.\.$/{flag=0}' test-output.tap | head -60
+
+      - name: Upload test output on failure
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}
-          path: |
-            *.log
-            logs/
+          path: test-output.tap
           if-no-files-found: ignore
           retention-days: 7
 
