@@ -124,3 +124,35 @@ test('the build publishes an auditable manifest beside the artifacts', () => {
   assert.match(build, /::notice/, 'the facts must reach the checks API as annotations');
   assert.match(build, /NOT VERIFIED/i, 'the manifest must say the installer is unproven');
 });
+
+test('a failing test reports its reason, not only its name', async () => {
+  // The annotation used to say "not ok 46 - every registered provider executes without
+  // throwing" and nothing else: the message was in the indented block underneath, which the
+  // workflow's awk kept discarding. A failing check must carry the failure.
+  const { spawn } = await import('node:child_process');
+
+  const tap = [
+    'not ok 46 - every registered provider executes without throwing',
+    '  ---',
+    '  type: testCodeFailure',
+    '  error: |-',
+    '    providers failed to execute:',
+    '    memory.info: threw Field invariant violated',
+    '  code: ERR_ASSERTION',
+    '  ...',
+    ''
+  ].join('\n');
+
+  const stdout = await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['scripts/tap-annotate.mjs'], { cwd: ROOT });
+    let out = '';
+    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+    child.on('error', reject);
+    child.on('close', () => resolve(out));
+    child.stdin.end(tap);
+  });
+
+  assert.match(stdout, /^::error title=Test failed::every registered provider executes without throwing/m);
+  assert.match(stdout, /Field invariant violated/, 'the assertion message must be in the annotation');
+  assert.match(stdout, /ERR_ASSERTION/, 'the failure code must be in the annotation');
+});

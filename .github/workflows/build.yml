@@ -85,11 +85,8 @@ jobs:
           echo "::group::Failing tests"
           grep -E "^not ok" test-output.tap || echo "no TAP failure lines found"
           echo "::endgroup::"
-          grep -E "^not ok" test-output.tap | head -40 | while IFS= read -r line; do
-            echo "::error title=Test failed::${line}"
-          done
-          # The assertion detail lives on the following indented lines of each TAP block.
-          awk '/^not ok/{flag=1} flag&&/error:|timed out|expected|actual/{print} /^\.\.\.$/{flag=0}' test-output.tap | head -60
+          node scripts/tap-annotate.mjs < test-output.tap
+          node scripts/tap-annotate.mjs --summary < test-output.tap
 
       # On Windows the diagnostic layer is additionally exercised against the *real*
       # interfaces: real WMI, real PowerShell, the real registry, and a real 15-task sweep.
