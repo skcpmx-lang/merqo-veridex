@@ -150,9 +150,11 @@ test('a failed tool invocation carries the tool\'s own words, not just an exit c
     timeoutMs: 5_000
   });
 
-  assert.equal(fields.directxVersion.status, 'ERROR');
+  // Silent failure: the method could not be used here. Not a GPU fault, and not proof the
+  // tool is absent - on the runner dxdiag.exe exists and still will not execute.
+  assert.equal(fields.directxVersion.status, 'UNSUPPORTED');
+  assert.match(fields.directxVersion.error, /could not be run on this installation/);
   assert.match(fields.directxVersion.error, /exit 127/);
-  assert.doesNotMatch(fields.directxVersion.error, /^dxdiag did not complete \(exit 127\)\./, 'a bare exit code is not an explanation');
 });
 
 test('a tool that fails with output says what it said — every provider that runs one', async () => {
@@ -275,4 +277,36 @@ test('manage-bde output with no volume table is reported as unknown, not as zero
   // A real table still parses.
   const real = mapBitlocker('Volume,Conversion Status,Protection Status\nC:,Fully Decrypted,Protection Off\n', true);
   assert.equal(real.bitlockerVolumeCount.value, 1);
+});
+
+test('a tool that runs and fails is an ERROR; one that cannot run is UNSUPPORTED', async () => {
+  const { registerGpu } = await import('../../src/diagnostics/gpu.js');
+  const registry = new ProviderRegistry();
+  registerGpu(registry);
+
+  const withOutput = new CommandRunner({
+    platform: 'win32',
+    spawnFn: (file, args) => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      setImmediate(() => {
+        child.stdout.end('');
+        child.stderr.end('Access is denied.');
+        child.emit('close', 5);
+      });
+      return child;
+    }
+  });
+
+  const fields = await registry.provider('directx-dxdiag.gpu').collect({
+    runner: withOutput,
+    permissions: windowsPermissions,
+    logger: null,
+    timeoutMs: 5_000
+  });
+
+  assert.equal(fields.directxVersion.status, 'ERROR', 'a tool that spoke and failed is an error');
+  assert.match(fields.directxVersion.error, /Access is denied/);
 });

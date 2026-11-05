@@ -66,7 +66,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 453 tests
+npm test            # 454 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```
