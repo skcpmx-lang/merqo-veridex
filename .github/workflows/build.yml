@@ -135,10 +135,36 @@ jobs:
       - name: Verify the artifacts
         run: npm run verify:artifacts
 
-      - name: Show what was produced
+      # The manifest is the evidence. Anyone reviewing this run can read the exact
+      # artifacts and their digests without downloading 200 MB, and the file is uploaded
+      # beside them so the two can be compared later. The `::notice` lines put the same
+      # facts in the checks API, where they remain readable even when the log download
+      # endpoint is unreachable.
+      - name: Write and publish the build manifest
         run: |
-          Get-ChildItem dist | Select-Object Name, Length
-          Get-Content dist/SHA256SUMS.txt
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $lines = @()
+          $lines += "VERIDEX build manifest"
+          $lines += "version: $version"
+          $lines += "commit: $env:GITHUB_SHA"
+          $lines += "built on: $env:RUNNER_OS $env:RUNNER_ARCH, Node $(node --version)"
+          $lines += "signed: no"
+          $lines += ""
+          $lines += "artifacts:"
+          Get-ChildItem dist -File | Where-Object { $_.Name -match '\.(exe|zip)$' } | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            $lines += "  $($_.Name)  $($_.Length) bytes  sha256=$hash"
+            Write-Host "::notice title=Artifact::$($_.Name) - $([math]::Round($_.Length/1MB,1)) MiB - sha256 $hash"
+          }
+          $lines += ""
+          $lines += "SHA256SUMS.txt:"
+          $lines += (Get-Content dist/SHA256SUMS.txt | ForEach-Object { "  $_" })
+          $lines += ""
+          $lines += "NOT VERIFIED: that this installer installs, launches or runs on Windows."
+          $lines += "That requires a real Windows machine; see docs/RELEASE_VERIFICATION.md."
+          $lines | Set-Content dist/BUILD-MANIFEST.txt -Encoding utf8
+          Get-Content dist/BUILD-MANIFEST.txt
+          Get-Content dist/BUILD-MANIFEST.txt >> $env:GITHUB_STEP_SUMMARY
         shell: pwsh
 
       - name: Upload artifacts
@@ -149,4 +175,5 @@ jobs:
             dist/*.exe
             dist/*.zip
             dist/SHA256SUMS.txt
+            dist/BUILD-MANIFEST.txt
           retention-days: 30
