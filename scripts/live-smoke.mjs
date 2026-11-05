@@ -48,6 +48,8 @@ const TASK_TIMEOUT = Number(argValue('--timeout', '60000'));
 const VALID_STATUSES = new Set(Object.values(Status));
 const findings = [];
 const problems = [];
+/** Headline numbers, filled in as the run progresses so they can be reported together. */
+const resultSummary = { permissions: 'unknown', fields: 0, modules: 0, providers: 0, assessment: 'none', statuses: '' };
 
 const IN_ACTIONS = process.env.GITHUB_ACTIONS === 'true';
 
@@ -91,6 +93,7 @@ async function main() {
   // ── 1. Permission state ───────────────────────────────────────────────────
   heading('Permission state');
   const permissions = await detectPermissionState(runner);
+  resultSummary.permissions = permissions.mode === 'elevated' ? 'elevated' : 'standard';
   record('info', `mode=${permissions.mode} isAdmin=${permissions.isAdmin} isWindows=${permissions.isWindows}`);
   record('info', `detail: ${permissions.detail}`);
   if (!permissions.isWindows) {
@@ -189,6 +192,11 @@ async function main() {
     }
     record('ok', `${total} fields validated across ${Object.keys(scan.modules).length} modules`);
     record('info', `status distribution: ${Object.entries(statusCounts).map(([status, count]) => `${status}=${count}`).join(', ')}`);
+    resultSummary.fields = total;
+    resultSummary.modules = Object.keys(scan.modules).length;
+    resultSummary.providers = scan.results.reduce((sum, task) => sum + task.attempts.length, 0);
+    resultSummary.assessment = `score=${assessment.score ?? 'withheld'} coverage=${assessment.coveragePercent}% ${assessment.gated ? 'gated' : 'rated'}`;
+    resultSummary.statuses = Object.entries(statusCounts).map(([status, count]) => `${status}=${count}`).join(', ');
 
     // ── 5. What each provider actually returned ─────────────────────────────
     heading('Provider attempts');
@@ -271,6 +279,30 @@ async function main() {
     };
     await writeFile(path.resolve(JSON_OUT), JSON.stringify(payload, null, 2), 'utf8');
     console.log(`\nJSON evidence written to ${JSON_OUT}`);
+  }
+
+  // The facts have to survive somewhere fetchable. CI logs and step summaries are not
+  // reachable from every environment (this project's own environment cannot download them),
+  // so the headline numbers also go out as an annotation.
+  if (IN_ACTIONS) {
+    const statusLine = Object.entries(
+      findings.reduce((acc, finding) => {
+        acc[finding.level] = (acc[finding.level] ?? 0) + 1;
+        return acc;
+      }, {})
+    ).map(([level, count]) => `${level}=${count}`).join(', ');
+    const headline = [
+      `host ${process.platform}/${process.arch}`,
+      `node ${process.version}`,
+      `permissions ${resultSummary.permissions}`,
+      `${resultSummary.fields} fields across ${resultSummary.modules} modules`,
+      `providers ${resultSummary.providers} attempts`,
+      `assessment ${resultSummary.assessment}`,
+      statusLine
+    ].join(' | ');
+    const icon = problems.length > 0 ? 'failure' : 'notice';
+    console.log(`::${icon} title=live-smoke::${cmdEscape(headline)}`);
+    if (resultSummary.statuses) console.log(`::notice title=live-smoke statuses::${cmdEscape(resultSummary.statuses)}`);
   }
 
   if (process.env.GITHUB_STEP_SUMMARY) {
