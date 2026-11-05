@@ -139,12 +139,12 @@ async function execute(electron) {
   console.log(`VERDICT: ${verdict.problems.length === 0 ? 'PASS' : 'FAIL'}`);
   console.log(`  electron ${verdict.electron}, packaged=${verdict.packaged}, ${okCount} steps passed, ${warnCount} warnings, ${verdict.problems.length} problems`);
 
-  emit(
-    verdict.problems.length === 0 ? 'notice' : 'error',
-    'gui-smoke',
-    `electron ${verdict.electron} · ${okCount} steps · ${verdict.problems.length} problem(s)` +
-      (verdict.problems.length > 0 ? ` — ${verdict.problems.slice(0, 4).join(' ;; ')}` : '')
-  );
+  // One annotation per problem. A single concatenated line gets truncated by the API and
+  // then the reader has to guess which failure came first.
+  emit('notice', 'gui-smoke', `electron ${verdict.electron} · ${okCount} steps passed · ${warnCount} warning(s) · ${verdict.problems.length} problem(s)`);
+  for (const problem of verdict.problems.slice(0, 10)) {
+    emit('error', 'gui-smoke problem', problem);
+  }
 
   if (process.env.GITHUB_STEP_SUMMARY) {
     const lines = [

@@ -39,12 +39,13 @@ function record(level, message) {
 }
 
 /** Run a promise against a deadline, so a hung step fails as a named step. */
-async function step(name, fn) {
+/** @param {string} name @param {() => Promise<any>} fn @param {number} [timeoutMs] */
+async function step(name, fn, timeoutMs = STEP_TIMEOUT_MS) {
   const started = Date.now();
   try {
     const value = await Promise.race([
       Promise.resolve().then(fn),
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`${name} exceeded ${STEP_TIMEOUT_MS}ms`)), STEP_TIMEOUT_MS))
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`${name} exceeded ${timeoutMs}ms`)), timeoutMs))
     ]);
     record('ok', `${name} (${Date.now() - started}ms)`);
     return { ok: true, value };
@@ -192,18 +193,21 @@ async function main() {
 
   // ── 4. A real sweep, through the UI ───────────────────────────────────────
   const sweep = await step('scan:start runs a real sweep and finishes', async () => {
-    await evaluate(`ipc('scan:start')`);
+    // Fire the sweep without awaiting it. scan:start resolves only when every task is done,
+    // so awaiting it here would make a healthy long scan look like a hung step.
+    await evaluate(`(window.veridex.invoke['scan:start']({}).then(() => 'done').catch((e) => 'error:' + e.message))`);
     await waitFor(`document.body.innerText.length > 200`, { label: 'scan output' });
-    // The sweep is the slowest thing the app does; wait for the finished state.
+    // scan:state reports `running` plus facts about the last sweep; there is no status
+    // string. Wait for the sweep to stop running and a finish timestamp to appear.
     const deadline = Date.now() + 180_000;
     while (Date.now() < deadline) {
       const state = await evaluate(`ipc('scan:state')`);
-      const status = state?.data?.status ?? state?.status;
-      if (status === 'idle' || status === 'complete' || status === 'finished' || state?.data?.finishedAt) return state;
+      const data = state?.data ?? {};
+      if (data.running === false && data.lastScanAt) return data;
       await sleep(1_000);
     }
     throw new Error('the sweep did not finish within 180s');
-  });
+  }, 200_000);
   if (sweep.ok) record('info', `scan state after finish: ${JSON.stringify(sweep.value?.data ?? sweep.value).slice(0, 300)}`);
 
   await step('the dashboard shows a coverage-aware score, never a bare one', async () => {
@@ -262,13 +266,18 @@ async function main() {
   // ── 8. Settings round trip ────────────────────────────────────────────────
   await step('a setting changes, persists to disk and reads back', async () => {
     const snapshot = await evaluate(`ipc('app:settings')`);
-    const schema = snapshot?.data?.schema ?? [];
-    const firstBoolean = (Array.isArray(schema) ? schema : []).find((entry) => entry.type === 'boolean');
+    const values = snapshot?.data?.values ?? {};
+    // The store calls its schema `specs`. An earlier version of this harness looked for a
+    // field named `schema`, found nothing, and skipped the round trip while reporting that
+    // the setting had been changed and read back.
+    const specs = snapshot?.data?.specs;
+    const candidates = Array.isArray(specs) ? specs : Object.entries(specs ?? {}).map(([key, spec]) => ({ key, ...spec }));
+    const firstBoolean = candidates.find((entry) => (entry.type ?? entry.kind) === 'boolean' && entry.key in values);
     if (!firstBoolean) {
-      record('warn', 'no boolean setting in the schema; skipping the round trip');
+      record('warn', `no editable boolean setting among ${candidates.length} specs; skipping the round trip`);
       return null;
     }
-    const before = snapshot?.data?.values?.[firstBoolean.key];
+    const before = values[firstBoolean.key];
     await evaluate(`window.veridex.invoke['app:setSetting']({ key: ${JSON.stringify(firstBoolean.key)}, value: ${JSON.stringify(!before)} })`);
     const after = await evaluate(`ipc('app:settings')`);
     const now = after?.data?.values?.[firstBoolean.key];
@@ -304,11 +313,11 @@ async function main() {
     await evaluate(`ipc('scan:cancel')`);
     await sleep(1_500);
     const state = await evaluate(`ipc('scan:state')`);
-    const status = state?.data?.status ?? state?.status;
-    record('info', `state after cancel: ${JSON.stringify(status)}`);
+    const data = state?.data ?? {};
+    record('info', `state after cancel: running=${data.running} lastScanAt=${data.lastScanAt ?? '(none)'}`);
     // The app must return to an idle, usable state rather than staying stuck in "running".
-    if (String(status) === 'running') record('fail', 'the sweep is still marked running after cancel');
-    return status;
+    if (data.running === true) record('fail', 'the sweep is still marked running after cancel');
+    return data;
   });
 
   // ── 11. Shutdown ──────────────────────────────────────────────────────────
