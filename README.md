@@ -84,7 +84,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 769 tests
+npm test            # 819 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```
@@ -112,6 +112,7 @@ Requires Node ≥ 20.11.0 for development. End users need nothing but the instal
 | [Project status](docs/PROJECT_STATUS.md) | Finished, wired-but-unproven, not started |
 | [Test status](docs/TEST_STATUS.md) | What has actually been executed, and what has not |
 | [Requirements](docs/REQUIREMENTS.md) | All 130 requirements with per-item status |
+| [40-section audit](docs/AUDIT_40_SECTIONS.md) | Every specification section judged: implemented, tested, gaps, evidence |
 | [Release notes](docs/RELEASE_NOTES.md) | Why there is no release yet |
 | [CI/CD](docs/GITHUB_ACTIONS.md) | The two workflows and their current state |
 | [Release verification](docs/RELEASE_VERIFICATION.md) | The pre-release checklist; build, launch and installer are done on a VM, physical hardware is not |

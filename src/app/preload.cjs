@@ -61,6 +61,7 @@ const INVOKE = [
   'stress:state',
   'monitor:start',
   'monitor:stop',
+  'monitor:export',
   'shell:openDataFolder'
 ];
 

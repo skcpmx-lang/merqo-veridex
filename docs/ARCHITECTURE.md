@@ -204,13 +204,13 @@ renderer's real import graph and fails on a Node builtin anywhere in it.
 `src/renderer/app.js` is a single page controller with **18 pages**. It renders only what
 the main process hands it; it never infers a value. The history page reads stored runs
 through `history:list` and keeps three states distinct — loading, empty and unreadable —
-because collapsing them would report a failed read as "no data". Where a feature is not wired yet
-(performance, monitor, history, report saving), the page says so in plain words rather
-than showing an empty shell or invented sample data.
+because collapsing them would report a failed read as "no data". Every page is now wired to a real
+main-process source. Where a source genuinely has nothing to report, the page says so in plain
+words rather than showing an empty shell or invented sample data.
 
 ### 5.1 Application-side modules
 
-Four modules sit between the renderer and the engine. They are plain ES modules with no
+Six modules sit between the renderer and the engine. They are plain ES modules with no
 Electron dependency, which is why each can be unit-tested directly.
 
 | Module | Responsibility | Notable rule |
@@ -220,6 +220,9 @@ Electron dependency, which is why each can be unit-tested directly.
 | `src/app/elevated-runner.js` | starts one elevated helper, waits for its JSON result | zero exit with no result is a failure; UAC decline is classified first |
 | `src/app/driver-export.js` | plans, describes and verifies a driver export | fresh folder per export; `.inf` count must match or the result is "cannot be confirmed complete" |
 | `src/app/logs.js` | parse, filter, summarise, export and describe the log | unparseable lines are kept; redaction is re-applied on export |
+| `src/app/crash-marker.js` | write, read, clear and describe the recovery marker | written before a run, removed by `finally`; a corrupt marker is kept as evidence |
+| `src/history/entries.js` | build history entries for benchmarks and stress runs | a refused run is not filed; an unread temperature is null, never 0 |
+| `src/monitoring/export.js` | turn one sampling session into CSV or JSON | long rows, `available` column; an empty session is refused rather than written as headers |
 
 ### 5.2 New IPC channels
 
@@ -231,7 +234,7 @@ Thirteen channels were added, each with an argument validator in
   `drivers:lastExport`
 - `logs:recent`, `logs:stats`, `logs:export`, `logs:clear`
 
-`src/app/preload.cjs` exposes **42 invoke channels and 9 event channels**. That list is
+`src/app/preload.cjs` exposes **43 invoke channels and 9 event channels**. That list is
 generated from `INVOKE_CHANNELS` and `EVENT_CHANNELS`, not typed by hand: a test compares
 the exposed surface with the contract, and a hand-edited list drifted from it once
 already.
@@ -252,7 +255,7 @@ The renderer runs with `contextIsolation: true`, `nodeIntegration: false`,
 | Interaction | jsdom clicks and keystrokes against a fake bridge: tour, log filters, export card, dialog focus |
 | Packaging boundary | the builder's `files:` patterns resolved against the real tree |
 | Documentation | paths named in docs must exist; CSP quoted in docs must match the shell |
-| Static | `scripts/check.mjs` parses every module, checks imports and entry points |
+| Static | `scripts/check.mjs`: parse, named imports, entry points, offline guarantee, manual registry, settings wiring, requirement ids, dependency cycles, formatting policy |
 
 The gap this strategy had, and closed: unit tests covered pure mapping functions but
 never invoked a provider closure, so five providers returning `{}` and three modules

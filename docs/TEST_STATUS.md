@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 769 · pass 769 · fail 0
+tests 819 · pass 819 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -60,7 +60,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/health.test.js` | 24 | component scoring, coverage gating, rating |
 | `tests/unit/history-store.test.js` | 7 | persistence, id generation, retention, quarantine, comparison |
 | `tests/unit/ipc-arity.test.js` | 7 | every channel accepts exactly the arguments it declares |
-| `tests/unit/ipc-contract.test.js` | 19 | the preload surface, forbidden exposure, handler coverage, benchmark and stress argument bounds |
+| `tests/unit/ipc-contract.test.js` | 20 | the preload surface, forbidden exposure, handler coverage, benchmark and stress argument bounds |
 | `tests/unit/logs-surface.test.js` | 13 | log parsing, filtering, summary, export redaction and retention |
 | `tests/unit/manual.test.js` | 48 | manual checklist, session, coverage separation |
 | `tests/unit/monitor.test.js` | 10 | sampling, series |
@@ -86,6 +86,12 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
 | `tests/unit/gpu-responsiveness-recovery.test.js` | 18 | GPU probe and mapping, responsiveness composite, crash marker and interrupted-run descriptions |
 | `tests/integration/contracts.test.js` | 10 | fixture shapes versus real projections, both directions, plus real-projection rendering |
+| `tests/integration/gate-refusals.test.js` | 10 | dependency cycles and the formatting policy refuse bad input, and pass on the real tree |
+| `tests/integration/navigation.test.js` | 6 | breadcrumb trail and the quick-access menu navigate the real controller |
+| `tests/integration/dashboard-arrange.test.js` | 9 | dashboard widget arrangement: move, hide, restore, reset, persisted to the setting |
+| `tests/integration/history-rows.test.js` | 5 | benchmark and stress entries render as what they measured, not as unrated scans |
+| `tests/unit/monitor-export.test.js` | 9 | monitoring session exported as CSV and JSON; missing readings stay missing |
+| `tests/unit/history-entries.test.js` | 10 | history entries for benchmarks and stress runs, from the runners' own result shapes |
 | `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
 | `tests/integration/gui-coverage.test.js` | 9 | the Windows GUI harness covers every page and uploads its screenshots |
 | `tests/integration/install-smoke-harness.test.js` | 9 | the installed build smoke harness itself |
@@ -102,7 +108,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **769** | |
+| **Total** | **819** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

@@ -192,6 +192,84 @@ body { overflow: hidden; }
   z-index: 5;
 }
 
+.vx-arrange__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+  padding: var(--vx-space-sm) var(--vx-space-md);
+  border: 1px dashed var(--vx-line);
+  border-radius: var(--vx-radius-md);
+  background: var(--vx-bg-raised);
+}
+.vx-arrange__bar .vx-dim { margin: 0; flex: 1 1 320px; }
+.vx-arrange__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vx-space-xs);
+  padding: var(--vx-space-xs);
+  border: 1px dashed var(--vx-line-soft);
+  border-radius: var(--vx-radius-md);
+}
+.vx-arrange__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-xs);
+  flex-wrap: wrap;
+}
+.vx-arrange__name {
+  font-size: var(--vx-font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vx-ink-muted);
+  margin-right: auto;
+}
+.vx-arrange__controls .vx-button { min-width: 32px; padding: 4px 8px; }
+.vx-arrange__controls .vx-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.vx-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-xs);
+  font-size: var(--vx-font-xs);
+  color: var(--vx-ink-muted);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vx-breadcrumb__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--vx-ink-muted);
+  cursor: pointer;
+  border-radius: var(--vx-radius-sm);
+}
+.vx-breadcrumb__link:hover { color: var(--vx-ink); }
+.vx-breadcrumb__link:focus-visible { outline: 2px solid var(--vx-accent); outline-offset: 2px; }
+.vx-breadcrumb__sep { opacity: 0.7; }
+.vx-breadcrumb__current { color: var(--vx-ink); font-weight: 500; }
+.vx-quickaccess { display: flex; flex-direction: column; gap: 2px; }
+.vx-quickaccess__row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--vx-radius-sm);
+  font: inherit;
+  color: var(--vx-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.vx-quickaccess__row:hover { border-color: var(--vx-line); background: var(--vx-bg-raised); }
+.vx-quickaccess__row:focus-visible { outline: 2px solid var(--vx-accent); outline-offset: 2px; }
+.vx-quickaccess__group { color: var(--vx-ink-muted); font-size: var(--vx-font-xs); }
+
 .vx-topbar__title { font-size: var(--vx-font-lg); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
 /* One line, always. Wrapped onto two lines it pushed the buttons off their baseline and made
    the bar 12px taller on every page, for a sentence that is the same on all of them. */

@@ -24,7 +24,7 @@ import { PRIVACY_GUARANTEES, exportVerdict, withheldCount } from '../security/pr
 // Renderer-safe by construction: the GPU probe needs a canvas, the composite is pure arithmetic,
 // and neither reaches `node:*` (tests/integration/renderer-graph.test.js enforces the second part).
 import { probeGpu } from '../benchmarking/gpu-bench.js';
-import { el, icon, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
+import { el, icon, statusBadge, formatValue, formatNumber, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
 
 const client = createClient();
 
@@ -49,6 +49,22 @@ const PAGES = [
   { id: 'logs', label: 'Activity log', icon: 'logs', group: 'Application' },
   { id: 'about', label: 'About', icon: 'about', group: 'Application' }
 ];
+
+/**
+ * The dashboard widgets, by id, with the label the arrangement editor shows.
+ *
+ * `dashboard.widgets` stores ids, so the mapping from id to a name a person can recognise lives
+ * here, beside the cards themselves. A widget added to the dashboard without an entry here would
+ * be invisible in the editor, which is why the tests assert the two sets match.
+ */
+const WIDGET_LABELS = Object.freeze({
+  health: 'Health score',
+  coverage: 'Coverage',
+  progress: 'Scan progress',
+  components: 'Components',
+  issues: 'Needs attention',
+  actions: 'Quick actions'
+});
 
 /** Application state. Deliberately small: the main process owns the truth. */
 const state = {
@@ -92,7 +108,23 @@ const state = {
   monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
   guard: null,
   bootError: null,
-  recovery: null
+  recovery: null,
+  /**
+   * Pages this session has visited, most recent first, excluding the current one.
+   *
+   * It is the quick-access menu's whole content, and it is deliberately session-scoped: the
+   * main process owns persistence, and a "recent" list restored from a file would quickly stop
+   * being recent.
+   */
+  recent: [],
+  /**
+   * The dashboard's arrangement mode.
+   *
+   * Arranging is a mode rather than always-on controls: move and remove buttons on every card
+   * would compete with the numbers they sit on, and the dashboard is read far more often than it
+   * is edited.
+   */
+  dashboard: { arranging: false }
 };
 
 /** @type {HTMLElement|null} */
@@ -176,9 +208,87 @@ function buildSidebar() {
   return sidebar;
 }
 
+/**
+ * The breadcrumb trail for a page: `VERIDEX › <group> › <page>`.
+ *
+ * Every crumb except the last is a button, and the group crumb goes to the first page in that
+ * group, so the trail is a real route rather than decoration. The current page is the last
+ * crumb and is not clickable — clicking where you already are is not an action.
+ *
+ * @param {string} pageId
+ * @returns {HTMLElement}
+ */
+function buildBreadcrumb(pageId) {
+  const page = PAGES.find((entry) => entry.id === pageId) ?? PAGES[0];
+  const trail = el('nav', { class: 'vx-breadcrumb', attrs: { 'aria-label': 'Breadcrumb' } });
+
+  const home = el('button', { class: 'vx-breadcrumb__link', text: 'VERIDEX', attrs: { type: 'button' } });
+  home.addEventListener('click', () => navigate('dashboard'));
+  trail.append(home, el('span', { class: 'vx-breadcrumb__sep', text: '›', attrs: { 'aria-hidden': 'true' } }));
+
+  const firstInGroup = PAGES.find((entry) => entry.group === page.group);
+  const group = el('button', { class: 'vx-breadcrumb__link', text: page.group, attrs: { type: 'button' } });
+  group.addEventListener('click', () => navigate(firstInGroup?.id ?? 'dashboard'));
+  trail.append(group, el('span', { class: 'vx-breadcrumb__sep', text: '›', attrs: { 'aria-hidden': 'true' } }));
+
+  trail.append(
+    el('span', {
+      class: 'vx-breadcrumb__current',
+      text: page.label,
+      attrs: { 'aria-current': 'page' }
+    })
+  );
+  return trail;
+}
+
+/**
+ * The quick-access menu: the pages visited this session, newest first.
+ *
+ * It exists because the sidebar is organised by area, and the reason a person navigates is
+ * usually to go back to where they just were. The list is empty on first launch and the menu
+ * says so rather than showing a guessed "popular pages" set.
+ */
+function openQuickAccess() {
+  /** Replaced by the dialog's own close once it opens; calling it early is harmless. */
+  let close = () => {};
+  const rows = state.recent.map((id) => {
+    const page = PAGES.find((entry) => entry.id === id);
+    if (!page) return null;
+    const row = el('button', { class: 'vx-quickaccess__row', attrs: { type: 'button' } });
+    row.append(icon(page.icon, { size: 16, class: 'vx-nav__icon' }), el('span', { text: page.label }));
+    row.append(el('span', { class: 'vx-quickaccess__group', text: page.group }));
+    row.addEventListener('click', () => {
+      close();
+      navigate(id);
+    });
+    return row;
+  }).filter(Boolean);
+
+  const body = rows.length
+    ? [el('div', { class: 'vx-quickaccess', children: rows })]
+    : [emptyState('Nothing visited yet', 'Pages you open will appear here, newest first. The sidebar has all 18.')];
+
+  const panel = dialog({
+    title: 'Recent pages',
+    body: [
+      ...body,
+      el('p', { class: 'vx-dim', text: 'This list is session-only. VERIDEX does not write your navigation to disk.' })
+    ]
+  });
+  if (panel) close = panel.close;
+}
+
 function buildTopbar() {
   const title = el('h1', { class: 'vx-topbar__title', text: 'Dashboard' });
   const subtitle = el('span', { class: 'vx-topbar__sub', text: 'Advanced All-in-One Windows PC & Laptop Diagnostics' });
+  const breadcrumb = buildBreadcrumb('dashboard');
+  const recentButton = button({
+    label: 'Recent',
+    variant: 'ghost',
+    onClick: () => openQuickAccess(),
+    title: 'Pages visited this session'
+  });
+  recentButton.id = 'vx-recent-pages';
 
   const startButton = button({
     label: 'Run full scan',
@@ -211,9 +321,10 @@ function buildTopbar() {
   const bar = el('header', {
     class: 'vx-topbar',
     children: [
-      el('div', { children: [title, subtitle] }),
+      el('div', { children: [breadcrumb, title, subtitle] }),
       el('div', { class: 'vx-topbar__spacer' }),
       searchButton,
+      recentButton,
       helpButton,
       startButton,
       // Cancel appears only while something is running. A permanently visible red button reads
@@ -223,6 +334,7 @@ function buildTopbar() {
   });
 
   bar._title = title;
+  bar._breadcrumb = breadcrumb;
   return bar;
 }
 
@@ -232,9 +344,17 @@ let topbar = null;
 function navigate(pageId) {
   const page = PAGES.find((entry) => entry.id === pageId);
   if (!page) return;
+  if (state.page !== pageId) {
+    state.recent = [state.page, ...state.recent.filter((id) => id !== state.page)].slice(0, 5);
+  }
   state.page = pageId;
   for (const [id, node] of navItems) node.classList.toggle('is-active', id === pageId);
-  if (topbar) topbar._title.textContent = page.label;
+  if (topbar) {
+    topbar._title.textContent = page.label;
+    const next = buildBreadcrumb(pageId);
+    topbar._breadcrumb.replaceWith(next);
+    topbar._breadcrumb = next;
+  }
   render();
 }
 
@@ -566,29 +686,153 @@ pages.dashboard = () => {
   const configured = state.settings?.ui?.widgets;
   const chosen = Array.isArray(configured) && configured.length > 0 ? configured.filter((id) => nodes[id]) : Object.keys(nodes);
 
+  // The arrangement bar is the editor for `dashboard.widgets`. It is shown only when the mode
+  // is on, and the mode is not persisted: a dashboard that opened in editing mode would be an
+  // editing surface pretending to be a report.
+  const arrangeBar = el('div', { class: 'vx-arrange__bar' });
+  const arrangeToggle = button({
+    label: state.dashboard.arranging ? 'Done arranging' : 'Arrange widgets',
+    variant: state.dashboard.arranging ? 'primary' : 'ghost',
+    onClick: () => {
+      state.dashboard.arranging = !state.dashboard.arranging;
+      render();
+    }
+  });
+  arrangeToggle.id = 'vx-arrange-toggle';
+  arrangeBar.append(arrangeToggle);
+  if (state.dashboard.arranging) {
+    const hidden = Object.keys(WIDGET_LABELS).filter((id) => !chosen.includes(id));
+    arrangeBar.append(
+      el('p', {
+        class: 'vx-dim',
+        text: hidden.length
+          ? `Hidden: ${hidden.map((id) => WIDGET_LABELS[id]).join(', ')}. Show one with its “Show” button in the list below.`
+          : 'Every widget is showing. Move a card with its arrows, or remove it with ×; the arrangement is saved immediately.'
+      })
+    );
+    if (chosen.length > 0) {
+      const reset = button({ label: 'Reset to default', variant: 'ghost', onClick: () => saveWidgetOrder(Object.keys(WIDGET_LABELS)) });
+      reset.id = 'vx-arrange-reset';
+      arrangeBar.append(reset);
+    }
+  }
+  wrapper.append(arrangeBar);
+
   let healthAndCoverageDrawn = false;
   for (const id of chosen) {
     if (id === 'health' || id === 'coverage') {
       if (healthAndCoverageDrawn) continue;
       const both = chosen.includes('health') && chosen.includes('coverage');
-      wrapper.append(both ? el('div', { class: 'vx-grid vx-grid--2', children: [healthCard, coverageCard] }) : nodes[id]);
+      const pair = both ? el('div', { class: 'vx-grid vx-grid--2', children: [healthCard, coverageCard] }) : nodes[id];
+      wrapper.append(both ? wrapWidgets(['health', 'coverage'], pair, chosen) : wrapWidgets([id], pair, chosen));
       healthAndCoverageDrawn = true;
       continue;
     }
-    if (nodes[id]) wrapper.append(nodes[id]);
+    if (nodes[id]) wrapper.append(wrapWidgets([id], nodes[id], chosen));
   }
 
-  if (chosen.length === 0) {
+  if (state.dashboard.arranging) {
+    // The add-back list exists because a removed widget would otherwise be unreachable from the
+    // dashboard: the arrangement is the only place it could reappear, and it is no longer there.
+    const hidden = Object.keys(WIDGET_LABELS).filter((id) => !chosen.includes(id));
+    if (hidden.length > 0) {
+      const addCard = el('div', { class: 'vx-card' });
+      addCard.append(el('h2', { class: 'vx-card__title', text: 'Hidden widgets' }));
+      const addRow = el('div', { class: 'vx-arrange__controls' });
+      for (const id of hidden) {
+        const show = button({
+          label: `Show ${WIDGET_LABELS[id]}`,
+          variant: 'ghost',
+          onClick: () => saveWidgetOrder([...chosen, id])
+        });
+        show.dataset.widget = id;
+        show.classList.add('vx-arrange__show');
+        addRow.append(show);
+      }
+      addCard.append(addRow);
+      wrapper.append(addCard);
+    }
+  }
+
+  if (chosen.length === 0 && !state.dashboard.arranging) {
     wrapper.append(
       emptyState(
         'No dashboard widgets are selected',
-        'Every widget has been removed from the arrangement. Settings → Dashboard lists them; add the ones you want back.'
+        'Every widget has been removed from the arrangement. Choose “Arrange widgets” to bring them back, or reset the arrangement in Settings.'
       )
     );
   }
 
   return wrapper;
 };
+
+/**
+ * Wrap a card (or a pair of cards) with its arrangement controls.
+ *
+ * The controls are buttons rather than drag handles because they have to work from a keyboard and
+ * from a screen reader, and a drag that only exists on a mouse is an edit that half the users
+ * cannot perform. The order they produce is the same order `dashboard.widgets` stores.
+ *
+ * @param {string[]} ids the widget ids inside this wrapper
+ * @param {HTMLElement} node
+ * @param {string[]} chosen the current arrangement
+ */
+function wrapWidgets(ids, node, chosen) {
+  if (!state.dashboard.arranging) return node;
+  if (!node) return node;
+  const shell = el('div', { class: 'vx-arrange__item' });
+  const controls = el('div', { class: 'vx-arrange__controls' });
+  const name = ids.map((id) => WIDGET_LABELS[id] ?? id).join(' + ');
+  controls.append(el('span', { class: 'vx-arrange__name', text: name }));
+
+  const index = chosen.indexOf(ids[0]);
+  const up = button({ label: '↑', variant: 'ghost', onClick: () => moveWidget(ids, -1), title: `Move ${name} up` });
+  up.setAttribute('aria-label', `Move ${name} up`);
+  up.disabled = index <= 0;
+  const down = button({ label: '↓', variant: 'ghost', onClick: () => moveWidget(ids, 1), title: `Move ${name} down` });
+  down.setAttribute('aria-label', `Move ${name} down`);
+  down.disabled = index < 0 || index + ids.length >= chosen.length;
+  const hide = button({ label: '×', variant: 'ghost', onClick: () => saveWidgetOrder(chosen.filter((id) => !ids.includes(id))), title: `Remove ${name} from the dashboard` });
+  hide.setAttribute('aria-label', `Remove ${name} from the dashboard`);
+  hide.dataset.remove = ids.join('+');
+
+  controls.append(up, down, hide);
+  shell.append(controls, node);
+  return shell;
+}
+
+/**
+ * Move a widget (or the health+coverage pair) by one position and save the result.
+ *
+ * Saving happens together with the move so the arrangement on screen and the arrangement on disk
+ * cannot disagree: an edit that only lived in the renderer would vanish at the next re-read.
+ *
+ * @param {string[]} ids
+ * @param {-1|1} delta
+ */
+function moveWidget(ids, delta) {
+  const configured = state.settings?.ui?.widgets;
+  const chosen = Array.isArray(configured) && configured.length > 0 ? configured.filter((id) => WIDGET_LABELS[id]) : Object.keys(WIDGET_LABELS);
+  const index = chosen.indexOf(ids[0]);
+  if (index < 0) return;
+  const target = index + delta;
+  if (target < 0 || target + ids.length > chosen.length) return;
+  const next = [...chosen];
+  next.splice(index, ids.length);
+  next.splice(target, 0, ...ids);
+  saveWidgetOrder(next);
+}
+
+/**
+ * Persist a widget arrangement.
+ * @param {string[]} order
+ */
+async function saveWidgetOrder(order) {
+  // Only ids the dashboard can actually draw are stored: a stale id from an older build would
+  // otherwise be written back and silently reserve a slot for a card that no longer exists.
+  const cleaned = order.filter((id) => WIDGET_LABELS[id]);
+  await changeSetting('dashboard.widgets', cleaned);
+}
 
 /** A generic module page: shows the section's fields for a given module id. */
 /**
@@ -1335,8 +1579,26 @@ pages.monitor = () => {
     onClick: () => stopMonitor(),
     disabled: !state.monitor.running
   });
-  controls.append(start, stop);
+  // Export stays available after sampling stops, because stopping is how a session ends and the
+  // series is still in the main process. It is disabled only when nothing has been sampled.
+  const exportButton = button({
+    label: 'Export samples',
+    variant: 'ghost',
+    onClick: () => exportMonitorSession('csv'),
+    title: 'Write this session to a CSV file, one row per reading',
+    disabled: !state.monitor.sample
+  });
+  exportButton.id = 'vx-monitor-export';
+  controls.append(start, stop, exportButton);
   card.append(controls);
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: state.monitor.sample
+        ? `Export writes every reading in this session, including unavailable sensors with their reason — not just the moment on screen.`
+        : 'Export becomes available after the first sample. A file of headers would look like a session that measured nothing.'
+    })
+  );
 
   if (state.monitor.note) card.append(el('p', { class: 'vx-dim', text: state.monitor.note }));
 
@@ -1552,6 +1814,66 @@ pages.reports = () => {
   return wrapper;
 };
 
+/**
+ * Summarise a benchmark or stress entry for the history list, or null for a scan.
+ *
+ * A figure is printed with its unit and its provenance, because "1200" alone is a number
+ * without a meaning, and "74 °C" without "peak, during the run" is a number without a when.
+ *
+ * @param {any} entry
+ * @returns {{headline: string, detail: string, note: string|null}|null}
+ */
+function describeNonScanEntry(entry) {
+  const summary = entry?.summary ?? null;
+  if (entry?.kind === 'benchmark' && summary) {
+    if (summary.benchmark === 'cpu') {
+      const parts = [
+        summary.singleCoreOpsPerSec !== null && summary.singleCoreOpsPerSec !== undefined ? `${formatNumber(summary.singleCoreOpsPerSec)} ops/s single-core` : null,
+        summary.multiCoreOpsPerSec !== null && summary.multiCoreOpsPerSec !== undefined ? `${formatNumber(summary.multiCoreOpsPerSec)} ops/s multi-core` : null,
+        summary.memoryGbps !== null && summary.memoryGbps !== undefined ? `${summary.memoryGbps} GB/s memory` : null
+      ].filter(Boolean);
+      return {
+        headline: parts.length > 0 ? `CPU benchmark · ${parts.join(', ')}` : 'CPU benchmark · nothing measured',
+        detail: `Mode ${summary.mode ?? 'unknown'}${summary.threads ? `, ${summary.threads} threads` : ''}`,
+        note: 'Comparable only with another VERIDEX run of this workload on this machine.'
+      };
+    }
+    if (summary.benchmark === 'disk') {
+      const parts = [
+        summary.sequentialReadMbps !== null && summary.sequentialReadMbps !== undefined ? `${formatNumber(summary.sequentialReadMbps)} MB/s read` : null,
+        summary.sequentialWriteMbps !== null && summary.sequentialWriteMbps !== undefined ? `${formatNumber(summary.sequentialWriteMbps)} MB/s write` : null,
+        summary.randomReadLatencyMs !== null && summary.randomReadLatencyMs !== undefined ? `${summary.randomReadLatencyMs} ms random read` : null
+      ].filter(Boolean);
+      return {
+        headline: parts.length > 0 ? `Disk benchmark · ${parts.join(', ')}` : 'Disk benchmark · nothing measured',
+        detail: `${summary.sizeMb ?? 'unknown'} MB test file, ${summary.writeTested ? 'write tested' : 'read only'}`,
+        note: summary.tempFileRemoved === false ? 'The temporary file was left behind; the activity log names it.' : null
+      };
+    }
+    if (summary.benchmark === 'gpu') {
+      return {
+        headline: `GPU benchmark · ${summary.frameTimeMs !== null && summary.frameTimeMs !== undefined ? `${summary.frameTimeMs} ms per frame` : 'frame time not measured'}`,
+        detail: summary.adapter ? `Adapter: ${summary.adapter}` : 'The adapter did not identify itself.',
+        note: 'Not the GPU’s peak performance; on switchable graphics this may be the integrated adapter.'
+      };
+    }
+    return { headline: `Benchmark · ${summary.benchmark ?? 'unknown'}`, detail: 'The entry does not describe its workload.', note: null };
+  }
+
+  if (entry?.kind === 'stress' && summary) {
+    const peak = summary.peakTemperatureC;
+    return {
+      headline: `CPU stress run · ${summary.state ?? 'state unknown'}`,
+      detail: `${summary.threads ?? 'unknown'} threads, stopped because ${summary.stopReason ?? 'the reason was not recorded'}; ${peak === null || peak === undefined ? 'no temperature reading was available' : `peak ${peak} °C`}`,
+      note: summary.completed
+        ? 'A completed run is not a pass: surviving one workload for one duration proves nothing about the next.'
+        : 'The run did not reach its requested duration.'
+    };
+  }
+
+  return null;
+}
+
 pages.history = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
@@ -1616,6 +1938,27 @@ pages.history = () => {
     const warnings = entry.issues?.warnings?.length ?? 0;
 
     const row = el('div', { class: 'vx-row' });
+
+    // Benchmarks and stress runs have no score and no coverage — they measure something else —
+    // so they are listed by what they measured. Falling through to the scan layout would print
+    // "Unrated, coverage unknown" beside a perfectly good 1200 ops/s.
+    const nonScan = describeNonScanEntry(entry);
+    if (nonScan) {
+      const label = el('div', {
+        class: 'vx-row__label',
+        children: [
+          el('span', { text: entry.finishedAt ? formatTimestamp(entry.finishedAt) : 'Unknown time' }),
+          el('span', { class: 'vx-row__source', text: ` ${entry.kind}` })
+        ]
+      });
+      const value = el('div', { class: 'vx-row__value' });
+      value.append(el('span', { class: 'vx-row__text', text: nonScan.headline }));
+      value.append(el('span', { class: 'vx-dim', text: nonScan.detail }));
+      if (nonScan.note) value.append(el('span', { class: 'vx-row__note', text: nonScan.note }));
+      row.append(label, value);
+      rows.append(row);
+      continue;
+    }
 
     // A withheld score stays withheld in the list. Rendering it as 0 would look like a
     // catastrophic result; rendering it as a dash would look like missing data. The
@@ -2877,6 +3220,31 @@ async function stopMonitor() {
   state.monitor.running = false;
   state.monitor.note = 'Sampling stopped. The readings above are no longer live.';
   if (state.page === 'monitor') render();
+}
+
+/**
+ * Write the sampling session to a file.
+ *
+ * The file is built in the main process from the same snapshot the page renders, so the export
+ * cannot contain a reading the interface never received. A refusal — no samples yet, a cancelled
+ * dialog, an unwritable path — is reported as a refusal, never as a successful save.
+ */
+async function exportMonitorSession(format) {
+  if (!client.live) return;
+  const result = await client.invoke('monitor:export', format);
+  if (!result.ok) {
+    toast({ tone: 'bad', title: 'Session not exported', body: result.error?.message ?? 'The export was refused.' });
+    return;
+  }
+  if (!result.data?.saved) {
+    toast({ tone: 'info', title: 'Export cancelled', body: 'No file was written.' });
+    return;
+  }
+  toast({
+    tone: 'ok',
+    title: 'Session exported',
+    body: `${result.data.rows} readings from ${result.data.sensors} sensors written to ${result.data.path}.`
+  });
 }
 
 async function loadHistory() {

@@ -27,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 
 import { Logger } from '../core/logger.js';
 import { Monitor, SENSORS } from '../monitoring/monitor.js';
+import { renderMonitorExport } from '../monitoring/export.js';
+import { cpuBenchmarkEntry, diskBenchmarkEntry, gpuBenchmarkEntry, stressEntry } from '../history/entries.js';
 import { detectPermissionState } from '../platform/permissions.js';
 import { CommandRunner } from '../platform/runner.js';
 import { SettingsStore } from '../core/settings.js';
@@ -83,6 +85,34 @@ const dataDir = () => app.getPath('userData');
 const logDir = () => path.join(dataDir(), 'logs');
 const settingsFile = () => path.join(dataDir(), 'settings.json');
 const historyFile = () => path.join(dataDir(), 'history.json');
+
+/**
+ * Write one history entry, if the user keeps history.
+ *
+ * Scans always did this; benchmarks and stress runs did not, so `history:list` only ever held
+ * scans even though the store documents six entry kinds and the requirement names benchmarks and
+ * stress runs explicitly. A failure here is logged and swallowed: failing a completed benchmark
+ * because its summary could not be filed would throw away the measurement the user waited for.
+ *
+ * @param {Record<string, any>} entry
+ * @returns {Promise<object|null>}
+ */
+async function recordHistory(entry) {
+  const options = wireAll(settings).history;
+  if (!options.persist) return null;
+  try {
+    const store = new HistoryStore({ file: historyFile(), ...options.storeOptions, logger });
+    await store.load();
+    return await store.add(entry);
+  } catch (error) {
+    await logger?.warn('a run finished but its history entry was not written', {
+      scope: 'history',
+      kind: entry?.kind ?? null,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return null;
+  }
+}
 
 // ── Single instance ────────────────────────────────────────────────────────────
 // A second copy would fight the first for the settings file and start a second
@@ -430,6 +460,7 @@ function registerHandlers() {
       };
       benchmarkResults.cpu = { mode, at: startedAt, durationMs: results.durationMs, results, fields: mapCpuBenchmarkResults(results), cancelled: false };
       emit('bench:progress', { kind: 'cpu', stage: 'finished', durationMs: results.durationMs });
+      await recordHistory(cpuBenchmarkEntry(benchmarkResults.cpu, { appVersion: app.getVersion() }));
       return benchmarkResults.cpu;
     }
   }));
@@ -454,6 +485,14 @@ function registerHandlers() {
       });
       // The benchmark writes a file. Whether it was removed is part of the result, not a detail.
       if (!result.cleanup?.removed) await logger?.warn('disk benchmark left a temporary file behind', { scope: 'benchmark', path: result.cleanup?.path ?? null });
+      if (!result.cancelled) {
+        await recordHistory(
+          diskBenchmarkEntry(benchmarkResults.disk, {
+            appVersion: app.getVersion(),
+            durationMs: Date.now() - Date.parse(startedAt)
+          })
+        );
+      }
       return benchmarkResults.disk;
     }
   }));
@@ -495,6 +534,15 @@ function registerHandlers() {
       stressLast = { runId, at: new Date().toISOString(), ...result };
       emit('stress:finished', { runId, started: result.started, state: result.state, stopReason: result.stopReason ?? null });
       if (!result.started) await logger?.warn('stress run refused', { scope: 'stress', reason: result.reason });
+      // A run that never started is a refusal, not evidence: filing it would put a row in the
+      // history that says the machine was stressed when it was not.
+      const stressHistory = stressEntry(result, {
+        appVersion: app.getVersion(),
+        requestedDurationSec: durationSec,
+        threads,
+        at: stressLast.at
+      });
+      if (stressHistory) await recordHistory(stressHistory);
       return stressLast;
     } finally {
       stressAbort = null;
@@ -531,9 +579,14 @@ function registerHandlers() {
     };
   });
 
-  handle('bench:gpu', ({ measurement }) => {
+  handle('bench:gpu', async ({ measurement }) => {
     const at = new Date().toISOString();
     benchmarkResults.gpu = { at, measurement, fields: mapGpuBenchmarkResults(measurement) };
+    // Only a real measurement is filed. An UNSUPPORTED probe is a fact about the machine, but it
+    // has no figures to compare, and a history entry of empty values would read as a run that
+    // measured nothing when it actually measured nothing *available*.
+    const entry = gpuBenchmarkEntry(benchmarkResults.gpu, { appVersion: app.getVersion() });
+    if (entry) await recordHistory(entry);
     return benchmarkResults.gpu;
   });
 
@@ -837,10 +890,22 @@ function registerHandlers() {
     if (monitor) monitor.stop();
 
     const state = await detectPermissionState(new CommandRunner());
+    monitorSession = null;
     monitor = new Monitor({
       runner: new CommandRunner(),
       intervalMs: 1500,
-      onSample: (sample) => emit('monitor:sample', sample),
+      onSample: (sample) => {
+        // The session record is what makes the series exportable after sampling stops. It holds
+        // the same snapshot the interface renders, so the file and the screen cannot disagree.
+        monitorSession = {
+          startedAt: monitorSession?.startedAt ?? sample.at,
+          endedAt: sample.at,
+          intervalMs: monitor?.intervalMs ?? null,
+          elevated: state.isAdmin,
+          series: sample.series
+        };
+        emit('monitor:sample', sample);
+      },
       onError: (error) => {
         // A sampling failure ends the session rather than silently skipping ticks: the
         // interface must not keep showing stale numbers as if they were live.
@@ -867,7 +932,37 @@ function registerHandlers() {
     const wasRunning = Boolean(monitor?.running);
     monitor?.stop();
     monitor = null;
-    return { stopped: true, wasRunning };
+    return { stopped: true, wasRunning, exportable: Boolean(monitorSession) };
+  });
+
+  /**
+   * Export the last monitoring session.
+   *
+   * Refuses rather than writing an empty file: a CSV of headers looks like a session that
+   * measured nothing, when the truth is that nothing was measured.
+   */
+  handle('monitor:export', async ({ format }) => {
+    const rendered = renderMonitorExport(monitorSession ?? {}, format);
+    if (!rendered.ok) throw new Error(rendered.reason);
+
+    const extension = rendered.format;
+    const stamp = (monitorSession?.endedAt ?? new Date().toISOString()).replace(/[:.]/g, '-').slice(0, 19);
+    const { canceled, filePath } = await dialog.showSaveDialog(window, {
+      title: 'Export monitoring session',
+      defaultPath: path.join(app.getPath('documents'), `VERIDEX-monitor-${stamp}.${extension}`),
+      filters: [{ name: extension.toUpperCase(), extensions: [extension] }]
+    });
+    if (canceled || !filePath) return { saved: false };
+
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(filePath, rendered.text, 'utf8');
+    await logger?.info('monitoring session exported', {
+      scope: 'monitor',
+      format: extension,
+      rows: rendered.rows,
+      sensors: rendered.sensors
+    });
+    return { saved: true, path: filePath, rows: rendered.rows, sensors: rendered.sensors, dropped: rendered.dropped };
   });
 
   handle('shell:openDataFolder', async () => {
@@ -881,6 +976,12 @@ let guard;
 
 /** The live-sampling session, or null when nothing is running. */
 let monitor = null;
+/**
+ * The most recent session's series, kept after sampling stops so it can still be exported.
+ * Cleared when a new session starts, because a file that mixed two sessions would attribute
+ * readings to a run that did not take them.
+ */
+let monitorSession = null;
 
 /** Benchmark results for this session, and whether one is running. */
 const benchmarkResults = { cpu: null, disk: null };

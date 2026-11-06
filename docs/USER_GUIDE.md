@@ -43,6 +43,23 @@ time. Being interrupted is not the same as having read it.
 A scan is read-only. Nothing is written to the machine, nothing is uploaded, and no
 service is restarted.
 
+### 2.1 Getting around
+
+The sidebar groups the eighteen pages by area. Above the page title a breadcrumb shows
+`VERIDEX › <area> › <page>`; the area crumb goes to the first page of that area and the
+VERIDEX crumb goes back to the dashboard. **Recent** in the toolbar lists the pages you have
+visited this session, newest first, and is empty on a fresh launch because there is nothing
+truthful to put in it yet. It is session-only: navigation is not written to disk.
+
+### 2.2 Arranging the dashboard
+
+**Arrange widgets** turns the dashboard into its own editor. Each card gets a name and three
+controls: move up, move down, and remove. Removed widgets appear under **Hidden widgets**
+with a button to add each one back, and **Reset to default** restores the shipped order.
+Every change is written to the `dashboard.widgets` setting immediately, so the arrangement
+survives a restart and is the same one the Settings page shows. The controls are buttons
+rather than drag handles so the arrangement is usable from a keyboard.
+
 ---
 
 ## 3. Reading the result
@@ -192,15 +209,35 @@ human's observation and a machine's measurement are two different kinds of claim
 
 ## 7. Benchmarking and monitoring
 
-The **Performance** page runs CPU and disk benchmarks, and the **Monitor** page samples
-sensors over time. Both are read-only except where they say otherwise:
+The **Performance** page runs CPU, disk and GPU benchmarks, the responsiveness composite,
+and a guarded CPU stress run. The **Monitor** page samples sensors over time. All of it is
+read-only except where it says otherwise:
 
 - The **write** half of the disk benchmark creates and deletes a temporary file, so it
-  asks for consent first.
+  asks for consent first, and the log names the file if it could not be removed.
 - Stress tests run under a guard that stops them if the machine leaves a safe thermal
-  range.
+  range. A stress run has **no pass or fail**: it reports how long it ran, how hot the
+  machine got, and why it stopped.
+- The **GPU** run is a WebGL fill-rate workload. If the session has no usable WebGL it
+  reports **UNSUPPORTED** with the reason; it never substitutes a software rasteriser and
+  present the result as a GPU figure. Frame time and fill rate are not the GPU's peak
+  performance, and on a laptop with switchable graphics the figure may belong to the
+  integrated adapter.
+- The **responsiveness** composite combines what was actually measured (CPU 35 %, memory
+  20 %, disk 25 %, GPU 20 %, renormalised over what ran) and prints its formula and
+  reference points beside the score. With fewer than two measured subsystems the score is
+  withheld rather than invented. Event-loop lag is a capped penalty, not an ingredient.
 
-Neither runs automatically. Neither changes a system setting.
+Neither benchmarks nor stress run automatically, and none of them changes a system setting.
+
+### 7.1 Exporting a monitoring session
+
+Sampling only runs while you ask it to. When you stop, the readings stay available and
+**Export samples** writes them to a CSV file — one row per reading, with a `#` header
+naming the session, and an `available` column that is `no` where a sensor did not answer.
+A missing reading is a blank cell, never a zero. JSON is also supported from the same
+session record. The export refuses when nothing has been sampled, because a file of headers
+looks like a session that measured nothing.
 
 ---
 

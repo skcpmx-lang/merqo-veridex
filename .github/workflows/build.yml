@@ -50,6 +50,12 @@ jobs:
       - name: Static checks
         run: npm run check
 
+      - name: Formatting policy
+        run: node scripts/check.mjs --only formatting
+
+      - name: Dependency cycles
+        run: node scripts/check.mjs --only cycles
+
       - name: Requirement status is consistent with the repository
         run: npm run audit:requirements -- --check
 

@@ -181,7 +181,6 @@ test('a task naming a missing provider is refused at registration', () => {
   );
 });
 
-
 test('a provider whose runner fails still explains itself rather than returning silence', async () => {
   // The failure path, which the NoopRunner test above does not reach. A provider that
   // awaits a command and catches the error must write an explained field, not `{}`:

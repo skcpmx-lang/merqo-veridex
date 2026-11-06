@@ -65,6 +65,7 @@ export const CHANNELS = Object.freeze({
   'stress:state': { args: [], description: 'Whether a stress run is active and what the last run measured.' },
   'monitor:start': { args: [], description: 'Begin live sensor sampling. Samples arrive on the event channel.' },
   'monitor:stop': { args: [], description: 'Stop sampling.' },
+  'monitor:export': { args: ['format'], description: 'Write the last sampling session to a file as csv or json, through a native save dialog.' },
   'shell:openDataFolder': { args: [], description: 'Reveal the local data folder in Explorer.' }
 });
 
@@ -215,6 +216,16 @@ export function validateRequest(channel, args = []) {
         return { ok: false, reason: 'Task ids must be short strings.' };
       }
       return { ok: true, value: { tasks } };
+    }
+
+    case 'monitor:export': {
+      // Only the two formats this module writes. An unknown format is refused here, so the
+      // handler is never asked to invent an extension.
+      const format = typeof named?.format === 'string' ? named.format.trim().toLowerCase() : '';
+      if (format !== 'csv' && format !== 'json') {
+        return { ok: false, reason: 'A monitoring export format is required: csv or json.' };
+      }
+      return { ok: true, value: { format } };
     }
 
     case 'report:build':

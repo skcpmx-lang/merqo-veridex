@@ -15,11 +15,11 @@ is the narrative summary of it.
 | --- | --- |
 | Requirements | 130 across 39 modules |
 | Verified on Windows | **0** |
-| Tested (automated) | 99 |
+| Tested (automated) | 108 |
 | Implemented, untested | 18 |
-| In progress | 10 |
-| Not started | 3 |
-| Automated tests | 769, all passing |
+| In progress | 4 |
+| Not started | 0 |
+| Automated tests | 819, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.5 MiB + portable 106.5 MiB, unsigned |
 
@@ -85,6 +85,14 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
   elevation named per task, `.inf` count verified afterwards.
 - Reports page states what the file will contain before a format is chosen.
 - Privacy page states what is stored, where, and how large it is.
+- GPU fill-rate benchmark that reports `UNSUPPORTED` with a reason instead of inventing a
+  figure, and a responsiveness composite that prints its weights and withholds itself below
+  two measured subsystems.
+- Dashboard arrangement editor: move, hide, restore and reset, written to `dashboard.widgets`
+  on every change; a breadcrumb trail that navigates; a session-only recent-pages menu.
+- Monitoring sessions export to CSV or JSON, one row per reading, with missing readings kept
+  missing and an `available` column that says so.
+- History lists benchmarks and stress runs as what they measured, not as unrated scans.
 
 ### Tooling
 - `scripts/check.mjs` static gate: 0 errors, 0 warnings — every requirement has an
@@ -106,10 +114,14 @@ Implemented and connected, but resting on fixtures rather than a real machine.
 
 - Every Windows read. The parsers match their fixtures; whether the fixtures match real
   Windows is unknown.
-- The Electron shell. Window creation, IPC handlers and the preload bridge exist and are
-  unit-tested; the window has never opened.
-- The packaging configuration. `electron-builder.config.mjs` is written and validated by
-  test; no installer has been built.
+- The Electron shell's behaviour on a desktop somebody owns. The window opens on the Windows
+  runner (`42172738822`, 21 steps, 32 screenshots), but that is a hosted VM with no battery, no
+  keyboard and no thermal sensors.
+- The packaged build on hardware. An installer was produced for an earlier tree and installed
+  on a Windows VM; nothing has been installed on a physical machine, and the current tree has no
+  artifact of its own yet.
+- Every benchmark figure and every stress run: the harness renders those pages but never presses
+  their buttons, and a stress run in CI would measure the runner.
 
 This is the largest category and the reason no requirement says VER.
 
@@ -117,20 +129,20 @@ This is the largest category and the reason no requirement says VER.
 
 ## 4. Not started
 
-44 requirements. Grouped by concentration:
+None. Every one of the 130 requirements has an implementation and an owner in the repository;
+36 of them are not yet covered by a test that would fail if the code were removed, and 4 are
+honestly partial:
 
-| Area | Roughly | Note |
-| --- | --- | --- |
-| Windows inventory depth | 5 | servicing detail, update history, activation state |
-| Benchmark variants | 3 | memory, GPU, broader workloads |
-| Driver inventory depth | 3 | signing state, version comparison across machines |
-| Report history | 2 | compare in the interface, delete |
-| Compatibility | 2 | vendor matrix, build-specific constraints |
-| Notifications, search, shortcuts, layout, animation | 8 | interface surface |
-| Audit, architecture, CI/CD, icon, about | 7 | repository and release plumbing |
-| Assorted | 13 | see `docs/REQUIREMENTS.md` |
+| ID | Requirement | What exists | What is missing |
+| --- | --- | --- | --- |
+| R-08-03 | RAM performance, bandwidth and stability | memory bandwidth workload measured and reported | a sustained-load stability test |
+| R-12-02 | Windows components, scheduled tasks, services | startup entries from the Run/RunOnce keys | scheduled tasks, running services, Windows components |
+| R-18-02 | High-DPI and multi-monitor handling | every display enumerated; 125 % zoom asserted in the harness | per-monitor window placement, scale-aware shell sizing |
+| R-26-01 | Offline-first, zero paid dependencies | no network client exists, enforced by a test | a script that audits dependency licences |
 
-Each is tracked with an id; none is promised for a date.
+`docs/AUDIT_40_SECTIONS.md` is the section-by-section record: for each of the 40 specification
+sections it lists the requirements, what a user sees, where the gaps are, and what evidence
+exists. Nothing is closed there by the mere presence of a page.
 
 ---
 

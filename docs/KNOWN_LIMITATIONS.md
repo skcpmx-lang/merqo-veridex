@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 769
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 819
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -203,7 +203,19 @@ as "no runs stored" is a lie about the user's own data.
 **Live monitoring is now wired**: the main process owns a real `Monitor` and pushes
 samples on the event channel. Starting it genuinely starts sampling, a refused start is
 reported as a failure rather than as success, sensors the machine does not expose are
-listed as unavailable with their reason, and sampling stops when the window closes.
+listed as unavailable with their reason, and sampling stops when the window closes. The
+session can be exported to CSV or JSON after it stops; it is not streamed to disk while it
+runs, and only the most recent session is kept, so a second start replaces the first.
+
+**Stress testing is now wired too** — CPU only, behind the guard, with consent, a duration
+ceiling, a live temperature and a stop-now button. Memory, GPU, disk and combined stress are
+refused with a specific reason each rather than approximated.
+
+**Widget arrangement, breadcrumbs and quick access are wired**: `dashboard.widgets` is
+editable from the dashboard itself and written on every change; the topbar carries a
+breadcrumb trail that navigates; and **Recent** lists this session's pages. Reordering uses
+move buttons rather than drag-and-drop, so it works from a keyboard, and the recent list is
+not persisted.
 
 Each of these pages says so in plain language rather than showing an empty shell or
 sample data. `docs/PROJECT_STATUS.md` tracks them.
@@ -212,11 +224,20 @@ sample data. `docs/PROJECT_STATUS.md` tracks them.
 
 ## 15. Requirements not started
 
-None. All 130 requirements now have an implementation and an automated test, which is a different
-claim from "verified on hardware": 99 carry `TS` (tested), 18 `IM` (implemented and wired),
-10 `IP` (partially implemented with the missing part named) and none `VER`. `VER` means a person
-ran the product on a real Windows machine and saw it work, and that evidence does not exist for
-any requirement yet — see §1 of this document.
+None. All 130 requirements now have an implementation, which is a different claim from
+"verified on hardware": 108 carry `TS` (tested), 18 `IM` (implemented and wired), 4 `IP`
+(partially implemented, with the missing part named per requirement) and none `VER`. `VER` means
+a person ran the product on a real Windows machine and saw it work, and that evidence does not
+exist for any requirement yet — see §1 of this document.
+
+The four still partial are named precisely in `docs/REQUIREMENTS.md`:
+
+| ID | What exists | What does not |
+| --- | --- | --- |
+| R-08-03 | memory bandwidth measured and reported | a sustained-load stability test |
+| R-12-02 | startup entries from the Run/RunOnce keys | scheduled tasks, running services, Windows components |
+| R-18-02 | every display enumerated; 125 % zoom checked in the harness | per-monitor window placement, scale-aware shell sizing |
+| R-26-01 | no network client exists, enforced by test | a script that audits dependency licences |
 
 The last three were closed by implementation rather than by reclassification:
 

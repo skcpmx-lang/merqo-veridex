@@ -177,3 +177,14 @@ test('the preload never exposes a raw ipcRenderer or a path-taking function', as
   assert.ok(source.includes('Object.freeze'), 'the bridge should be frozen so the renderer cannot reassign it');
   assert.ok(!/\bnodeIntegration\b\s*:\s*true/.test(source));
 });
+
+test('a monitoring export accepts only the two formats it can actually write', () => {
+  for (const format of ['csv', 'json', 'CSV', ' JSON ']) {
+    const result = validateRequest('monitor:export', [format]);
+    assert.equal(result.ok, true, `${format} should be accepted`);
+    assert.match(result.value.format, /^(csv|json)$/);
+  }
+  for (const format of ['', undefined, null, 'pdf', 'xlsx', 'csv;rm -rf /']) {
+    assert.equal(validateRequest('monitor:export', [format]).ok, false, `${String(format)} must be refused`);
+  }
+});

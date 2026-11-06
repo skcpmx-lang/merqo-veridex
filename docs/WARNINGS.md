@@ -5,6 +5,18 @@ were still open at the start of this milestone — R-08-05, R-08-06 and R-25-02 
 tested (see §1 below). Nothing was suppressed and no rule was relaxed: the warnings went away
 because the requirements were implemented, not because the gate stopped checking.
 
+The gate has since grown rather than shrunk. The 40-section audit found two rules the static
+check did not have, and both are now errors rather than notes:
+
+| Added rule | What it refuses | Proven to refuse by |
+| --- | --- | --- |
+| Dependency cycles | a module graph whose import chain returns to its start, reported as `a.js -> b.js -> a.js` | `tests/integration/gate-refusals.test.js` — a two-file cycle, a three-file cycle, and a self-import |
+| Formatting policy | tabs, carriage returns, trailing whitespace, a missing final newline and three or more blank lines in `src/`, `tests/` and `scripts/` | the same file, on source it constructs for the purpose |
+
+Both checks are exported as pure functions and the runner only executes when the file is invoked
+directly, so the tests watch the rules fail without running the whole gate. "No findings" is
+therefore a stronger statement than it was, not a weaker one.
+
 This file is the decision record for all 21 requirements that were marked *not started* at the
 start of this milestone. Nothing was suppressed, no rule was relaxed, and no status was changed
 without evidence in the repository.

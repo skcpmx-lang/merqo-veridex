@@ -87,9 +87,15 @@ Triggers: every push to any branch, every pull request, and manual dispatch.
 
 ```bash
 npm ci
-npm run check                       # scripts/check.mjs — parses every module
-npm run audit:requirements -- --check   # refuses inconsistent claim statuses
+npm run check                            # scripts/check.mjs — parse, imports, entry points,
+                                         # offline, settings, requirements, cycles, formatting
+node scripts/check.mjs --only formatting  # the formatting policy, named as its own step
+node scripts/check.mjs --only cycles      # the dependency graph, named as its own step
+npm run audit:requirements -- --check    # refuses inconsistent claim statuses
 ```
+
+The two `--only` steps run the whole gate and print one area, so a red build names the rule
+that failed instead of asking a reader to scan nine sections for the one `FAIL` line.
 
 `--check` matters: it verifies without rewriting `docs/REQUIREMENTS.md`, so a pull request
 that changes a status without updating the generated file fails rather than silently
@@ -204,6 +210,8 @@ Everything the workflows do can be run here, except the Windows packaging step:
 ```bash
 npm ci
 npm run check
+node scripts/check.mjs --only formatting
+node scripts/check.mjs --only cycles
 npm run audit:requirements -- --check
 npm test
 npm run icon

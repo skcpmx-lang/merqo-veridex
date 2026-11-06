@@ -9,7 +9,13 @@
  *   3. no source file imports a network transport outside the guard;
  *   4. the manual registry is structurally valid;
  *   5. every settings key names a module that references it;
- *   6. requirement ids in docs/requirements.json are unique and well formed.
+ *   6. requirement ids in docs/requirements.json are unique and well formed;
+ *   7. the module graph is acyclic — every dependency chain terminates;
+ *   8. the source files obey the formatting policy (tabs, trailing space, line endings).
+ *
+ * Checks 7 and 8 are exported as pure functions so the tests can put a cycle and a badly
+ * formatted line in front of them and watch them fail. A gate that has never refused
+ * anything is a gate nobody has measured.
  *
  * Exit code is non-zero on any finding, so CI can gate on it.
  */
@@ -21,6 +27,68 @@ import { pathToFileURL } from 'node:url';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const findings = [];
 const notes = [];
+
+/**
+ * Depth-first search for dependency cycles.
+ *
+ * Returns one entry per cycle, each the shortest path that closes it, so the message names a
+ * chain a person can follow (`a.js -> b.js -> a.js`) instead of a set of files.
+ *
+ * @param {Map<string, string[]>} graph  file -> files it imports
+ * @returns {string[][]} cycles, each a path whose last element imports its first
+ */
+export function findCycles(graph) {
+  /** @type {string[][]} */
+  const cycles = [];
+  const seen = new Set();      // fully explored
+  const onPath = new Set();
+  /** @type {string[]} */
+  const stack = [];
+
+  /** @param {string} node */
+  function visit(node) {
+    if (onPath.has(node)) {
+      const start = stack.indexOf(node);
+      if (start !== -1) cycles.push([...stack.slice(start), node]);
+      return;
+    }
+    if (seen.has(node)) return;
+    onPath.add(node);
+    stack.push(node);
+    for (const next of graph.get(node) ?? []) visit(next);
+    stack.pop();
+    onPath.delete(node);
+    seen.add(node);
+  }
+
+  for (const node of graph.keys()) visit(node);
+  return cycles;
+}
+
+/**
+ * Formatting policy for source files.
+ *
+ * Deliberately small and mechanical: the point is that a reviewer never has to think about
+ * tabs, carriage returns, trailing whitespace or a missing final newline again. Anything
+ * requiring taste (line length, alignment) is out of scope and stays a review question.
+ *
+ * @param {string} relative  file name for the message
+ * @param {string} source
+ * @returns {string[]} problems, empty when the file is clean
+ */
+export function formatProblems(relative, source) {
+  const problems = [];
+  const lines = source.split('\n');
+  lines.forEach((line, index) => {
+    const where = `${relative}:${index + 1}`;
+    if (line.includes('\r')) problems.push(`${where}: carriage return (this repository uses LF endings)`);
+    if (/\t/.test(line)) problems.push(`${where}: tab character (this repository indents with two spaces)`);
+    if (/[ ]+$/.test(line)) problems.push(`${where}: trailing whitespace`);
+  });
+  if (!source.endsWith('\n')) problems.push(`${relative}: no final newline`);
+  if (/\n\n\n/.test(source)) problems.push(`${relative}: three or more consecutive blank lines`);
+  return problems;
+}
 
 /** @param {'error'|'warn'} level @param {string} area @param {string} message */
 function report(level, area, message) {
@@ -221,30 +289,98 @@ async function checkRequirements() {
   notes.push(`${requirements.length} requirements parsed`);
 }
 
-// ── Run ──────────────────────────────────────────────────────────────────────
-const modules = await checkModules();
-await checkNamedImports(modules);
-await checkOffline(modules);
-await checkManualRegistry();
-await checkSettings();
-await checkRequirements();
+// ── 7. Dependency cycles ─────────────────────────────────────────────────────
+async function checkCycles(files) {
+  /** @type {Map<string, string[]>} */
+  const graph = new Map();
+  const byPath = new Set(files.map((file) => path.resolve(file)));
 
-const errors = findings.filter((finding) => finding.level === 'error');
-const warnings = findings.filter((finding) => finding.level === 'warn');
-
-console.log('VERIDEX static checks');
-for (const note of notes) console.log(`  · ${note}`);
-console.log('');
-
-if (findings.length === 0) {
-  console.log('No findings.');
-} else {
-  for (const finding of findings) {
-    console.log(`${finding.level === 'error' ? 'FAIL' : 'WARN'}  [${finding.area}] ${finding.message}`);
+  for (const file of files) {
+    const source = await readFile(file, 'utf8');
+    const imports = [];
+    for (const match of source.matchAll(/^\s*(?:import|export)\s[^;]*?from\s*['"]([^'"]+)['"]/gms)) {
+      if (!match[1].startsWith('.')) continue;
+      const resolved = path.resolve(path.dirname(file), match[1]);
+      if (byPath.has(resolved)) imports.push(resolved);
+    }
+    for (const match of source.matchAll(/^\s*import\s*['"]([^'"]+)['"]/gm)) {
+      if (!match[1].startsWith('.')) continue;
+      const resolved = path.resolve(path.dirname(file), match[1]);
+      if (byPath.has(resolved)) imports.push(resolved);
+    }
+    graph.set(path.resolve(file), imports);
   }
+
+  for (const cycle of findCycles(graph)) {
+    const chain = cycle.map((file) => path.relative(ROOT, file).split(path.sep).join('/')).join(' -> ');
+    report('error', 'cycles', `dependency cycle: ${chain}`);
+  }
+  notes.push(`scanned ${graph.size} modules for dependency cycles`);
 }
 
-const summary = `${errors.length} error(s), ${warnings.length} warning(s)`;
-console.log('');
-console.log(summary);
-if (errors.length > 0) process.exitCode = 1;
+// ── 8. Formatting policy ─────────────────────────────────────────────────────
+async function checkFormatting() {
+  const roots = ['src', 'tests', 'scripts'].map((dir) => path.join(ROOT, dir));
+  let count = 0;
+  for (const root of roots) {
+    const files = await walk(root, (name) => /\.(js|mjs|cjs)$/.test(name));
+    for (const file of files) {
+      const relative = path.relative(ROOT, file).split(path.sep).join('/');
+      const source = await readFile(file, 'utf8');
+      for (const problem of formatProblems(relative, source)) report('error', 'formatting', problem);
+      count += 1;
+    }
+  }
+  notes.push(`checked formatting of ${count} source files`);
+}
+
+// ── Run ──────────────────────────────────────────────────────────────────────
+/**
+ * Run every check and return what was found.
+ *
+ * Exported so a test can call the gate directly; the printer below is the CLI's job. Importing
+ * this module has no side effects, which is what lets `findCycles` and `formatProblems` be
+ * exercised on synthetic input.
+ *
+ * @returns {Promise<{findings: {level: string, area: string, message: string}[], notes: string[]}>}
+ */
+export async function runChecks({ only = null } = {}) {
+  findings.length = 0;
+  notes.length = 0;
+  const modules = await checkModules();
+  await checkNamedImports(modules);
+  await checkOffline(modules);
+  await checkManualRegistry();
+  await checkSettings();
+  await checkRequirements();
+  await checkCycles(modules);
+  await checkFormatting();
+  const selected = only ? findings.filter((finding) => only.includes(finding.area)) : [...findings];
+  return { findings: selected, notes: [...notes] };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+  // `--only formatting` runs the whole gate but only reports one area. CI uses it for the
+  // formatting step so the log says which rule failed instead of repeating every check.
+  const onlyIndex = process.argv.indexOf('--only');
+  const only = onlyIndex === -1 ? null : (process.argv[onlyIndex + 1] ?? '').split(',').filter(Boolean);
+  const result = await runChecks({ only });
+  const errors = result.findings.filter((finding) => finding.level === 'error');
+  const warnings = result.findings.filter((finding) => finding.level === 'warn');
+
+  console.log('VERIDEX static checks');
+  for (const note of result.notes) console.log(`  · ${note}`);
+  console.log('');
+
+  if (result.findings.length === 0) {
+    console.log('No findings.');
+  } else {
+    for (const finding of result.findings) {
+      console.log(`${finding.level === 'error' ? 'FAIL' : 'WARN'}  [${finding.area}] ${finding.message}`);
+    }
+  }
+
+  console.log('');
+  console.log(`${errors.length} error(s), ${warnings.length} warning(s)`);
+  if (errors.length > 0) process.exitCode = 1;
+}
