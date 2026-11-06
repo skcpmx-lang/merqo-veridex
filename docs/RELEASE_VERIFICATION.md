@@ -20,8 +20,8 @@ listed here as **NOT VERIFIED**.
 | Hashes quoted below belong to | **the 42160034210 build, not the current tree.** The current tree's bytes could not be fetched into the environment that wrote this document: `gh run download` reaches `*.blob.core.windows.net`, which is outside its network egress (`EOF`), so no hash is claimed for them. A hash nobody computed is not a hash |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
-| Published | **No.** The first blocker is gone: `release.yml` is on `main` and registered, after this branch was merged (`2b71668`). The second is a permission this session does not have — `Actions: write` — so the dispatch answers `403`. See below |
-| Release workflow | **Registered, dispatch refused.** The workflow now exists on `main` (`409192902`), so the endpoint resolves; the call is answered `403 Resource not accessible by integration`, which is the `Actions: write` permission this session's GitHub App installation does not hold. Read the row above for the history: it used to be `404` as well |
+| Published | **No.** Build and artifact verification both pass in CI, and the tag `v1.0.0` exists and names `cc886a3`. The step after the build used to fail — it passed an empty string to `gh release create`, which gh reads as an asset path — and that is fixed (§0a). What remains is the `Actions: write` permission needed to dispatch the workflow from an agent session: the call answers `403`. One click in the Actions tab, by a person with write access, finishes it |
+| Release workflow | **Registered and fixed; dispatch refused.** The workflow exists on `main` (`409192902`); the dispatch is answered `403 Resource not accessible by integration`, the `Actions: write` permission this session's installation does not hold. Its first two steps have been executed against the real repository and return `TAG_ACTION=reuse-ancestor`, `RELEASE_ACTION=create`, `RELEASE_REF=cc886a3` — the tag is reused, not moved, and there is no release to duplicate |
 | Result | **Installed, launched, uninstalled on a VM. Still never run on physical hardware.** |
 
 Every item below is unchecked except the build checks in §1 and the machine checks that
@@ -210,6 +210,16 @@ that means and how to close it.
 machine, and nothing in this document becomes **L4** evidence until that happens.
 
 ---
+
+### The tag that exists, and what it names
+
+`v1.0.0` is an annotated tag pointing at commit `cc886a3`, the merge of the workflow fix. It was
+pushed by a run that then failed while creating the release, so the repository holds a tag with no
+release behind it. The tag is not moved, and no run of this workflow can move it: a resume builds
+the commit the tag names and publishes from there. The application source in that commit
+(`src/`, `resources/`, `electron-builder.config.mjs`, `package.json`, `package-lock.json`) is
+byte-identical to the head of `main`; the only differences between the two commits are CI files —
+the workflow, the release scripts, the tests and these documents.
 
 ## 0a. Publication — what the failed run got wrong
 
