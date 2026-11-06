@@ -1,9 +1,9 @@
 # VERIDEX — 40-section requirements audit
 
-**Commit audited:** `40674688c9e1225d5d5cb9855e0571ab993df78c`
+**Commit audited:** `1b7ab4e042b72dc57293f3044b266b420779db5f`
 **Requirements audited:** 130 across 39 specification sections, plus the cross-cutting release gates as section 40.
 **Static gate:** `node scripts/check.mjs` → 0 errors, 0 warnings.
-**Test suite:** 880 tests, 880 passing, on ubuntu-latest and windows-latest.
+**Test suite:** 881 tests, 881 passing, on ubuntu-latest and windows-latest.
 
 ## How to read this document
 
@@ -1085,7 +1085,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 | --- | --- | --- |
 | Requirements complete | 130 of 130 implemented, 0 marked NS | `docs/requirements.json`, this document |
 | Static gate | 0 errors, 0 warnings | `node scripts/check.mjs` |
-| Test suite | 880/880 on Linux and Windows | run 42194144517 and predecessors |
+| Test suite | 881/881 on Linux and Windows | run 42198220081 and predecessors |
 | Renderer import graph | no Node builtin reachable from the renderer | `tests/integration/renderer-graph.test.js` |
 | Real-window evidence | 23 steps, 35 screenshots, 0 problems | design-evidence run 42192434597, `ci/ui-42192434597` |
 | Installer and portable build | produced and verified for tree `3281c01`; **stale for the current tree** | `docs/RELEASE_VERIFICATION.md` |
@@ -1119,7 +1119,7 @@ None. The last two - R-12-02 and R-18-02 - were closed by building the missing h
 
 - That any diagnostic value is correct for the machine it was collected from. No requirement is VER.
 - That a physical component works: no keyboard, panel, speaker, camera, port or battery has been exercised.
-- That the installer installs on a real desktop: it installs, launches and uninstalls on a virtual machine for this tree (run 42194144517), and has never touched a physical one.
+- That the installer installs on a real desktop: it installs, launches and uninstalls on a virtual machine for this tree (run 42198220081), and has never touched a physical one.
 - That the GPU benchmark measures a real GPU: it has only been run against a fake WebGL context.
 - That the stress runner has been run on real hardware: it has only been run in tests with an injected load.
 

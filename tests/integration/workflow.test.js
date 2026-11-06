@@ -70,6 +70,15 @@ test('the release workflow will not publish without passing tests', () => {
   assert.ok(!/on:\s*push/.test(release), 'a release must not be triggered by a push');
 });
 
+test('the release notes say what has not been verified', () => {
+  // A release page is a recommendation. It has to carry the same caveat as the repository:
+  // everything was executed on a virtual machine, and no requirement is VERIFIED.
+  const release = read('release.yml');
+  assert.match(release, /virtual machine/i, 'the release must say the evidence comes from a VM');
+  assert.match(release, /never been run on real hardware|not field-verified/i, 'the release must say what was never run on hardware');
+  assert.match(release, /KNOWN_LIMITATIONS\.md/, 'the release must point at the limitations document');
+});
+
 test('the release notes state that the build is unsigned', () => {
   const release = read('release.yml');
   assert.match(release, /unsigned/i, 'the release must disclose that it is not signed');

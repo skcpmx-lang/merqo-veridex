@@ -19,7 +19,7 @@ is the narrative summary of it.
 | Implemented, untested | 18 |
 | In progress | 2 |
 | Not started | 0 |
-| Automated tests | 880, all passing |
+| Automated tests | 881, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.5 MiB + portable 106.5 MiB, unsigned |
 

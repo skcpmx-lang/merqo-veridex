@@ -94,6 +94,20 @@ jobs:
 
           and compare the result with `SHA256SUMS.txt` below.
 
+          ### What has been verified, and what has not
+
+          This build is tested, not field-verified. Before publishing, CI runs the whole
+          suite on Linux and Windows, drives the packaged application through its interface,
+          installs it silently, launches the installed copy and uninstalls it again — all on a
+          **virtual machine**. No requirement is marked VERIFIED, because that requires a
+          person at a physical PC with a battery, an SSD exposing SMART and a discrete GPU.
+
+          Known limitations, in full: `docs/KNOWN_LIMITATIONS.md` in the repository. The short
+          version — battery wear, SMART detail and GPU behaviour may be unavailable or
+          reported as unsupported; the GPU benchmark and the stress runner have never been run
+          on real hardware; there is no remembered window position between runs; and a
+          two-monitor or 125 % setup is covered by unit tests rather than by observation.
+
           ### What a scan does and does not do
 
           A scan reads hardware and operating-system state from this machine using
