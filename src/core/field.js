@@ -8,7 +8,7 @@
  * honesty requirements structural instead of aspirational.
  */
 
-import { Status, hasValue, toStatus } from './status.js';
+import { Status, hasValue, toStatus, DATA_ABSENT_EXPECTED, DATA_BLOCKED, DATA_FAILED } from './status.js';
 
 /**
  * How much trust the *source* of a value deserves, combined with whether the
@@ -226,7 +226,7 @@ export function unknownValue(reason, source = null, options = {}) {
  * @property {string} title
  * @property {Record<string, FieldValue>} fields
  * @property {import('./status.js').StatusName} status   Aggregate status.
- * @property {{ok:number, warning:number, missing:number, blocked:number, total:number}} counts
+ * @property {{ok:number, warning:number, missing:number, blocked:number, failed:number, total:number}} counts
  */
 
 /**
@@ -248,33 +248,39 @@ export function section(id, title, fields) {
       if (hasValue(f.status)) acc.ok += 1;
       if (f.status === Status.WARNING) acc.warning += 1;
       if (f.status === Status.PARTIALLY_AVAILABLE) acc.warning += 1;
-      if (
-        f.status === Status.UNAVAILABLE ||
-        f.status === Status.UNSUPPORTED ||
-        f.status === Status.NOT_APPLICABLE ||
-        f.status === Status.UNTESTED
-      ) {
-        acc.missing += 1;
-      }
-      if (f.status === Status.PERMISSION_REQUIRED || f.status === Status.ERROR || f.status === Status.UNKNOWN) {
-        acc.blocked += 1;
-      }
+      // The categories live in status.js, which also documents what each one means. They were
+      // written out again here, so adding a status to the vocabulary silently left this
+      // counting function behind: a new status would have counted as neither missing nor
+      // blocked, and the section would have reported more evidence than it had.
+      if (DATA_ABSENT_EXPECTED.includes(f.status)) acc.missing += 1;
+      if (DATA_BLOCKED.includes(f.status)) acc.blocked += 1;
+      if (DATA_FAILED.includes(f.status)) acc.failed += 1;
       return acc;
     },
-    { ok: 0, warning: 0, missing: 0, blocked: 0, total: values.length }
+    { ok: 0, warning: 0, missing: 0, blocked: 0, failed: 0, total: values.length }
   );
 
+  // FAIL was in no counter, so a module whose only readings were failing (a worn battery, a
+  // drive reporting a critical warning) summarised as UNAVAILABLE: the interface said "no data"
+  // about the one thing it had measured. A failure is evidence, and a section that holds one has
+  // to say so.
   let status;
   if (counts.total === 0) {
     status = Status.UNAVAILABLE;
   } else if (counts.ok === counts.total) {
     status = counts.warning > 0 ? Status.WARNING : Status.PASS;
+  } else if (counts.failed > 0) {
+    // Mixed with anything that did resolve, the honest label is WARNING: some of the module is
+    // fine, one reading is not. Only a section where nothing but the failure resolved is FAIL.
+    status = counts.ok > 0 || counts.warning > 0 || counts.missing > 0 || counts.blocked > 0 ? Status.WARNING : Status.FAIL;
   } else if (counts.ok > 0) {
     status = Status.PARTIALLY_AVAILABLE;
   } else if (values.every((f) => f.status === Status.PERMISSION_REQUIRED)) {
     status = Status.PERMISSION_REQUIRED;
   } else if (values.some((f) => f.status === Status.ERROR)) {
     status = Status.ERROR;
+  } else if (values.some((f) => f.status === Status.UNKNOWN)) {
+    status = Status.UNKNOWN;
   } else {
     status = Status.UNAVAILABLE;
   }

@@ -62,6 +62,9 @@ export const STATUS_META = Object.freeze({
 
 const ALL = Object.freeze(Object.keys(Status));
 
+/** Every status name, in declaration order. Exported so tests can prove the categories are total. */
+export const ALL_STATUSES = ALL;
+
 /** @param {unknown} name */
 export function isStatus(name) {
   return typeof name === 'string' && Object.prototype.hasOwnProperty.call(Status, name);
@@ -87,11 +90,18 @@ export const DATA_ABSENT_EXPECTED = Object.freeze([
   Status.UNAVAILABLE,
   Status.UNSUPPORTED,
   Status.NOT_APPLICABLE,
-  Status.UNTESTED
+  Status.UNTESTED,
+  // UNRATED belongs here rather than nowhere: it means "no usable evidence to weigh", which is
+  // the same shape as the others. It was in none of the three categories, so a field carrying it
+  // counted as neither present, missing nor blocked and disappeared from the section summary.
+  Status.UNRATED
 ]);
 
 /** Statuses that need the user (or an admin) to do something. */
 export const DATA_BLOCKED = Object.freeze([Status.PERMISSION_REQUIRED, Status.ERROR, Status.UNKNOWN]);
+
+/** Data that exists and whose value is bad news: a failing test or a value outside range. */
+export const DATA_FAILED = Object.freeze([Status.FAIL]);
 
 /** Terminal outcomes of an executed test, used by coverage maths. */
 export const OUTCOME_STATUSES = Object.freeze([Status.PASS, Status.FAIL, Status.WARNING]);
@@ -150,5 +160,3 @@ export function statusTone(status) {
 export function statusLabel(status) {
   return STATUS_META[status]?.label ?? String(status);
 }
-
-export { ALL as ALL_STATUSES };

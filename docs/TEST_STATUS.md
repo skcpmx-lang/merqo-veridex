@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 712 · pass 712 · fail 0
+tests 715 · pass 715 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -54,7 +54,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/elevated-runner.test.js` | 8 | the elevated helper: stale result files, timeout, missing/broken results |
 | `tests/unit/export-and-capabilities.test.js` | 6 | capability declarations match tasks and the elevated allowlist |
 | `tests/unit/fallback.test.js` | 8 | provider chain fall-through |
-| `tests/unit/field.test.js` | 13 | FieldValue construction, status vocabulary |
+| `tests/unit/field.test.js` | 15 | FieldValue construction, status vocabulary |
 | `tests/unit/gpu.test.js` | 16 | GPU parsing, vendor heuristic, VRAM sanity |
 | `tests/unit/health-cap.test.js` | 9 | coverage cap and withheld score |
 | `tests/unit/health.test.js` | 24 | component scoring, coverage gating, rating |
@@ -98,7 +98,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **712** | |
+| **Total** | **715** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

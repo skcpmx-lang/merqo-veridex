@@ -142,3 +142,40 @@ test('coverageOf reports present/total and a bounded percentage', () => {
   assert.equal(coverage.percent, 60);
   assert.equal(coverageOf([]).percent, 0, 'empty coverage is 0, never 100');
 });
+
+test('every status is classified, so a section cannot over-report its evidence', async () => {
+  // section() counted "missing" and "blocked" by listing statuses inline. Adding a status to
+  // the vocabulary therefore left the counter behind, and a new status would have counted as
+  // neither - a field with no value that the summary treated as not-there-and-fine.
+  const { ALL_STATUSES: ALL, hasValue, DATA_ABSENT_EXPECTED, DATA_BLOCKED, DATA_FAILED } = await import('../../src/core/status.js');
+  const classes = new Map();
+  for (const status of ALL) {
+    const hit = [
+      hasValue(status) ? 'present' : null,
+      DATA_ABSENT_EXPECTED.includes(status) ? 'absent' : null,
+      DATA_BLOCKED.includes(status) ? 'blocked' : null,
+      DATA_FAILED.includes(status) ? 'failed' : null
+    ].filter(Boolean);
+    assert.equal(hit.length, 1, `status ${status} belongs to ${hit.length} categories (${hit.join(', ')}); it must belong to exactly one`);
+    classes.set(status, hit[0]);
+  }
+  assert.equal(classes.size, ALL.length);
+  assert.equal(classes.get('PASS'), 'present');
+  assert.equal(classes.get('PERMISSION_REQUIRED'), 'blocked');
+  assert.equal(classes.get('UNSUPPORTED'), 'absent');
+  assert.equal(classes.get('FAIL'), 'failed');
+});
+
+test('a section holding a failure reports it instead of claiming there is no data', async () => {
+  const { section, available, field } = await import('../../src/core/field.js');
+  const { Status } = await import('../../src/core/status.js');
+  const failing = section('battery', 'Battery', { wear: field(84, { status: Status.FAIL, unit: '%' }) });
+  assert.equal(failing.status, Status.FAIL, 'a module whose only reading failed must say FAIL, not UNAVAILABLE');
+  assert.equal(failing.counts.failed, 1);
+
+  const mixed = section('storage', 'Storage', { model: available('Samsung', 'cim'), health: field(null, { status: Status.FAIL }) });
+  assert.equal(mixed.status, Status.WARNING, 'a failure among good readings is a warning, not a pass and not a total loss');
+
+  const unknown = section('gpu', 'GPU', { vram: field(null, { status: Status.UNKNOWN, error: 'could not interpret' }) });
+  assert.equal(unknown.status, Status.UNKNOWN, 'a payload that could not be interpreted is not the same as no provider');
+});
