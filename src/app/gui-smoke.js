@@ -511,8 +511,19 @@ async function main() {
     await evaluate(`document.querySelector('.vx-nav__item[data-page="reports"]').click()`);
     await waitFor(`/What this report contains/i.test(document.querySelector('.vx-content')?.innerText ?? '')`, { label: 'the report preview' });
     const text = await evaluate(`document.querySelector('.vx-content').innerText`);
-    for (const marker of ['Modules', 'Evidence fields', 'Coverage', 'Save PDF', 'Save JSON']) {
-      if (!text.includes(marker)) throw new Error(`the report page does not state "${marker}"`);
+    // The coverage labels are drawn with `text-transform: uppercase`, and `innerText` returns
+    // text as rendered - so this compared "EVIDENCE FIELDS" with "Evidence fields" and failed
+    // on Windows, where a real Chromium does the transform, while jsdom (which does not) passed.
+    // The labels are now read from their elements as text, which is the thing being asserted:
+    // that the strip states these figures, not that CSS left their capitalisation alone.
+    const labels = await evaluate(`[...document.querySelectorAll('.vx-coverage__label')].map((node) => node.textContent.trim())`);
+    for (const marker of ['Modules', 'Evidence fields', 'Warnings', 'Errors', 'Coverage']) {
+      if (!labels.some((label) => label.toLowerCase() === marker.toLowerCase())) {
+        throw new Error(`the report preview does not state "${marker}" (it showed: ${labels.join(', ')})`);
+      }
+    }
+    for (const marker of ['Save PDF', 'Save JSON']) {
+      if (!text.includes(marker)) throw new Error(`the report page does not offer "${marker}"`);
     }
     await screenshot('reports-preview');
     return text.length;

@@ -661,8 +661,15 @@ app.whenReady().then(async () => {
 
   session = new InspectionSession({ inspector: null });
 
-  await createWindow();
+  // Handlers before the window. The renderer's boot sequence invokes `app:onboarding`,
+  // `app:info`, `app:settings` and `app:lastScan` the moment its script runs, and Electron
+  // rejects an invoke with no handler registered. Registering afterwards created a race that
+  // a fast machine loses: on the Windows runner the first-run tour silently never appeared
+  // (gui-smoke: "timed out waiting for the first-run tour"), because the renderer's
+  // `app:onboarding` call arrived before this line. A fail-open here is a fail-silent - the
+  // tour is skipped, nothing is logged, and the state still says the tour is owed.
   registerHandlers();
+  await createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow();

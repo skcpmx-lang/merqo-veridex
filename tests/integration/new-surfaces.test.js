@@ -562,6 +562,26 @@ test('every marker the Windows GUI harness expects is actually rendered', { skip
   }
 });
 
+test('the report preview states every figure the Windows harness looks for', { skip }, async () => {
+  // gui-smoke asserts these five labels on the reports page. The labels are drawn with
+  // `text-transform: uppercase`, so reading them out of `innerText` compared "EVIDENCE FIELDS"
+  // with "Evidence fields" - a check that could only fail, on the one platform where a real
+  // Chromium runs it. The harness now reads the label elements; this test keeps the set of
+  // labels it requires and the set the page draws in step.
+  const { document, restore } = await bootWithBridge(baseAnswers({ 'scan:last': { ok: true, data: { scan: scanFixture() } } }));
+  try {
+    await waitFor(() => document.querySelector('.vx-content').textContent.length > 40, { label: 'the dashboard' });
+    document.querySelector('.vx-nav__item[data-page="reports"]').click();
+    await waitFor(() => /What this report contains/.test(document.querySelector('.vx-content').textContent), { label: 'the report page' });
+    const labels = [...document.querySelectorAll('.vx-coverage__label')].map((node) => node.textContent.trim());
+    for (const marker of ['Modules', 'Evidence fields', 'Warnings', 'Errors', 'Coverage']) {
+      assert.ok(labels.some((label) => label.toLowerCase() === marker.toLowerCase()), `the report preview does not state "${marker}" (it showed: ${labels.join(', ')})`);
+    }
+  } finally {
+    restore();
+  }
+});
+
 // ── Dashboard widget arrangement (R-19-02) ─────────────────────────────────
 
 test('the dashboard honours the configured widget list, in order', { skip }, async () => {

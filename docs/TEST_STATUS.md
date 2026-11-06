@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 709 · pass 709 · fail 0
+tests 711 · pass 711 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -84,9 +84,9 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/contrast.test.js` | 10 | contrast ratios for both themes and every accent, focus visibility, no hardcoded colours |
 | `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
 | `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
-| `tests/integration/gui-coverage.test.js` | 6 | the Windows GUI harness covers every page and uploads its screenshots |
+| `tests/integration/gui-coverage.test.js` | 9 | the Windows GUI harness covers every page and uploads its screenshots |
 | `tests/integration/install-smoke-harness.test.js` | 9 | the installed build smoke harness itself |
-| `tests/integration/new-surfaces.test.js` | 23 | first-run tour, activity log, driver export card, Reports and Privacy |
+| `tests/integration/new-surfaces.test.js` | 24 | first-run tour, activity log, driver export card, Reports and Privacy |
 | `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
 | `tests/integration/privacy-verification.test.js` | 7 | redaction on disk and on export, retention, reset safety |
 | `tests/integration/provider-invocation.test.js` | 13 | CI workflows reference scripts that exist; tests gate publishing |
@@ -98,7 +98,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **709** | |
+| **Total** | **711** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

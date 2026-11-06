@@ -95,3 +95,20 @@ test('the figures quoted about the Windows run match the code they describe', as
   assert.match(doc, new RegExp(`all ${pages} pages`, 'i'), `the document must quote the real page count (${pages})`);
   assert.doesNotMatch(doc, /all 15 pages/i, 'the older page count is still quoted somewhere');
 });
+
+test('IPC handlers are registered before the window loads the renderer', async () => {
+  // The renderer invokes app:onboarding, app:info, app:settings and app:lastScan from its first
+  // script evaluation. Registering handlers after createWindow() gave the renderer a window it
+  // could outrun, and Electron rejects an unhandled invoke rather than queueing it: on the
+  // Windows runner this is what made the first-run tour silently never appear. Nothing else in
+  // this suite can see it, because jsdom has no such race.
+  const main = await read('src/app/main.js');
+  const ready = main.slice(main.indexOf('app.whenReady()'));
+  const end = ready.indexOf("app.on('activate'", ready.indexOf('await createWindow()'));
+  const body = end === -1 ? ready : ready.slice(0, end);
+  const registered = body.indexOf('registerHandlers()');
+  const created = body.indexOf('await createWindow()');
+  assert.ok(registered !== -1, 'registerHandlers() must be called at startup');
+  assert.ok(created !== -1, 'createWindow() must be called at startup');
+  assert.ok(registered < created, 'registerHandlers() must run before createWindow(), or the renderer can invoke a channel that has no handler');
+});
