@@ -258,3 +258,33 @@ test('two scans write history a comparison can actually read', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('a provider that returns a secret has it refused at collection, not only at export', async () => {
+  // The privacy page promises "secrets are never collected: the collector refuses these field
+  // names". Nothing called the collector's rule, so the promise rested on export-time redaction
+  // alone - and the value would still have been in the scan, the history snapshot and the
+  // interface. This is the path that makes the sentence true.
+  const registry = new ProviderRegistry();
+  registry.registerProvider({
+    id: 'fake-secrets',
+    title: 'A provider that ignores the policy',
+    async collect() {
+      return {
+        productKey: available('XXXXX-XXXXX-XXXXX-XXXXX-XXXXX', 'fake-secrets'),
+        recoveryKey: available('123456-123456', 'fake-secrets'),
+        model: available('Fake Board', 'fake-secrets')
+      };
+    }
+  });
+  registry.registerTask({ id: 'secrets.test', module: 'secrets', title: 'Secrets', providers: ['fake-secrets'] });
+
+  const scan = await runScan({ registry, logger: new NullLogger(), settings: {}, permissions: STANDARD_SESSION, historyFile: null });
+  const fields = scan.modules.secrets;
+  assert.equal(fields.model.value, 'Fake Board', 'an ordinary field is untouched');
+  for (const key of ['productKey', 'recoveryKey']) {
+    assert.equal(fields[key].value, null, `${key} must not carry a value`);
+    assert.equal(fields[key].status, Status.UNSUPPORTED);
+    assert.match(fields[key].notes.join(' '), /never-collect/i, `${key} must say why it is absent`);
+  }
+  assert.ok(!JSON.stringify(scan.modules).includes('XXXXX'), 'the secret must not survive anywhere in the scan');
+});

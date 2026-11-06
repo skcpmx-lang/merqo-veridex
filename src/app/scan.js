@@ -16,6 +16,7 @@ import { CommandRunner, NoopRunner } from '../platform/runner.js';
 import { HistoryStore } from '../history/store.js';
 import { buildSnapshot } from '../history/compare.js';
 import { guardFromSettings } from '../security/guard.js';
+import { enforceNeverCollect } from '../security/privacy.js';
 import { Status } from '../core/status.js';
 import { InspectionSession } from '../manual/session.js';
 import { runnerOptions, historyOptions } from './settings-wiring.js';
@@ -96,7 +97,15 @@ export async function runScan(options = {}) {
     onProgress: options.onProgress
   });
 
-  const modules = Object.fromEntries(Object.entries(byModule).map(([id, section]) => [id, section.fields]));
+  // `enforceNeverCollect` existed, documented as the thing that keeps "secrets are never
+  // collected" true, and the collection path never called it. Redaction at export time covered
+  // the formats, but a field named `productKey` sat in the scan in the meantime - in the
+  // interface, in the history snapshot and in any consumer added later. The policy is applied
+  // here, where the fields enter the application, and the refused key is kept as an UNSUPPORTED
+  // placeholder so the report can say why the value is absent.
+  const modules = Object.fromEntries(
+    Object.entries(byModule).map(([id, section]) => [id, enforceNeverCollect(section.fields)])
+  );
   const sectionTitles = Object.fromEntries(Object.entries(byModule).map(([id, section]) => [id, section.title]));
   const assessment = assessFromDiagnostics(modules);
 
