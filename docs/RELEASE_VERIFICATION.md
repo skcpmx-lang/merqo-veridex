@@ -16,7 +16,7 @@ listed here as **NOT VERIFIED**.
 | | |
 | --- | --- |
 | Release candidate | `1.0.0`, built by CI — installed, launched and removed on a Windows runner |
-| Build produced | **Yes, twice.** Run 42160034210 built, installed, launched and removed the build whose hashes are quoted below. Run **42186269187** built the same two targets from the current tree and passed artifact verification, package validation and the unpacked GUI smoke test |
+| Build produced | **Yes, twice.** Run 42160034210 built, installed, launched and removed the build whose hashes are quoted below. Run **42194144517** built the same two targets from the current tree (`29c7a32`) and passed artifact verification, package validation, the unpacked GUI smoke test, the portable launch check and the installer's install/launch/uninstall |
 | Hashes quoted below belong to | **the 42160034210 build, not the current tree.** The current tree's bytes could not be fetched into the environment that wrote this document: `gh run download` reaches `*.blob.core.windows.net`, which is outside its network egress (`EOF`), so no hash is claimed for them. A hash nobody computed is not a hash |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
@@ -32,17 +32,17 @@ an SSD and a discrete GPU in it.
 
 ## The artifacts of the current tree, and what can and cannot be said about them
 
-The packaging job of run **42187908032** (source commit `72ad47b`, `windows-latest`) built the
+The packaging job of run **42194144517** (source commit `29c7a32`, `windows-latest`) built the
 installer, the portable executable, the build manifest and `dist/SHA256SUMS.txt`, and passed
 artifact verification, package validation and the unpacked GUI smoke test. GitHub's REST API reports
 these artifacts for that run, and this section was written from its answer, not from memory:
 
 | Artifact | Size (bytes) | GitHub's archive digest | What it is |
 | --- | --- | --- | --- |
-| `veridex-windows` | 234,992,960 | `sha256:74e1d5ec5f991b88cedcb698f2ee6d4abbbf38af805cc93eeff024cd3ae5a801` | the zip containing the NSIS installer, the portable executable, the build manifest and `SHA256SUMS.txt` |
-| `veridex-gui-evidence` | 3,669,424 | `sha256:308d2ccbd96439dee85ed06138cb56f666df84b05d679baa1b6fca53d3faa776` | the GUI harness report and screenshots |
-| `test-results-windows-latest` | 34,382 | `sha256:563ab5286c3407faa46a5e57cd683ec506de36acfb5df286976340baf14331ed` | the Windows test run |
-| `test-results-ubuntu-latest` | 33,486 | `sha256:9e698e6e63e3c031b37bf0e57b8b0544a26de86f92345abacb821f79ad4bc576` | the Linux test run |
+| `veridex-windows` | 234,987,522 | `sha256:3598b4788d607d26f4258c7f11b86e47df9495e530ff54ab6fd92a97d2af91ec` | the zip containing the NSIS installer, the portable executable, the build manifest and `SHA256SUMS.txt` |
+| `veridex-gui-evidence` | 3,814,166 | `sha256:48588286103ed61a416293f7c7d39057be92c6e99147016eff2dadb0d4240c6d` | the GUI harness report and screenshots |
+| `test-results-windows-latest` | 35,653 | `sha256:399b011d363374c96f885c938cc78b567545ad87690b19251a33ffd67c2f44a9` | the Windows test run |
+| `test-results-ubuntu-latest` | 34,786 | `sha256:aedf9cc4b9a57eb93c3cbe983c47d54393c607af2ef8374a31ed84d9671ed004` | the Linux test run |
 
 **Those digests are GitHub's SHA-256 of the artifact _archives_, not of the executables inside
 them.** They prove the archive that holds the build, and they would let you confirm a download is
@@ -52,7 +52,7 @@ installer and portable hashes are **not recorded here**, because the bytes could
 into the environment that wrote this file:
 
 ```
-$ gh run download 42187908032 -R skcpmx-lang/merqo-veridex -D dist-ci
+$ gh run download 42194144517 -R skcpmx-lang/merqo-veridex -D dist-ci
 error downloading test-results-windows-latest: Get "https://productionresultssa18.blob.core.windows.net/...": EOF
 ```
 
@@ -67,16 +67,16 @@ Either path works; the first needs a browser and no token.
 
 **Through the web UI**
 
-1. Open <https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42187908032>.
-2. Scroll to **Artifacts** and download `veridex-windows` (234,992,960 bytes).
-3. Confirm the downloaded zip's own SHA-256 is `74e1d5ec…a801` before opening it:
+1. Open <https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42194144517>.
+2. Scroll to **Artifacts** and download `veridex-windows` (234,987,522 bytes).
+3. Confirm the downloaded zip's own SHA-256 is `3598b478…91ec` before opening it:
    - Windows: `Get-FileHash .\veridex-windows.zip -Algorithm SHA256`
    - macOS/Linux: `shasum -a 256 veridex-windows.zip`
 
 **Through the CLI (needs `gh auth login` on a machine with unrestricted network access)**
 
 ```bash
-gh run download 42187908032 -R skcpmx-lang/merqo-veridex -n veridex-windows -D dist-ci
+gh run download 42194144517 -R skcpmx-lang/merqo-veridex -n veridex-windows -D dist-ci
 cd dist-ci
 sha256sum VERIDEX-Setup-1.0.0-x64.exe VERIDEX-1.0.0-portable-x64.exe   # or Get-FileHash on Windows
 cat SHA256SUMS.txt                                                    # CI's own record, compare it
@@ -121,8 +121,8 @@ can be completed without a physical machine — see §2 and §7.
 - **the portable executable launched** from its extraction directory and reported a working
   interface: 10 checks, no problems, 15 seconds end to end;
 **Established for the current tree** (same runner, CI run
-[42187908032](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42187908032), source
-commit `72ad47b`): the installer and portable were built; artifact verification and package
+[42194144517](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42194144517), source
+commit `29c7a32`): the installer and portable were built; artifact verification and package
 validation passed; the unpacked build was driven through the GUI smoke test; the portable
 executable launched from its extraction directory; and the installer installed silently,
 launched the installed application and uninstalled it. The *hashes* above are still the ones

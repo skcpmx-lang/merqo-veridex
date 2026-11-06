@@ -28,16 +28,16 @@ These ran, in this environment or in CI, and the output was read.
 | What | Where | Result |
 | --- | --- | --- |
 | Full test suite | this container (Linux) | `# tests 878 · # pass 878 · # fail 0` |
-| Full test suite | `windows-latest` (runs `42182778326`, `42187908032`) | green, 878 tests |
+| Full test suite | `windows-latest` (runs `42187908032`, `42194144517`) | green, 878 tests |
 | Static gate | `node scripts/check.mjs` | "No findings." — 0 errors, 0 warnings |
 | Licence audit | `npm run audit:licences` | 339 packages, 0 errors, 1 recorded exception (`png-js`, undeclared licence, upstream states MIT) |
 | Requirement audit | `npm run audit:requirements -- --check` | "Every claimed status matches the repository contents." |
 | Memory stability worker | `tests/unit/memory-stability.test.js` | a real 64 MB buffer written and read back through a worker; 0 mismatches |
 | Real window (Electron 45.2.3, Windows) | run [42192434597](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42192434597) | 23 steps, 35 screenshots, 0 problems, 0 renderer console messages |
 | Window placement in that window | same run | `window 1024x720 at 0,0; display 1024x768 at 100 %, work area 1024x720; overflow {left:0,top:0,right:0,bottom:0}` — the window is the work area, not the resolution, and 48 px of taskbar are excluded |
-| Artifact inventory for the packaged build | `gh api …/actions/runs/42187908032/artifacts` | four artifacts, with sizes and GitHub's archive digests — recorded in `RELEASE_VERIFICATION.md` |
+| Artifact inventory for the packaged build | `gh api …/actions/runs/42194144517/artifacts` | four artifacts, with sizes and GitHub's archive digests — recorded in `RELEASE_VERIFICATION.md` |
 | Release workflow dispatch | `gh workflow run release.yml`; `POST /actions/workflows/build.yml/dispatches` | `404` for `release.yml` (never on `main`, so never registered); `403 Resource not accessible by integration` for a registered workflow (the installation has no `Actions: write`) |
-| Artifact download | `gh run download 42187908032` | `EOF` on `*.blob.core.windows.net` — reachable API, unreachable payload host |
+| Artifact download | `gh run download 42194144517` | `EOF` on `*.blob.core.windows.net` — reachable API, unreachable payload host |
 | Real WMI / PowerShell / registry sweep | `windows-latest`, same run family | 1,094 fields across 19 modules, 32 provider attempts, score 84 at 75 % coverage, 10 info + 45 ok |
 | Dependency graph + formatting policy | CI step on every push | both clean; both proven to refuse bad input by test |
 
@@ -95,7 +95,7 @@ Named, with the reason. None of these is a code defect, and none is presented as
 | GPU benchmark on a real GPU | **unverified** | the unit tests use a fake WebGL context; the evidence run never presses the button |
 | Stress run on real hardware | **unverified** | only the guard and the runner are tested, with injected loads. A stress run in CI would measure the runner |
 | The crash path (`uncaughtException` → marker → exit) | **partly executed** | the marker, the descriptions and staleness are unit-tested; no process was actually killed to produce one |
-| The installer's own SHA-256 for *this* tree | **not computed** | the binary was **built** (run `42187908032`) and its artifact archive has GitHub's digest, but the payload is served from `*.blob.core.windows.net`, which this environment cannot reach (`EOF`). A hash nobody computed is not a hash; `RELEASE_VERIFICATION.md` says which hashes are whose and gives the owner the exact commands |
+| The installer's own SHA-256 for *this* tree | **not computed** | the binary was **built** (run `42194144517` from `29c7a32`) and its artifact archive has GitHub's digest, but the payload is served from `*.blob.core.windows.net`, which this environment cannot reach (`EOF`). A hash nobody computed is not a hash; `RELEASE_VERIFICATION.md` says which hashes are whose and gives the owner the exact commands |
 | A published release, or a tag | **not created** | deliberately: `release.yml` is not registered (it has never been on `main`, so `workflow_dispatch` answers `404`) and dispatching any workflow from here is refused with `403` because the GitHub App installation has no `Actions: write` |
 | Second monitor, negative origin, 125 % work area in a real window (R-18-02) | **unit-tested, not observed** | the evidence runner has one 1024x700 display at 100 %. The placement arithmetic for two monitors is 20 unit tests; no window was dragged between two real screens |
 | The `schtasks` fallback (R-12-02) | **unit-tested, not observed** | no machine without the ScheduledTasks module was available. The fallback's parsing is tested against fixtures that reproduce its CSV shape |
@@ -141,7 +141,7 @@ Each of these is a limit of the environment, stated so nobody later assumes it w
 
 | Attempt | Result | Cause, precisely |
 | --- | --- | --- |
-| Download the installer and portable from run `42187908032` | `EOF` | `gh run download` follows a redirect to `productionresultssa18.blob.core.windows.net`; that host is outside this sandbox's network egress. `api.github.com` is reachable, which is why the artifact *names*, *sizes* and *archive digests* are recorded |
+| Download the installer and portable from run `42194144517` | `EOF` | `gh run download` follows a redirect to `productionresultssa18.blob.core.windows.net`; that host is outside this sandbox's network egress. `api.github.com` is reachable, which is why the artifact *names*, *sizes* and *archive digests* are recorded |
 | `gh workflow run release.yml` | `HTTP 404` | the workflow has never existed on `main`; GitHub only registers `workflow_dispatch` workflows present on the default branch |
 | `POST /actions/workflows/build.yml/dispatches` | `403` | `{"message":"Resource not accessible by integration"}` — the GitHub App installation token has Actions read, not `Actions: write` |
 | Compute SHA-256 of the two executables | not attempted further | they are inside the artifact archive above. Hashing a different file and calling it the installer's hash would be a lie, so `RELEASE_VERIFICATION.md` records GitHub's archive digest under exactly that name and gives the owner the commands |
