@@ -383,21 +383,18 @@ async function main() {
 
     // Scroll to the cards below the fold, so the evidence shows them rather than the CPU card
     // they sit under.
+    // Scroll the memory card into the middle of the viewport rather than to the bottom of the
+    // page: the first attempt scrolled to the end and photographed the stress card, which is
+    // evidence of the wrong thing.
     const scrolled = await evaluate(`(() => {
-      // The page scrolls inside the content region, not the window; scrolling the window body
-      // would move nothing and the screenshot would show the same top-of-page frame twice.
-      const candidates = [document.querySelector('.vx-content'), document.querySelector('#vx-main'), document.scrollingElement];
-      for (const node of candidates) {
-        if (!node) continue;
-        if (node.scrollHeight > node.clientHeight + 40) {
-          node.scrollTop = node.scrollHeight;
-          return { scrolled: node.className || node.tagName, top: Math.round(node.scrollTop) };
-        }
-      }
-      return { scrolled: null, top: 0 };
+      const card = document.querySelector('#vx-memory-run')?.closest('.vx-card') ?? null;
+      if (!card) return { scrolled: null, top: 0 };
+      card.scrollIntoView({ block: 'center' });
+      const scroller = document.querySelector('.vx-content');
+      return { scrolled: 'memory card', top: scroller ? Math.round(scroller.scrollTop) : 0 };
     })()`);
-    record('info', `scrolled to the lower cards: ${JSON.stringify(scrolled)}`);
-    if (!scrolled.scrolled) record('warn', 'nothing on the Performance page scrolled, so the lower cards may not be in the screenshot');
+    record('info', `scrolled the memory card into view: ${JSON.stringify(scrolled)}`);
+    if (!scrolled.scrolled) record('fail', 'the memory card could not be scrolled into view, so the screenshot would show the wrong cards');
     await screenshot('performance-cards');
 
     // The arrangement editor, entered and left again so the later dashboard shots are the
