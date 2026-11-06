@@ -237,17 +237,20 @@ test('a toast appears, is dismissable, and is capped in number', { skip }, async
 
     const host = window.document.querySelector('.vx-toasts');
     assert.ok(host, 'the toast region must exist');
-    assert.equal(host.children.length, 4, 'at most four toasts may be on screen');
+    // Inside the application column the stack holds two, because it takes layout space from the
+    // page; a floating stack (no shell) still allows four.
+    assert.equal(host.children.length, 2, 'the in-column stack caps at two');
     assert.match(host.textContent, /Event 5/, 'the newest toast must survive the cap');
+    assert.match(host.textContent, /Event 4/, 'the second newest must survive too');
 
     // The page reserves room for the stack while it is on screen, so the last card is never
     // permanently underneath a notification.
-    assert.equal(window.document.body.dataset.toasts, '4', 'the page must know toasts are covering it');
+    assert.equal(window.document.body.dataset.toasts, '2', 'the page must know toasts are on screen');
 
     const close = host.querySelector('.vx-toast__close');
     close.click();
-    await waitFor(() => host.children.length === 3, { label: 'the dismissed toast to leave' });
-    assert.equal(window.document.body.dataset.toasts, '3', 'the reserve must follow the stack');
+    await waitFor(() => host.children.length === 1, { label: 'the dismissed toast to leave' });
+    assert.equal(window.document.body.dataset.toasts, '1', 'the marker must follow the stack');
 
     for (const node of [...host.children]) host.removeChild(node);
     await waitFor(() => window.document.body.dataset.toasts === undefined, { label: 'the reserve to be released' });
@@ -411,6 +414,10 @@ test('the dashboard shows device state rather than a decorative shell', { skip }
     const text = document.querySelector('.vx-content').textContent;
     assert.match(text, /Unrated|Not measured/, 'an unmeasured machine must not be presented as healthy');
     assert.ok(document.querySelectorAll('.vx-card').length >= 2, 'the dashboard is built from real cards');
+    // Nothing is running, so there is nothing to cancel: a red button that would do nothing is
+    // worse than no button.
+    assert.equal(document.getElementById('vx-start-scan')?.disabled, false, 'a scan can be started');
+    assert.equal(document.getElementById('vx-cancel-scan'), null, 'cancel is not offered while idle');
   } finally {
     restore();
   }

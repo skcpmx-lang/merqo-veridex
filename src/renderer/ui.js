@@ -400,6 +400,13 @@ let toastHost = null;
 const TOAST_LIMIT = 4;
 
 /**
+ * The stack inside the application column takes layout space, so it gets a smaller cap: four
+ * notifications at full size would take half of a 700px window away from the page being
+ * reported on. A floating stack covers nothing but itself and keeps the larger limit.
+ */
+const COLUMN_TOAST_LIMIT = 2;
+
+/**
  * The toast container, created once and appended to the document body.
  * @returns {HTMLElement|null}
  */
@@ -466,7 +473,8 @@ export function toast(options) {
   node.append(close);
 
   host.append(node);
-  while (host.children.length > TOAST_LIMIT) host.children[0].remove();
+  const limit = host.parentElement?.id === 'vx-main' ? COLUMN_TOAST_LIMIT : TOAST_LIMIT;
+  while (host.children.length > limit) host.children[0].remove();
   syncToastMarker();
 
   const timeout = options.timeoutMs ?? (tone === 'bad' ? 12_000 : 6_000);

@@ -211,7 +211,9 @@ function buildTopbar() {
       searchButton,
       helpButton,
       startButton,
-      cancelButton
+      // Cancel appears only while something is running. A permanently visible red button reads
+      // as an available destructive action, and there is nothing to cancel.
+      ...(state.scan.running ? [cancelButton] : [])
     ]
   });
 
