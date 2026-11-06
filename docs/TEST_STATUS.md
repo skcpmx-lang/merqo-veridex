@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 708 · pass 708 · fail 0
+tests 709 · pass 709 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -81,7 +81,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/audit-gate.test.js` | 6 | the requirement audit refuses a claim it cannot support |
 | `tests/integration/build-boundary.test.js` | 3 | nothing test-only or fixture-only can be packaged |
 | `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
-| `tests/integration/contrast.test.js` | 9 | contrast ratios for both themes and every accent, focus visibility, no hardcoded colours |
+| `tests/integration/contrast.test.js` | 10 | contrast ratios for both themes and every accent, focus visibility, no hardcoded colours |
 | `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
 | `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
 | `tests/integration/gui-coverage.test.js` | 6 | the Windows GUI harness covers every page and uploads its screenshots |
@@ -98,7 +98,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **708** | |
+| **Total** | **709** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

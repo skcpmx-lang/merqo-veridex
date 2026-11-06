@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { themeTokens, contrastRatio, ACCENTS, SURFACES, TONES } from '../../src/renderer/theme.js';
+import { themeTokens, contrastRatio, themeAudit, ACCENTS, SURFACES, TONES } from '../../src/renderer/theme.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const MODES = ['dark', 'light'];
@@ -149,4 +149,17 @@ test('the stylesheet fallback block matches the default theme exactly', async ()
     if (tokens[token].replace(/\s+/g, '') !== value.replace(/\s+/g, '')) drift.push(`${token}: stylesheet says ${value}, theme says ${tokens[token]}`);
   }
   assert.deepEqual(drift, [], `the fallback block has drifted from the theme:\n${drift.join('\n')}`);
+});
+
+test('themeAudit() is honest: it runs, and it is held to the text threshold', async () => {
+  // The module header describes themeAudit() as "asserted empty by the test suite", and
+  // nothing called it. It also carried 3:1 for muted text, which is why it reported ok
+  // while the interface drew that colour at 4.16:1 on a card. Both are now checked.
+  const audit = themeAudit();
+  assert.equal(audit.ok, true, `themeAudit reports failures:\n${audit.failures.join('\n')}`);
+
+  const source = await readFile(path.join(ROOT, 'src/renderer/theme.js'), 'utf8');
+  assert.match(source, /\['muted on a card', 'inkMuted', 'bgCard', 4\.5\]/, 'muted text on a card must be audited at 4.5:1');
+  assert.match(source, /\['secondary on a card', 'inkSoft', 'bgCard', 4\.5\]/, 'secondary text on a card must be audited at 4.5:1');
+  assert.doesNotMatch(source, /'inkMuted', 'bg', 3\.0/, 'the muted pair must not be audited at the UI-shape threshold');
 });

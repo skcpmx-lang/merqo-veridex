@@ -77,9 +77,26 @@ never reads as either a pass or a failure.
 
 ### 2.4 Contrast
 
-`contrastRatio()`, `luminance()` and `themeAudit()` in `theme.js` compute WCAG contrast
-for every foreground/background pair in both modes. `themeAudit()` currently returns
-`{ ok: true, failures: [] }`.
+`contrastRatio()`, `luminance()` and `themeAudit()` in `theme.js` compute WCAG contrast, and
+`tests/integration/contrast.test.js` measures every pair the interface actually draws: body,
+secondary, muted and tone text on both the page and a card, the accent on the page and as a
+button label, in both themes, for all five accents — ten theme/accent combinations.
+
+Text is held to 4.5:1, shapes and borders to 3:1. Measured values at the time of writing:
+
+| Pair | Dark | Light |
+| --- | --- | --- |
+| body on the page | 16.42 | 17.60 |
+| secondary on the page | 8.64 | 6.52 |
+| muted on the page / on a card | 5.58 / 4.89 | 5.66 / 6.03 |
+| accent on the page (lowest of five) | 6.42 | 4.62 |
+| label on an accent button (lowest) | 6.03 | 4.92 |
+| pass / warn / fail / info tones | 6.78–11.24 | 4.71–6.07 |
+
+Two values failed that measurement and were corrected rather than accepted: the light theme's
+muted ink (3.71:1 — it was the dark theme's colour) and the light theme's accent button label
+(2.52:1 — dark ink on a darkened accent). `docs/KNOWN_LIMITATIONS.md` §19 has the details,
+including what this measurement cannot tell you.
 
 Colour is never the only carrier of meaning: every status also has a glyph and a word
 (§4).

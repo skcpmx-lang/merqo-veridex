@@ -197,12 +197,18 @@ export function statusPresentation(status) {
  */
 export function themeAudit() {
   const failures = [];
+  // Text clears 4.5:1 wherever it is drawn - including on a card, which is where most of
+  // this interface's small labels live. The muted pair used to be listed at 3:1, and that
+  // 3:1 is exactly why this audit reported ok while the interface drew #6E8299 at 4.16:1
+  // on a card.
   const pairs = [
-    ['body', 'ink', 'bg', 4.5],
-    ['secondary', 'inkSoft', 'bg', 4.5],
-    ['muted', 'inkMuted', 'bg', 3.0],
-    ['card body', 'ink', 'bgCard', 4.5],
-    ['accent on surface', 'accent', 'bg', 3.0]
+    ['body on the page', 'ink', 'bg', 4.5],
+    ['body on a card', 'ink', 'bgCard', 4.5],
+    ['secondary on the page', 'inkSoft', 'bg', 4.5],
+    ['secondary on a card', 'inkSoft', 'bgCard', 4.5],
+    ['muted on the page', 'inkMuted', 'bg', 4.5],
+    ['muted on a card', 'inkMuted', 'bgCard', 4.5],
+    ['accent on the page', 'accent', 'bg', 3.0]
   ];
 
   for (const mode of ['dark', 'light']) {
@@ -230,10 +236,11 @@ export function themeAudit() {
     }
 
     // Status tones must be readable as text on the surface, because the report and
-    // the UI both render them as words rather than colour swatches.
+    // the UI both render them as words rather than colour swatches - so they are held to
+    // the text threshold, not the 3:1 used for shapes and borders.
     for (const [toneName, colour] of Object.entries(tone)) {
       const ratio = contrastRatio(colour, surface.bg);
-      if (ratio < 3.0) failures.push(`${mode}/tone ${toneName}: ${ratio}:1 (needs 3:1)`);
+      if (ratio < 4.5) failures.push(`${mode}/tone ${toneName}: ${ratio}:1 (needs 4.5:1)`);
     }
   }
 

@@ -36,7 +36,7 @@ an SSD and a discrete GPU in it.
 | `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `90a5602b6f4a5c72b68ed7838ea9308cd85d0303cbd3439c03ca9da76fd511c0` |
 | `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `3627a41d3e3ce6e7c73c5ac6afad19099fa61766699da23c8aafb378e9d7ff0a` |
 
-- the full test suite passes on Windows as well as Linux (708 tests at the time of writing);
+- the full test suite passes on Windows as well as Linux (709 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
@@ -88,7 +88,7 @@ machine, and nothing in this document becomes **L4** evidence until that happens
 ## 1. Build — performed by CI on windows-latest
 
 - [x] `npm ci` completes from a clean checkout
-- [x] `npm test` passes with zero failures (708 tests, both platforms)
+- [x] `npm test` passes with zero failures (709 tests, both platforms)
 - [x] `npm run check` reports 0 errors
 - [x] `npm run audit:requirements -- --check` reports no inconsistency
 - [x] `npm run build:win` produces an NSIS installer and a portable executable
