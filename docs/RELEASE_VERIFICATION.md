@@ -16,7 +16,7 @@ listed here as **NOT VERIFIED**.
 | | |
 | --- | --- |
 | Release candidate | `1.0.0`, built by CI — installed, launched and removed on a Windows runner |
-| Build produced | **Yes** — Windows x64 installer and portable; CI run 42158921882 built, installed, launched and removed it |
+| Build produced | **Yes** — Windows x64 installer and portable; CI run 42160034210 built, installed, launched and removed it |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
 | Result | **Installed, launched, uninstalled on a VM. Still never run on physical hardware.** |
@@ -29,12 +29,12 @@ an SSD and a discrete GPU in it.
 
 ## What has been established, and what has not
 
-**Established** (Windows Server 2025 runner, `windows-latest`, CI run 42158921882):
+**Established** (Windows Server 2025 runner, `windows-latest`, CI run 42160034210):
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `VERIDEX-Setup-1.0.0-x64.exe` | 117.5 MiB | `8aa98c2ee76087d3a954a0328168f5f51a0dcd284e3f0df0b06a6cdec428f426` |
-| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `63e8a3468f5f1e7019ee78725b54a2a866c697330a59e7a32d1b2ea4c8ad97ed` |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.5 MiB | `e6d0fdd88c6e9c78d2543e321b9b6c63fa63d2e407454c1343dd5d2ffa5ecec2` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `40d6a0db33414c3be914fb068c31048136c95394ca75acabad25bd43de14b487` |
 
 - the GUI harness drove the real window through 19 steps with 0 warnings and 0 problems;
 - these hashes belong to the build from that run. Any later commit produces a different binary:
@@ -55,7 +55,8 @@ an SSD and a discrete GPU in it.
 - **the installer installed**: silently, per-user, into `%LOCALAPPDATA%\Programs\VERIDEX`,
   with an uninstaller and both shortcuts; **the installed application then launched and
   worked** — title, preload bridge with 32 invoke channels, a real `app:info` call, and all
-  18 pages rendered from inside the installed build — and **the uninstaller removed it**; 18 checks,
+  18 pages rendered from inside the installed build — and **the uninstaller removed it**; 17 checks
+  (this count moves between 17 and 18 with what the runner allows),
   no problems.
 
 **Not established — and these are the reasons no release is published:**

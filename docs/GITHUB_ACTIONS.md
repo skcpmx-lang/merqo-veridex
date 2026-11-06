@@ -26,6 +26,7 @@ Recorded runs:
 | [`42154677493`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42154677493) | push | ✅ GUI 13 steps, install 17 checks, portable 10 checks, 0 problems |
 | [`42157700654`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42157700654) | pull request | ❌ package job: two gui-smoke problems (tour missing, report label) — both real, both fixed |
 | [`42158921882`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42158921882) | pull request | ✅ both fixes confirmed on Windows: GUI 19 steps, install 18 checks, portable 10 checks, 0 problems |
+| [`42160034210`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42160034210) | pull request | ✅ final tree: GUI 19 steps, install 17 checks, portable 10 checks, 0 problems, and the "setting rejected" warning is gone |
 
 Before run 42013425380 the workflow had been **failing on every push since it was added**,
 and this document incorrectly said it had not run at all. That was wrong in a way worth

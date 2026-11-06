@@ -27,8 +27,8 @@ evidence level of every subsystem.
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `VERIDEX-Setup-1.0.0-x64.exe` | 117.5 MiB | `8aa98c2ee76087d3a954a0328168f5f51a0dcd284e3f0df0b06a6cdec428f426` |
-| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `63e8a3468f5f1e7019ee78725b54a2a866c697330a59e7a32d1b2ea4c8ad97ed` |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.5 MiB | `e6d0fdd88c6e9c78d2543e321b9b6c63fa63d2e407454c1343dd5d2ffa5ecec2` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `40d6a0db33414c3be914fb068c31048136c95394ca75acabad25bd43de14b487` |
 
 These come from a `windows-latest` CI runner. **Unsigned**, so SmartScreen will warn. They
 are not offered for download from a release page, because a release page is a

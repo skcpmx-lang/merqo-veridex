@@ -153,7 +153,7 @@ Stated plainly, because this is the section that matters:
 4. ~~That the installer installs.~~ **Done.** `npm run smoke:install` runs the real installer
    silently on the Windows runner, launches the installed application, checks its window,
    title, preload bridge, one IPC round trip and all 18 pages, then runs the uninstaller and
-   confirms the files, directory and shortcuts are gone. 18 checks, no problems.
+   confirms the files, directory and shortcuts are gone. 17–18 checks, no problems.
 5. **That performance is acceptable on real hardware.** The ~800 ms cold / ~200 ms warm figure comes from
    this container running providers that mostly return `UNSUPPORTED` immediately. It says
    nothing about a Windows machine running 28 real queries.
