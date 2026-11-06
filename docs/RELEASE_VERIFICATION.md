@@ -40,7 +40,7 @@ an SSD and a discrete GPU in it.
 - these hashes belong to the build from that run. Any later commit produces a different binary:
   when publishing, take the SHA-256 from the run that produced the artifact you are publishing,
   not from this table;
-- the full test suite passes on Windows as well as Linux (718 tests at the time of writing);
+- the full test suite passes on Windows as well as Linux (720 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
@@ -94,7 +94,7 @@ machine, and nothing in this document becomes **L4** evidence until that happens
 ## 1. Build — performed by CI on windows-latest
 
 - [x] `npm ci` completes from a clean checkout
-- [x] `npm test` passes with zero failures (718 tests, both platforms)
+- [x] `npm test` passes with zero failures (720 tests, both platforms)
 - [x] `npm run check` reports 0 errors
 - [x] `npm run audit:requirements -- --check` reports no inconsistency
 - [x] `npm run build:win` produces an NSIS installer and a portable executable

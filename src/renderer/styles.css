@@ -151,6 +151,11 @@ body { overflow: hidden; }
   box-shadow: inset 2px 0 0 var(--vx-accent), 0 0 24px -12px var(--vx-accent);
 }
 .vx-nav__glyph { width: 16px; text-align: center; color: var(--vx-accent); flex: 0 0 auto; }
+/* The rail's icons take the accent on the active row and muted ink elsewhere, which a font
+   glyph or an emoji cannot do. The stroke is fixed at 1.6 in the SVG; only colour changes. */
+.vx-nav__icon { flex: 0 0 auto; color: var(--vx-ink-muted); transition: color var(--vx-motion) ease; }
+.vx-nav__item:hover .vx-nav__icon { color: var(--vx-ink-soft); }
+.vx-nav__item.is-active .vx-nav__icon { color: var(--vx-accent); }
 .vx-nav__badge {
   margin-left: auto;
   font-size: 10px;
@@ -187,21 +192,56 @@ body { overflow: hidden; }
   z-index: 5;
 }
 
-.vx-topbar__title { font-size: var(--vx-font-lg); font-weight: 600; margin: 0; }
-.vx-topbar__sub { color: var(--vx-ink-muted); font-size: var(--vx-font-sm); }
+.vx-topbar__title { font-size: var(--vx-font-lg); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+/* One line, always. Wrapped onto two lines it pushed the buttons off their baseline and made
+   the bar 12px taller on every page, for a sentence that is the same on all of them. */
+.vx-topbar__sub {
+  display: block;
+  color: var(--vx-ink-muted);
+  font-size: var(--vx-font-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 34ch;
+}
 .vx-topbar__spacer { flex: 1; }
+/* Buttons in the bar are one line and one height, whatever their label. "Run full scan" used to
+   wrap onto two lines and stand 8px taller than "Shortcuts" beside it. */
+.vx-topbar .vx-button { white-space: nowrap; flex: 0 0 auto; }
+.vx-topbar > div:first-child { min-width: 0; }
 
 .vx-content {
   padding: var(--vx-space-xl);
+  /* The toast stack is fixed over the bottom-right corner. Without this the last row of a page
+     sat underneath it: the settings screenshot ended with a control half-hidden behind "Ready". */
+  padding-bottom: calc(var(--vx-space-xl) + 56px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--vx-space-lg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--vx-line) transparent;
 }
+
+/* A thin, theme-coloured scrollbar instead of the operating system's default ridge, which is
+   the one element on screen that ignores every token in this file. */
+.vx-content::-webkit-scrollbar, .vx-sidebar::-webkit-scrollbar, .vx-dialog__body::-webkit-scrollbar { width: 10px; height: 10px; }
+.vx-content::-webkit-scrollbar-track, .vx-sidebar::-webkit-scrollbar-track, .vx-dialog__body::-webkit-scrollbar-track { background: transparent; }
+.vx-content::-webkit-scrollbar-thumb, .vx-sidebar::-webkit-scrollbar-thumb, .vx-dialog__body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--vx-line) 80%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.vx-content::-webkit-scrollbar-thumb:hover, .vx-sidebar::-webkit-scrollbar-thumb:hover { background: var(--vx-line); background-clip: content-box; }
 
 /* ── Cards & grid ────────────────────────────────────────────────────────── */
 
-.vx-grid { display: grid; gap: var(--vx-space-lg); }
+.vx-grid { display: grid; gap: var(--vx-space-lg); align-items: start; }
+/* Two cards side by side are as tall as the taller one. When one is a dial and the other is two
+   lines of text, that leaves a large empty panel - which reads as a rendering fault rather than
+   as breathing room. Rows align to the top of their content instead, and the empty space is the
+   page's, not a box drawn around it. */
 .vx-grid--3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .vx-grid--2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 
@@ -325,7 +365,14 @@ body { overflow: hidden; }
 }
 .vx-row:last-child { border-bottom: 0; }
 .vx-row__label { color: var(--vx-ink-soft); font-size: var(--vx-font-sm); }
-.vx-row__value { display: flex; align-items: baseline; gap: var(--vx-space-sm); flex-wrap: wrap; }
+.vx-row__value { display: flex; align-items: baseline; gap: var(--vx-space-sm); flex-wrap: wrap; justify-content: flex-end; text-align: right; }
+/* Controls in the settings column share one width, so the right edge is a line rather than a
+   ragged edge - in the settings screenshot the four selects were 95, 95, 136 and 95 pixels wide
+   and the toggles sat at yet another offset. */
+.vx-row__value select,
+.vx-row__value input[type="text"],
+.vx-row__value input[type="number"] { min-width: 152px; }
+.vx-row__value .vx-switch { margin-left: auto; }
 .vx-row__text { font-variant-numeric: tabular-nums; }
 .vx-row__source {
   font-family: var(--vx-font-mono);
@@ -476,13 +523,16 @@ body { overflow: hidden; }
 /* ── Empty / loading ─────────────────────────────────────────────────────── */
 
 .vx-empty {
-  padding: var(--vx-space-xl);
+  /* A dashed panel around two lines of text was the largest object on the dashboard and the
+     battery page. It is a note, not a container: less padding, tighter line, and the border is
+     kept only because it marks where content will appear. */
+  padding: var(--vx-space-lg) var(--vx-space-xl);
   text-align: center;
   border: 1px dashed var(--vx-line);
   border-radius: var(--vx-radius-md);
   color: var(--vx-ink-muted);
 }
-.vx-empty__title { margin: 0 0 4px; color: var(--vx-ink-soft); font-weight: 600; }
+.vx-empty__title { margin: 0 0 2px; color: var(--vx-ink-soft); font-weight: 600; font-size: var(--vx-font-md); }
 .vx-empty__detail { margin: 0; font-size: var(--vx-font-sm); max-width: 520px; margin-inline: auto; line-height: 1.55; }
 
 .vx-loading {

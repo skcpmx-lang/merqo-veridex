@@ -13,6 +13,7 @@
  */
 
 import { statusPresentation, statusGlyph, statusAriaLabel } from './theme.js';
+import { ICONS } from './icons.js';
 
 /**
  * Create an element. `text` is set with textContent, so a device name containing
@@ -21,6 +22,70 @@ import { statusPresentation, statusGlyph, statusAriaLabel } from './theme.js';
  * @param {{class?:string, text?:string, attrs?:Record<string,string>, children?:Node[], style?:Record<string,string>}} [options]
  * @returns {HTMLElement}
  */
+/**
+ * An inline SVG icon.
+ *
+ * `createElement` cannot build SVG: the element has to be in the SVG namespace or nothing
+ * renders. Icons inherit `currentColor`, so they pick up the accent in the active row and the
+ * muted ink everywhere else without a second rule per state.
+ * @param {string} name
+ * @param {{size?: number, class?: string, title?: string}} [options]
+ */
+export function icon(name, options = {}) {
+  if (typeof document === 'undefined') return null;
+  const shape = ICONS[name];
+  const size = options.size ?? 18;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.6');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('class', options.class ?? 'vx-icon');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  if (options.title) svg.setAttribute('aria-label', options.title);
+  if (!shape) {
+    // A missing icon is a visible square, on purpose: it is better than an invisible gap that
+    // nobody notices, and the test suite fails before it can be shipped.
+    const fallback = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    fallback.setAttribute('x', '4');
+    fallback.setAttribute('y', '4');
+    fallback.setAttribute('width', '16');
+    fallback.setAttribute('height', '16');
+    fallback.setAttribute('rx', '2');
+    fallback.setAttribute('stroke-dasharray', '3 3');
+    svg.append(fallback);
+    svg.setAttribute('data-missing-icon', name);
+    return svg;
+  }
+  for (const [x, y, width, height, radius] of shape.rects ?? []) {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', String(x));
+    rect.setAttribute('y', String(y));
+    rect.setAttribute('width', String(width));
+    rect.setAttribute('height', String(height));
+    if (radius) rect.setAttribute('rx', String(radius));
+    svg.append(rect);
+  }
+  for (const [cx, cy, r] of shape.circles ?? []) {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', String(cx));
+    circle.setAttribute('cy', String(cy));
+    circle.setAttribute('r', String(r));
+    svg.append(circle);
+  }
+  for (const d of shape.paths ?? []) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+  }
+  return svg;
+}
+
 export function el(tag, options = {}) {
   const node = document.createElement(tag);
   if (options.class) node.className = options.class;

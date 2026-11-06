@@ -20,30 +20,30 @@ import { SHORTCUTS, shortcutOf } from './shortcuts.js';
 // The first-run copy lives with the main-process state machine so the words on screen and the
 // promises asserted by the tests are literally the same strings.
 import { STEPS as ONBOARDING_STEPS } from '../app/onboarding.js';
-import { el, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
+import { el, icon, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
 
 const client = createClient();
 
 /** Pages in navigation order, grouped as the brief's structure demands. */
 const PAGES = [
-  { id: 'dashboard', label: 'Dashboard', glyph: '◈', group: 'Overview' },
-  { id: 'hardware', label: 'Hardware', glyph: '⌘', group: 'Diagnostics' },
-  { id: 'battery', label: 'Battery', glyph: '▮', group: 'Diagnostics' },
-  { id: 'storage', label: 'Storage', glyph: '⛁', group: 'Diagnostics' },
-  { id: 'network', label: 'Network', glyph: '≋', group: 'Diagnostics' },
-  { id: 'windows', label: 'Windows & security', glyph: '⛨', group: 'Diagnostics' },
-  { id: 'reliability', label: 'Reliability', glyph: '⌛', group: 'Diagnostics' },
-  { id: 'drivers', label: 'Drivers & software', glyph: '⚙', group: 'Diagnostics' },
-  { id: 'processes', label: 'Processes', glyph: '⌗', group: 'Diagnostics' },
-  { id: 'manual', label: 'Manual tests', glyph: '◎', group: 'Inspection' },
-  { id: 'performance', label: 'Performance', glyph: '⚡', group: 'Inspection' },
-  { id: 'monitor', label: 'Live monitoring', glyph: '⌁', group: 'Inspection' },
-  { id: 'reports', label: 'Reports', glyph: '⌸', group: 'Output' },
-  { id: 'history', label: 'History', glyph: '⟲', group: 'Output' },
-  { id: 'settings', label: 'Settings', glyph: '⚒', group: 'Application' },
-  { id: 'privacy', label: 'Privacy', glyph: '⛨', group: 'Application' },
-  { id: 'logs', label: 'Activity log', glyph: '⌸', group: 'Application' },
-  { id: 'about', label: 'About', glyph: 'ⓘ', group: 'Application' }
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', group: 'Overview' },
+  { id: 'hardware', label: 'Hardware', icon: 'hardware', group: 'Diagnostics' },
+  { id: 'battery', label: 'Battery', icon: 'battery', group: 'Diagnostics' },
+  { id: 'storage', label: 'Storage', icon: 'storage', group: 'Diagnostics' },
+  { id: 'network', label: 'Network', icon: 'network', group: 'Diagnostics' },
+  { id: 'windows', label: 'Windows & security', icon: 'windows', group: 'Diagnostics' },
+  { id: 'reliability', label: 'Reliability', icon: 'reliability', group: 'Diagnostics' },
+  { id: 'drivers', label: 'Drivers & software', icon: 'drivers', group: 'Diagnostics' },
+  { id: 'processes', label: 'Processes', icon: 'processes', group: 'Diagnostics' },
+  { id: 'manual', label: 'Manual tests', icon: 'manual', group: 'Inspection' },
+  { id: 'performance', label: 'Performance', icon: 'performance', group: 'Inspection' },
+  { id: 'monitor', label: 'Live monitoring', icon: 'monitor', group: 'Inspection' },
+  { id: 'reports', label: 'Reports', icon: 'reports', group: 'Output' },
+  { id: 'history', label: 'History', icon: 'history', group: 'Output' },
+  { id: 'settings', label: 'Settings', icon: 'settings', group: 'Application' },
+  { id: 'privacy', label: 'Privacy', icon: 'privacy', group: 'Application' },
+  { id: 'logs', label: 'Activity log', icon: 'logs', group: 'Application' },
+  { id: 'about', label: 'About', icon: 'about', group: 'Application' }
 ];
 
 /** Application state. Deliberately small: the main process owns the truth. */
@@ -147,7 +147,7 @@ function buildSidebar() {
       class: 'vx-nav__item',
       attrs: { type: 'button', 'data-page': page.id }
     });
-    item.append(el('span', { class: 'vx-nav__glyph', text: page.glyph, attrs: { 'aria-hidden': 'true' } }));
+    item.append(icon(page.icon, { size: 16, class: 'vx-nav__icon' }));
     item.append(el('span', { text: page.label }));
     item.addEventListener('click', () => navigate(page.id));
     navItems.set(page.id, item);
@@ -396,10 +396,11 @@ pages.dashboard = () => {
           el('div', {
             children: [
               el('div', {
+                // "Unrated" three times in one card - dial, headline, badge - is not emphasis,
+                // it is noise. The dial and this sentence carry the meaning; the badge repeated it.
                 class: 'vx-hero__headline',
                 children: [
-                  el('span', { class: 'vx-hero__rating', text: assessment?.gated ? 'Score withheld' : 'Unrated' }),
-                  statusBadge('UNRATED', { size: 'sm' })
+                  el('span', { class: 'vx-hero__rating', text: assessment?.gated ? 'Score withheld' : 'Not yet measured' })
                 ]
               }),
               el('p', {

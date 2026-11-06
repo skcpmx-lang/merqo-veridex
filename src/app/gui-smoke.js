@@ -160,6 +160,14 @@ const shots = [];
 async function screenshot(name) {
   if (!shotsDir || !target || target.isDestroyed()) return null;
   try {
+    // Let the renderer paint before capturing. `capturePage()` returns the last composited
+    // frame, so a capture taken immediately after a DOM update can show the *previous* page:
+    // the first evidence run produced `08-page-storage.png` containing the battery page and
+    // `06-page-hardware.png` containing the dashboard. Evidence that is one page behind is
+    // worse than no evidence, because it looks right in a directory listing.
+    await evaluate(
+      `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))`
+    );
     const image = await target.webContents.capturePage();
     const file = path.join(shotsDir, `${String(shots.length + 1).padStart(2, '0')}-${name}.png`);
     await writeFile(file, image.toPNG());

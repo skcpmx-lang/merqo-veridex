@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
-const WORKFLOWS = ['build.yml', 'release.yml'];
+const WORKFLOWS = ['build.yml', 'release.yml', 'ui-evidence.yml'];
 const read = (name) => readFileSync(path.join(ROOT, '.github/workflows', name), 'utf8');
 const readWorkflow = read;
 

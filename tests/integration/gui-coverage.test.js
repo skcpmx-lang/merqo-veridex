@@ -132,3 +132,25 @@ test('screenshots can leave the runner, not just the artifact store', async () =
   assert.match(workflow, /ci\/evidence-\$\{GITHUB_RUN_ID\}/, 'it must publish to a per-run branch');
   assert.match(workflow, /contents: write/, 'it needs write access to publish a branch');
 });
+
+test('a screenshot is taken after the renderer has painted, not before', async () => {
+  // The first evidence run's screenshots were one page behind - 08-page-storage.png contained
+  // the battery page - because capturePage() returns the last composited frame. Evidence that
+  // is subtly wrong is worse than no evidence: it looks correct in a directory listing.
+  const harness = await read('src/app/gui-smoke.js');
+  assert.match(harness, /requestAnimationFrame\(\(\) => requestAnimationFrame/, 'the capture must wait for a painted frame');
+  assert.match(harness, /capturePage\(\)/, 'the capture must still come from the real compositor');
+});
+
+test('every navigation entry has an icon in the shared set', async () => {
+  // The rail used typographic glyphs, several of which Windows resolves through its emoji font:
+  // the result was a coloured fuel pump beside a monochrome diamond, and none of them could take
+  // the accent colour. This asserts the set stays complete when a page is added.
+  const { ICONS } = await import('../../src/renderer/icons.js');
+  const source = await read('src/renderer/app.js');
+  const declared = [...source.matchAll(/\{ id: '(\w+)', label: '[^']+', icon: '(\w+)', group:/g)].map((m) => ({ id: m[1], icon: m[2] }));
+  assert.equal(declared.length, 18, `expected 18 navigation entries, found ${declared.length}`);
+  for (const entry of declared) {
+    assert.ok(ICONS[entry.icon], `page "${entry.id}" names icon "${entry.icon}", which is not in icons.js`);
+  }
+});

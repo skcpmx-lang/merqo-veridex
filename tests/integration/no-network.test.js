@@ -100,10 +100,17 @@ test('the renderer layer declares no remote resource in its markup or styles', a
   for (const file of files) {
     const relative = path.relative(ROOT, file).split(path.sep).join('/');
     const source = await readFile(file, 'utf8');
-    // Reports may reference the schema URL as an identifier; they must never load it.
+    // Reports may reference the schema URL as an identifier; they must never load it. The third
+    // exemption is narrower than it looks: the SVG namespace is a name, not an address. It is
+    // never fetched - it is the string that tells the DOM "this is an SVG element" - and an
+    // inline icon cannot be created without it. Every other absolute URL is still an offence.
+    const NAMESPACE_URIS = ['http://www.w3.org/2000/svg', 'http://www.w3.org/1999/xlink'];
     for (const match of source.matchAll(/https?:\/\/[^\s'"`)]+/g)) {
       const url = match[0];
-      const benign = url.startsWith('https://veridex.merqo.local/schema/') || url.includes('merqo.local/schema');
+      const benign =
+        url.startsWith('https://veridex.merqo.local/schema/') ||
+        url.includes('merqo.local/schema') ||
+        NAMESPACE_URIS.includes(url);
       if (!benign) offenders.push(`${relative}: ${url}`);
     }
   }
