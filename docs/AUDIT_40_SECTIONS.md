@@ -3,7 +3,7 @@
 **Commit audited:** `1b7ab4e042b72dc57293f3044b266b420779db5f`
 **Requirements audited:** 130 across 39 specification sections, plus the cross-cutting release gates as section 40.
 **Static gate:** `node scripts/check.mjs` → 0 errors, 0 warnings.
-**Test suite:** 881 tests, 881 passing, on ubuntu-latest and windows-latest.
+**Test suite:** 899 tests, 899 passing, on ubuntu-latest and windows-latest.
 
 ## How to read this document
 
@@ -933,7 +933,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 **Evidence**
 
-- run 42172738818 (Tests on both platforms), 42172738822 (21 evidence steps, 32 screenshots).
+- run 42198214081 and 42205312147 (Tests on both platforms), 42198214081 (23 evidence steps, 35 screenshots).
 
 
 ---
@@ -1085,7 +1085,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 | --- | --- | --- |
 | Requirements complete | 130 of 130 implemented, 0 marked NS | `docs/requirements.json`, this document |
 | Static gate | 0 errors, 0 warnings | `node scripts/check.mjs` |
-| Test suite | 881/881 on Linux and Windows | run 42198220081 and predecessors |
+| Test suite | 899/899 on Linux and Windows | run 42205312147 and predecessors |
 | Renderer import graph | no Node builtin reachable from the renderer | `tests/integration/renderer-graph.test.js` |
 | Real-window evidence | 23 steps, 35 screenshots, 0 problems | design-evidence run 42192434597, `ci/ui-42192434597` |
 | Installer and portable build | produced and verified for tree `3281c01`; **stale for the current tree** | `docs/RELEASE_VERIFICATION.md` |

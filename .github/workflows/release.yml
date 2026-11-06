@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release, without the leading v (e.g. 1.0.0)'
+        description: 'Version to release: 1.0.0 and v1.0.0 both mean the same tag, v1.0.0'
         required: true
         type: string
       prerelease:
@@ -37,15 +37,51 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Check that the tag does not already exist
+      # ── Version, once ─────────────────────────────────────────────────────
+      # Every later step reads $VERSION and $TAG from here. Nothing else in this file may
+      # build a tag name by hand: doing that is how `vv1.0.0` happened, when a person typed
+      # `v1.0.0` into a field whose description said not to, and how the old guard threw on
+      # every run, because `git rev-parse v1.0.0` prints `v1.0.0` to stdout even when it
+      # cannot resolve it — a truthy string, to PowerShell, for a tag that never existed.
+      - name: Normalize and validate the version
+        env:
+          # Passed through the environment, never interpolated into the command line: a version
+          # input is user text, and `${{ }}` inside `run:` is pasted into a shell.
+          INPUT_VERSION: ${{ inputs.version }}
+        run: node scripts/release-version.mjs "$INPUT_VERSION" --github-env
+        shell: bash
+
+      - name: Check the existing tag and release state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
-          if (git rev-parse "v${{ inputs.version }}" 2>$null) { throw "Tag v${{ inputs.version }} already exists." }
-        shell: pwsh
+          set -euo pipefail
+          # `git rev-parse --verify` says nothing on stdout and exits non-zero when the ref is
+          # absent, so the empty string below means "no tag" rather than "could not say".
+          existing="$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" || true)"
+          if [ -n "$existing" ]; then
+            echo "existing tag ${TAG} → ${existing}"
+          else
+            echo "no ${TAG} tag exists"
+          fi
+
+          release_exists=false
+          if gh release view "$TAG" --json tagName >/dev/null 2>&1; then
+            release_exists=true
+            echo "a GitHub Release for ${TAG} already exists"
+          fi
+
+          node scripts/release-version.mjs --decide \
+            --tag "$TAG" --target "$TARGET_SHA" \
+            --existing "${existing:-none}" --release-exists "$release_exists" \
+            --github-env
+        shell: bash
 
       - name: Set the version in package.json
         run: |
           $json = Get-Content package.json -Raw | ConvertFrom-Json
-          $json.version = '${{ inputs.version }}'
+          $json.version = "$env:VERSION"
           $json | ConvertTo-Json -Depth 20 | Set-Content package.json
         shell: pwsh
 
@@ -73,11 +109,18 @@ jobs:
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag "v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          if ($env:TAG_ACTION -eq 'reuse') {
+            Write-Host "reusing ${env:TAG} at ${env:TAG_EXISTING}: it already points at this commit"
+          } else {
+            # An annotated tag on the commit this run checked out. Created here and nowhere else.
+            git tag -a "$env:TAG" -m "VERIDEX $env:VERSION" "$env:GITHUB_SHA"
+            git push origin "$env:TAG"
+          }
 
-          $notes = @'
-          ## VERIDEX ${{ inputs.version }}
+          # A double-quoted here-string, because the notes interpolate $env:VERSION. A literal
+          # `@'…'@` would publish the text "VERIDEX $env:VERSION" to the release page.
+          $notes = @"
+          ## VERIDEX $env:VERSION
 
           ### This build is unsigned
 
@@ -89,7 +132,7 @@ jobs:
           Verify what you downloaded before running it:
 
           ```
-          Get-FileHash .\VERIDEX-Setup-${{ inputs.version }}-x64.exe -Algorithm SHA256
+          Get-FileHash .\VERIDEX-Setup-$env:VERSION-x64.exe -Algorithm SHA256
           ```
 
           and compare the result with `SHA256SUMS.txt` below.
@@ -118,15 +161,16 @@ jobs:
 
           Every report carries the redaction setting that was in force when it was
           generated, so a report can always be traced back to what it exposed.
-          '@
+          "@
 
           $prerelease = if ('${{ inputs.prerelease }}' -eq 'true') { '--prerelease' } else { '' }
 
-          gh release create "v${{ inputs.version }}" `
+          gh release create "$env:TAG" `
             dist/VERIDEX-Setup-*.exe `
             dist/VERIDEX-*-portable-*.exe `
             dist/SHA256SUMS.txt `
-            --title "VERIDEX ${{ inputs.version }}" `
+            --title "VERIDEX $env:VERSION" `
             --notes $notes `
+            --verify-tag `
             $prerelease
         shell: pwsh
