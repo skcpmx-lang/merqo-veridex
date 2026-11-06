@@ -236,7 +236,13 @@ test('the publish step hands gh exactly three real files and no empty argument',
 
   // The notes file is written, substituted, and is the one gh was told about.
   const notesPath = argv[argv.indexOf('--notes-file') + 1];
-  assert.equal(notesPath, box.notes);
+  // Git Bash on the Windows runner hands the path back with forward slashes; Windows itself
+  // reports backslashes. Same file, two spellings, and neither is wrong.
+  assert.equal(
+    notesPath.replace(/\\/g, '/'),
+    box.notes.replace(/\\/g, '/'),
+    'gh must be pointed at the notes file this step wrote'
+  );
   const notes = readFileSync(notesPath, 'utf8');
   assert.match(notes, /^## VERIDEX 1\.0\.0$/m);
   assert.doesNotMatch(notes, /@VERSION@/, 'the placeholder must be substituted');
