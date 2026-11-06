@@ -1,0 +1,17 @@
+# Every text file in this repository uses LF endings, on every platform.
+#
+# This is not cosmetic. `scripts/check.mjs` enforces the formatting policy as an error, and the
+# gate runs on Windows in CI: a checkout that converted line endings to CRLF made the rule fire
+# on all 145 source files, which turned a real check into a platform-specific false alarm. Pinning
+# the ending here means the file on disk is the file in the repository, whichever machine cloned it.
+* text=auto eol=lf
+
+# Binary assets must never be converted or diffed as text.
+*.png binary
+*.ico binary
+*.jpg binary
+*.exe binary
+*.dmg binary
+*.zip binary
+*.woff binary
+*.woff2 binary
