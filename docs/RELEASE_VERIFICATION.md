@@ -147,7 +147,7 @@ can be completed without a physical machine — see §2 and §7.
 - these hashes belong to the build from that run. Any later commit produces a different binary:
   when publishing, take the SHA-256 from the run that produced the artifact you are publishing,
   not from this table;
-- the full test suite passes on Windows as well as Linux (899 tests at the time of writing);
+- the full test suite passes on Windows as well as Linux (923 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
@@ -211,6 +211,28 @@ machine, and nothing in this document becomes **L4** evidence until that happens
 
 ---
 
+## 0a. Publication — what the failed run got wrong
+
+A run built the installer and the portable executable, verified them, pushed `v1.0.0`, and then
+failed while creating the release page:
+
+```
+[new tag] v1.0.0 -> v1.0.0
+no matches found for ''
+Error: Process completed with error 1
+```
+
+`gh release create <tag> [<files>…]` treats every positional after the tag as an asset path and
+globs it. The step passed `$prerelease`, which is `''` for a stable release, and PowerShell forwards
+an empty string to a native command as `""` — so gh was handed an empty asset pattern and stopped
+before it created anything. Hence: a tag, no release, no assets.
+
+The tag is now authoritative and untouched. The workflow checks out the commit the tag names,
+builds *that* tree, verifies three named files exist and are non-empty, verifies them against
+`SHA256SUMS.txt`, passes exactly those three paths to gh in one array, publishes the notes from a
+file, and then downloads the published assets again and re-checks their digests against the
+published checksum file. `docs/GITHUB_ACTIONS.md` records the failure and the resume table.
+
 ## 0. Versioning — one tag name, decided by one file
 
 The canonical tag for version `X.Y.Z` is `vX.Y.Z`, and `scripts/release-version.mjs` is the only
@@ -233,7 +255,7 @@ cause in `GITHUB_ACTIONS.md`.
 ## 1. Build — performed by CI on windows-latest
 
 - [x] `npm ci` completes from a clean checkout
-- [x] `npm test` passes with zero failures (899 tests, both platforms)
+- [x] `npm test` passes with zero failures (923 tests, both platforms)
 - [x] `npm run check` reports 0 errors
 - [x] `npm run audit:requirements -- --check` reports no inconsistency
 - [x] `npm run build:win` produces an NSIS installer and a portable executable

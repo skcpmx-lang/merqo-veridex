@@ -4,11 +4,17 @@
 
 ## No release has been published
 
-**The one remaining gate.** Everything on this page is built, tested and documented. The release
-workflow exists on `main` and needs one thing this environment cannot provide: `Actions: write` on
-the repository, so that it can be dispatched. A person with write access clicks *Actions → Release
-→ Run workflow*, enters `1.0.0`, and the workflow builds, tests, verifies, tags `v1.0.0` and
-publishes the artifacts with their checksums. Nothing else is outstanding.
+**The one remaining gate.** The build passes and so does the artifact verification. The tag
+`v1.0.0` exists and names commit `cc886a3`. The step after it used to fail — it passed an empty
+string to `gh release create`, which read it as an asset path and stopped — and that is fixed,
+with tests that run the shipped step against stub binaries and inspect the arguments the GitHub
+CLI really received. The workflow now reuses that tag, builds the commit it names, and publishes
+the installer, the portable executable and `SHA256SUMS.txt`. What this environment cannot do is
+press the button: the Actions API answers `403 Resource not accessible by integration` because the
+session's installation holds Actions read rather than write. A person with repository write access
+clicks *Actions → Release → Run workflow*, enters `1.0.0` (or `v1.0.0`; both mean the same tag),
+and the run resumes from the existing tag rather than trying to make a new one. Nothing else is
+outstanding.
 
 
 `package.json` says `1.0.0`, and CI **builds** a Windows x64 installer and portable

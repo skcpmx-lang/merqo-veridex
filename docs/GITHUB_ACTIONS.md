@@ -32,7 +32,7 @@ Recorded runs:
 | [`42172738818`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738818) | push | ✅ Linux and Windows: 725 tests, static checks clean |
 | [`42172738822`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738822) | push (design evidence) | ✅ 21 steps, 32 screenshots, 0 problems, including the populated pages |
 | [`42179901603`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42179901603) | push | ❌ Linux and Windows: Windows failed, and the annotation said "no failing tests" — the annotation script only matched `not ok` at column zero, and the real failure was the new formatting rule meeting a checkout that had converted 145 files to CRLF |
-| [`42182778326`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42182778326) | push | ✅ Linux and Windows: 899 tests, static checks 0/0, licence audit clean, live platform smoke on real WMI (1,094 fields, 19 modules, score 84, 75 % coverage) |
+| [`42182778326`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42182778326) | push | ✅ Linux and Windows: 923 tests, static checks 0/0, licence audit clean, live platform smoke on real WMI (1,094 fields, 19 modules, score 84, 75 % coverage) |
 | [`42184099160`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184099160) | push (design evidence) | ❌ new step threw "Script failed to execute": a backslash-n inside a template literal arrived at the renderer as a real newline in a regex |
 | [`42184459268`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184459268) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems — includes the memory, GPU and responsiveness cards and the arrangement editor |
 | [`42185390234`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42185390234) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems, and the memory card's consent row now reads correctly |
@@ -86,6 +86,68 @@ workflow can force, move or delete a tag. Eighteen tests pin the arithmetic and 
 and each of the three original defects was reintroduced deliberately to confirm the suite fails:
 the guard, the hand-built tag, and a single-quoted `$env:` reference that would have published
 the literal text "VERIDEX $env:VERSION" to the release page.
+
+## The failed publication run, and the empty argument behind it
+
+Two runs (11:54Z and 12:10Z) got all the way through the build — tag pushed, artifacts built and
+checksummed — and then died in "Create the tag and release" with:
+
+```
+[new tag] v1.0.0 -> v1.0.0
+no matches found for ''
+Error: Process completed with error 1
+```
+
+That message is `gh release create` refusing an **asset pattern**. Its usage is
+`gh release create <tag> [<files>...]`, and its own help says "A list of asset files may be given
+to upload to the new release": every positional after the tag is a file to attach. gh expands each
+one as a glob and stops with `no matches found for …` when one matches nothing.
+
+The step appended `$prerelease` to the command, which was `''` for a stable release:
+
+```pwsh
+$prerelease = if ('${{ inputs.prerelease }}' -eq 'true') { '--prerelease' } else { '' }
+gh release create "$env:TAG" dist/… --verify-tag $prerelease
+```
+
+PowerShell 7.3 and later pass an empty string to a native command as `""` rather than dropping it,
+so gh received a **fourth positional argument that was empty**, tried to glob the empty name, and
+aborted. It aborted *before* creating anything — which is why the repository still has no release,
+and why the failure left the tag pushed and nothing else. The three real globs were never the
+problem; nothing in them can be empty.
+
+### What the step does now
+
+* Bash, not PowerShell, so no layer re-parses the arguments.
+* The three assets are built from `$VERSION` by name — `dist/VERIDEX-Setup-${VERSION}-x64.exe`,
+  `dist/VERIDEX-${VERSION}-portable-x64.exe`, `dist/SHA256SUMS.txt` — never a glob.
+* Each is checked to exist and to be non-empty, and each named entry in `SHA256SUMS.txt` is
+  verified with `sha256sum --check` before gh is called.
+* The arguments are one array with no empty elements; the pre-release flag is a separate array
+  that is only non-empty when it should be.
+* The notes are written to a file and passed with `--notes-file`, so a multi-line body never
+  becomes an argument.
+* `tests/unit/release-publish.test.js` extracts this step's `run:` block from the shipped
+  workflow, runs it under bash with stub `gh` and `git`, and inspects the argument vector gh
+  actually received. The empty-argument bug was reintroduced during development and the test
+  failed on it.
+
+### Resuming
+
+The workflow is resumable by design, because the failure above leaves a real, published tag
+behind: a second attempt must not move it, delete it or duplicate it. The state step reads the
+tag's commit and whether it is an ancestor of the dispatched commit, then the tested decision
+function chooses one of:
+
+| Observed | Action |
+| --- | --- |
+| no tag | create it on the dispatched commit |
+| tag on the dispatched commit | reuse it, build that commit |
+| tag on an ancestor of the dispatched commit | reuse it, **check out the tagged commit** and build that |
+| tag not in the dispatched commit's history | refuse |
+| no release | create it |
+| draft release | upload and publish the draft |
+| published release | verify it against its own assets; change nothing |
 
 ## State after the merge
 

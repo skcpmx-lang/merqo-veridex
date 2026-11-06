@@ -17,7 +17,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { normalizeVersion, decideTagAction, parseArgs, renderEnv, emit } from '../../scripts/release-version.mjs';
+import {
+  normalizeVersion,
+  decideTagAction,
+  decideRelease,
+  readReleaseState,
+  parseArgs,
+  renderEnv,
+  emit
+} from '../../scripts/release-version.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WORKFLOW = readFileSync(path.join(ROOT, '.github/workflows/release.yml'), 'utf8');
@@ -92,16 +100,93 @@ test('a tag on another commit is refused, never overwritten', () => {
   assert.match(decision.message, /aaaaaaa/);
 });
 
-test('an existing release is refused even when the tag is on the right commit', () => {
+test('an existing release never makes the tag decision a duplicate-publishing one', () => {
+  // The release object is handled separately, by decideRelease: the tag may be reused, and the
+  // release itself is then verified rather than created again.
   const decision = decideTagAction({ tag: 'v1.0.0', target: 'abc', existing: 'abc', releaseExists: true });
+  assert.equal(decision.action, 'reuse');
+  assert.equal(decideRelease({ state: 'published' }).action, 'verify');
+});
+
+test('a release without a tag is refused as an unexplainable state', () => {
+  const decision = decideTagAction({ tag: 'v1.0.0', target: 'abc', existing: null, releaseState: 'published' });
   assert.equal(decision.action, 'refuse');
-  assert.match(decision.message, /would duplicate it/);
+  assert.match(decision.message, /cannot be explained/);
+});
+
+// ═══ Resuming after a partial failure ══════════════════════════════════════
+
+test('a tag on an ancestor commit releases the tagged tree, not the branch head', () => {
+  // v1.0.0 was pushed by a run that then died while publishing. main has moved on since, by
+  // exactly the CI fix that makes publishing work. The released files must be the files the
+  // tag names, so the ref to build is the tag's commit and the tag is never moved.
+  const decision = decideTagAction({
+    tag: 'v1.0.0',
+    target: 'cccccccccccccccccccccccccccccccccccccccc',
+    existing: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    inHistory: true
+  });
+  assert.equal(decision.action, 'reuse-ancestor');
+  assert.equal(decision.ref, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+  assert.notEqual(decision.ref, 'cccccccccccccccccccccccccccccccccccccccc');
+  assert.match(decision.message, /not moved/);
+});
+
+test('a tag that is not in the history of the dispatched commit is refused', () => {
+  const decision = decideTagAction({ tag: 'v1.0.0', target: 'aaaaaaa', existing: 'bbbbbbb', inHistory: false });
+  assert.equal(decision.action, 'refuse');
+  assert.equal(decision.ref, null);
+  assert.match(decision.message, /not in the history/);
+});
+
+test('a tag on this commit is reused and built from that same commit', () => {
+  const decision = decideTagAction({ tag: 'v1.0.0', target: 'ddddddd', existing: 'ddddddd' });
+  assert.equal(decision.action, 'reuse');
+  assert.equal(decision.ref, 'ddddddd');
+});
+
+test('a missing tag is created on the dispatched commit', () => {
+  const decision = decideTagAction({ tag: 'v1.0.0', target: 'eeeeeee' });
+  assert.equal(decision.action, 'create');
+  assert.equal(decision.ref, 'eeeeeee');
+});
+
+// ═══ The release object ════════════════════════════════════════════════════
+
+test('the release state is read from what gh printed, including "absent"', () => {
+  assert.equal(readReleaseState({ absent: true }).state, 'none');
+  assert.equal(readReleaseState(null).state, 'none');
+  assert.equal(readReleaseState('none').state, 'none');
+  assert.equal(readReleaseState('draft').state, 'draft');
+  assert.equal(readReleaseState('published').state, 'published');
+  assert.equal(readReleaseState({ isDraft: true, assets: [] }).state, 'draft');
+  const published = readReleaseState({
+    isDraft: false,
+    isPrerelease: false,
+    url: 'https://example.invalid/release',
+    assets: [{ name: 'a.exe', size: 12 }, { name: 'SHA256SUMS.txt', size: 3 }]
+  });
+  assert.equal(published.state, 'published');
+  assert.deepEqual(published.assets, [{ name: 'a.exe', size: 12 }, { name: 'SHA256SUMS.txt', size: 3 }]);
+  assert.equal(published.url, 'https://example.invalid/release');
+});
+
+test('each release state has one action, and none of them overwrites a published release', () => {
+  assert.equal(decideRelease({ state: 'none' }).action, 'create');
+  assert.equal(decideRelease({ state: 'draft' }).action, 'complete-draft');
+  assert.equal(decideRelease({ state: 'published' }).action, 'verify');
+  assert.equal(decideRelease({ state: 'something else' }).action, 'refuse');
+  assert.match(decideRelease({ state: 'published' }).message, /never overwritten or deleted/);
 });
 
 // ═══ Plumbing ══════════════════════════════════════════════════════════════
 
 test('the command line separates the version from the flags', () => {
-  assert.deepEqual(parseArgs(['v1.0.0', '--github-env']), { mode: 'normalize', input: 'v1.0.0', githubEnv: true, tag: null, target: null, existing: null, releaseExists: false });
+  assert.deepEqual(parseArgs(['v1.0.0', '--github-env']), {
+    mode: 'normalize', input: 'v1.0.0', githubEnv: true, githubOutput: false,
+    tag: null, target: null, existing: null, inHistory: false,
+    releaseExists: false, releaseState: null, releaseJson: null
+  });
   const decide = parseArgs(['--decide', '--tag', 'v1.0.0', '--target', 'abc', '--existing', 'none', '--release-exists', 'true']);
   assert.equal(decide.mode, 'decide');
   assert.equal(decide.tag, 'v1.0.0');
@@ -150,7 +235,7 @@ test('the tag check can tell "no tag" from "cannot say"', () => {
 test('the release step refuses to duplicate, and verifies the tag it publishes', () => {
   assert.match(WORKFLOW, /--decide/, 'the tag/release state decision must come from the module');
   assert.match(WORKFLOW, /--verify-tag/, 'gh release create must verify the tag exists before publishing');
-  assert.match(WORKFLOW, /TAG_ACTION -eq 'reuse'/, 'a tag already on this commit is reused');
+  assert.match(WORKFLOW, /TAG_ACTION" = "create"/, 'the tag is created only when it is absent');
   assert.doesNotMatch(WORKFLOW, /git push --force|git tag -f|git push origin .*--force/, 'a tag is never moved by force');
 });
 
@@ -161,8 +246,13 @@ test('no PowerShell string silently swallows an environment variable', () => {
   assert.doesNotMatch(WORKFLOW, /\$notes = @'/, 'the notes here-string must be double-quoted to interpolate');
 });
 
-test('the workflow still publishes the three required assets', () => {
-  for (const asset of ['dist/VERIDEX-Setup-*.exe', 'dist/VERIDEX-*-portable-*.exe', 'dist/SHA256SUMS.txt']) {
+test('the workflow still publishes the three required assets, named exactly', () => {
+  for (const asset of [
+    'dist/VERIDEX-Setup-${VERSION}-x64.exe',
+    'dist/VERIDEX-${VERSION}-portable-x64.exe',
+    'dist/SHA256SUMS.txt'
+  ]) {
     assert.ok(WORKFLOW.includes(asset), `the release must attach ${asset}`);
   }
+  assert.doesNotMatch(WORKFLOW, /disk\/VERIDEX[^\n]*\*\.exe/, 'a glob is expanded by the wrong program sooner or later');
 });

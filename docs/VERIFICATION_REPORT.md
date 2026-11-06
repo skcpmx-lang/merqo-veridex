@@ -17,7 +17,7 @@ Nothing in the last column is ever reported as done. Nothing in the third column
 - **Requirements:** 130 across 39 specification sections — 110 tested, 18 implemented, 2 partial, 0 not started, **0 verified on real hardware**
 - **Audit:** [`AUDIT_40_SECTIONS.md`](AUDIT_40_SECTIONS.md) — every section judged, with its gaps named
 - **Static gate:** 0 errors, 0 warnings
-- **Test suite:** 899 tests, 899 passing, on Linux and Windows
+- **Test suite:** 923 tests, 923 passing, on Linux and Windows
 
 ---
 
@@ -28,7 +28,7 @@ These ran, in this environment or in CI, and the output was read.
 | What | Where | Result |
 | --- | --- | --- |
 | Full test suite | this container (Linux) | `# tests 881 · # pass 881 · # fail 0` |
-| Full test suite | `windows-latest` (runs `42187908032`, `42194144517`) | green, 899 tests |
+| Full test suite | `windows-latest` (runs `42187908032`, `42194144517`) | green, 923 tests |
 | Static gate | `node scripts/check.mjs` | "No findings." — 0 errors, 0 warnings |
 | Licence audit | `npm run audit:licences` | 339 packages, 0 errors, 1 recorded exception (`png-js`, undeclared licence, upstream states MIT) |
 | Requirement audit | `npm run audit:requirements -- --check` | "Every claimed status matches the repository contents." |
@@ -156,7 +156,7 @@ npm ci
 npm run check                       # 0 errors, 0 warnings
 npm run audit:licences              # 339 packages, 0 errors, 1 recorded exception
 npm run audit:requirements -- --check
-npm test                            # 899 tests
+npm test                            # 923 tests
 node --test tests/integration/gate-refusals.test.js   # proves the gate refuses bad input
 ```
 
