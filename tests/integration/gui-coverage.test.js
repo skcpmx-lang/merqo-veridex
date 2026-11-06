@@ -122,7 +122,9 @@ test('screenshots can leave the runner, not just the artifact store', async () =
   const workflow = await read('.github/workflows/build.yml');
   assert.match(workflow, /capture_evidence:/, 'the dispatch input must exist');
   assert.match(workflow, /needs: package/, 'the publishing job must run after the screenshots exist');
-  assert.match(workflow, /if: always\(\) && inputs\.capture_evidence/, 'it must not run on ordinary pushes');
+  assert.match(workflow, /inputs\.capture_evidence/, 'the dispatch input must gate it');
+  assert.match(workflow, /contains\(github\.event\.head_commit\.message, '\[evidence\]'\)/, 'a commit marker must be able to request it');
+  assert.match(workflow, /head_commit/, 'it must never fire for a commit that did not ask');
   assert.match(workflow, /ci\/evidence-\$\{GITHUB_RUN_ID\}/, 'it must publish to a per-run branch');
   assert.match(workflow, /contents: write/, 'it needs write access to publish a branch');
 });

@@ -261,13 +261,18 @@ jobs:
   # so the images can be *looked at* rather than assumed, by publishing them to a
   # throwaway branch that anyone with repository read access can fetch.
   #
-  # It runs only when the workflow is dispatched with `capture_evidence`, so ordinary
-  # pushes never write to the repository. The branch is `ci/evidence-<run id>`: it is a
-  # snapshot, it is never merged, and it is safe to delete.
+  # It runs only when asked: either a dispatch with `capture_evidence`, or a commit whose
+  # message contains the marker below (which is how a maintainer without Actions API access
+  # can request it). Ordinary pushes never write to the repository. The branch is
+  # `ci/evidence-<run id>`: it is a snapshot, it is never merged, and it is safe to delete.
   publish-evidence:
     name: Publish GUI evidence
     needs: package
-    if: always() && inputs.capture_evidence
+    if: >-
+      always() && (
+        inputs.capture_evidence ||
+        (github.event_name == 'push' && contains(github.event.head_commit.message, '[evidence]'))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write
