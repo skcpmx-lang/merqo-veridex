@@ -297,6 +297,25 @@ export function buildReport(input = {}) {
     }
   };
 
+  // Normalise the assessment before any renderer sees it.
+  //
+  // A real health assessment always carries `components`, each with `missing` and `evidence`
+  // arrays. An assessment that arrives from anywhere else - a stored report being re-rendered,
+  // an engine change, a caller building one by hand - would otherwise throw inside the first
+  // renderer that touches it, and the user would see "the report could not be generated"
+  // instead of a document. The shape is repaired here, once, rather than in four renderers.
+  if (report.assessment && typeof report.assessment === 'object') {
+    const components = Array.isArray(report.assessment.components) ? report.assessment.components : [];
+    report.assessment = {
+      ...report.assessment,
+      components: components.map((component) => ({
+        ...component,
+        missing: Array.isArray(component?.missing) ? component.missing : [],
+        evidence: Array.isArray(component?.evidence) ? component.evidence : []
+      }))
+    };
+  }
+
   if (report.generatedWith.includeManualResults === false) {
     // Dropping the results must also drop the programme summary: reporting
     // "8 of 31 tests answered" while listing none of them would be incoherent.

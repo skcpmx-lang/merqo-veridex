@@ -23,6 +23,7 @@
  */
 
 import { app, BrowserWindow } from 'electron';
+import { PAGE_EXPECTATIONS, PAGE_ORDER } from './gui-pages.js';
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -86,6 +87,7 @@ async function persist(final = false) {
     platform: process.platform,
     arch: process.arch,
     packaged: app.isPackaged,
+    screenshots: shots,
     findings,
     problems
   };
@@ -146,9 +148,58 @@ async function ipc(channel, payload) {
   );
 }
 
+let shotsDir = null;
+const shots = [];
+
+/**
+ * Screenshot the current window into the evidence folder.
+ *
+ * `capturePage` renders the real compositor output, so what lands in the PNG is what a person
+ * would see - not a DOM dump. Each shot is pinned to 1280×860 so two runs are comparable.
+ */
+async function screenshot(name) {
+  if (!shotsDir || !target || target.isDestroyed()) return null;
+  try {
+    const image = await target.webContents.capturePage();
+    const file = path.join(shotsDir, `${String(shots.length + 1).padStart(2, '0')}-${name}.png`);
+    await writeFile(file, image.toPNG());
+    const size = image.getSize();
+    shots.push({ name, file: path.basename(file), width: size.width, height: size.height });
+    return file;
+  } catch (error) {
+    record('warn', `screenshot "${name}" failed: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+
+/**
+ * Click a navigation item by page id, through the real rail.
+ *
+ * Built with JSON.stringify rather than string interpolation so a page id containing a quote
+ * cannot break out of the selector - and so the generated JavaScript is legible in a log.
+ * @param {string} id
+ */
+async function clickPage(id) {
+  const selector = JSON.stringify(`.vx-nav__item[data-page="${id}"]`);
+  return evaluate(`(() => {
+    const node = document.querySelector(${selector});
+    if (!node) return false;
+    node.click();
+    return true;
+  })()`);
+}
+
+/** Resize the window and let the compositor settle, so a screenshot is not of the old layout. */
+async function resize(width, height) {
+  target.setContentSize(width, height);
+  await sleep(500);
+}
+
 async function main() {
   const reportPath = process.env.VERIDEX_GUI_SMOKE_REPORT ?? path.join(app.getPath('temp'), 'veridex-gui-smoke.json');
   reportTarget = reportPath;
+  shotsDir = path.join(path.dirname(reportPath), 'gui-shots');
+  await mkdir(shotsDir, { recursive: true }).catch(() => null);
   runStartedAt = new Date().toISOString();
   const startedAt = runStartedAt;
   console.log('VERIDEX GUI smoke test');
@@ -186,6 +237,94 @@ async function main() {
     // was the harness inventing a requirement the app never had.
     if (!/^VERIDEX\b/.test(booted.value.title)) record('fail', `window title does not start with the product name: "${booted.value.title}"`);
   }
+
+  // ── 1b. First run ─────────────────────────────────────────────────────────
+  // A CI runner has an empty user profile, so this is genuinely the first launch: the tour
+  // should be on screen before anything else can be. If the profile is warm, the tour is
+  // correctly absent and that is recorded rather than forced.
+  const tour = await step('the first-run tour appears on a clean profile and can be completed', async () => {
+    const state = await ipc('app:onboarding');
+    const data = state?.data ?? {};
+    record('info', `onboarding: needed=${data.needed} step=${data.step} skipped=${data.skipped}`);
+    if (!data.needed) {
+      record('warn', 'the first-run tour was already complete on this machine, so it was not exercised');
+      return { needed: false };
+    }
+
+    // The tour is opened by the renderer after its first paint, so it can lag the window by
+    // a few hundred milliseconds. Waiting for it is the difference between "the tour is
+    // broken" and "the harness looked too early".
+    await waitFor(`document.querySelector('.vx-onboarding') !== null`, { timeout: 10_000, label: 'the first-run tour' });
+
+    const seen = [];
+    for (let index = 0; index < 6; index += 1) {
+      const visible = await evaluate(`(() => { const d = document.querySelector('.vx-onboarding'); return d ? d.innerText : null; })()`);
+      if (!visible) break;
+      const stepName = (visible.match(/Step (\d) of (\d)/) ?? [])[0] ?? `step-${index + 1}`;
+      seen.push(stepName.replace(/ /g, '-').toLowerCase());
+      await screenshot(`tour-${index + 1}`);
+      // Click the real action button rather than calling the IPC channel: the tour is a
+      // user interface, and a harness that calls the channel underneath it proves nothing
+      // about the button.
+      const clicked = await evaluate(`(() => {
+        const actions = [...document.querySelectorAll('.vx-onboarding__actions .vx-button')];
+        const primary = actions.find((node) => !/skip/i.test(node.textContent));
+        if (!primary) return 'no-action';
+        primary.click();
+        return primary.textContent;
+      })()`);
+      record('info', `tour step ${index + 1}: clicked "${clicked}"`);
+      await sleep(400);
+    }
+
+    const after = await ipc('app:onboarding');
+    const closed = await evaluate(`document.querySelector('.vx-onboarding') === null`);
+
+    // The skip path, exercised at the state level: the tour only opens at boot, so a reset
+    // cannot re-open the dialog inside this run. The button itself is driven under jsdom in
+    // tests/integration/new-surfaces.test.js; what is proven here is that a skipped tour is
+    // recorded as skipped and does not claim to have been read.
+    const reset = await ipc('app:onboardingReset');
+    const rearmed = await ipc('app:onboarding');
+    const skipped = await ipc('app:onboardingSkip');
+    const afterSkip = await ipc('app:onboarding');
+    record('info', `skip path: reset needed=${rearmed?.data?.needed} → skipped=${afterSkip?.data?.skipped} needed=${afterSkip?.data?.needed}`);
+    if (rearmed?.data?.needed !== true) record('fail', 'resetting the tour did not make it owed again');
+    if (afterSkip?.data?.skipped !== true) record('fail', 'skipping the tour was not recorded as skipped');
+    if (afterSkip?.data?.completedAt === null) record('fail', 'skipping the tour did not record a time');
+    record('info', `after the tour: needed=${after?.data?.needed} closed=${closed} steps=${JSON.stringify(seen)}`);
+    if (seen.length < 4) throw new Error(`the tour showed ${seen.length} step(s); four were expected`);
+    if (!closed) throw new Error('the tour did not close after the last step');
+    if (after?.data?.needed === true) throw new Error('the tour was completed but still reports itself as owed');
+    return { needed: true, steps: seen, closed };
+  }, 90_000);
+
+  // ── 1c. Every page, from the real navigation ──────────────────────────────
+  const navigation = await step('the navigation lists every documented page, and each one renders', async () => {
+    const labels = await evaluate(`[...document.querySelectorAll('.vx-nav__item')].map((n) => n.getAttribute('data-page'))`);
+    record('info', `navigation entries (${labels.length}): ${labels.join(', ')}`);
+
+    const expected = Object.keys(PAGE_EXPECTATIONS);
+    const missing = expected.filter((id) => !labels.includes(id));
+    const unexpected = labels.filter((id) => !expected.includes(id));
+    if (missing.length) throw new Error(`navigation is missing: ${missing.join(', ')}`);
+    if (unexpected.length) record('warn', `navigation contains pages with no expectation: ${unexpected.join(', ')}`);
+
+    const visited = [];
+    for (const id of expected) {
+      const clicked = await clickPage(id);
+      if (!clicked) throw new Error(`page "${id}" has no navigation item to click`);
+      await waitFor(`(document.querySelector('.vx-content')?.innerText ?? '').length > 20`, { label: `page ${id} to render` });
+      const text = await evaluate(`document.querySelector('.vx-content').innerText`);
+      const marker = PAGE_EXPECTATIONS[id];
+      if (!marker.test(text)) throw new Error(`page "${id}" rendered without its expected content (${JSON.stringify(text.slice(0, 120))})`);
+      if (/\[object Object\]|undefined|NaN/.test(text)) throw new Error(`page "${id}" rendered a placeholder value`);
+      await screenshot(`page-${id}`);
+      visited.push(id);
+    }
+    record('info', `visited and screenshotted ${visited.length} pages`);
+    return { visited };
+  }, 180_000);
 
   // Security posture of the real window: these are the properties that make the app
   // defensible if the renderer is compromised. They are set in code and have never been
@@ -347,6 +486,90 @@ async function main() {
     if (showsScore && !/coverage|%|unrated/i.test(text)) record('fail', 'a numeric score is displayed with no coverage context');
     if (/unrated/i.test(text)) record('ok', 'the score is presented as Unrated where evidence is insufficient');
     return scoreLine;
+  });
+
+  // ── 8b. The three new surfaces, with data in them ─────────────────────────
+  await step('the activity log lists what the run just wrote, and filters it', async () => {
+    await evaluate(`document.querySelector('.vx-nav__item[data-page="logs"]').click()`);
+    await waitFor(`!(document.querySelector('.vx-content')?.innerText ?? '').includes('Reading the log')`, { label: 'the log to load' });
+    const all = await ipc('logs:recent', { minLevel: 'trace', limit: 200 });
+    const errorsOnly = await ipc('logs:recent', { minLevel: 'error', limit: 200 });
+    const total = all?.data?.entries?.length ?? -1;
+    const errors = errorsOnly?.data?.entries?.length ?? -1;
+    record('info', `log entries: ${total} at trace+, ${errors} at error+; unparseable=${all?.data?.unparseable ?? 'n/a'}`);
+    if (total < 0) throw new Error(`logs:recent failed: ${JSON.stringify(all).slice(0, 200)}`);
+    if (total === 0) throw new Error('a scan just ran and the log is empty');
+    if (errors > total) throw new Error('a stricter filter returned more entries than a looser one');
+    const text = await evaluate(`document.querySelector('.vx-content').innerText`);
+    if (!/activity log/i.test(text)) throw new Error('the activity log page did not render its heading');
+    if (/\[object Object\]/.test(text)) throw new Error('the log page rendered a placeholder value');
+    await screenshot('logs-populated');
+    return { total, errors };
+  });
+
+  await step('the reports page previews what the file will contain', async () => {
+    await evaluate(`document.querySelector('.vx-nav__item[data-page="reports"]').click()`);
+    await waitFor(`/What this report contains/i.test(document.querySelector('.vx-content')?.innerText ?? '')`, { label: 'the report preview' });
+    const text = await evaluate(`document.querySelector('.vx-content').innerText`);
+    for (const marker of ['Modules', 'Evidence fields', 'Coverage', 'Save PDF', 'Save JSON']) {
+      if (!text.includes(marker)) throw new Error(`the report page does not state "${marker}"`);
+    }
+    await screenshot('reports-preview');
+    return text.length;
+  });
+
+  await step('the privacy page states what is stored and offers the controls', async () => {
+    await evaluate(`document.querySelector('.vx-nav__item[data-page="privacy"]').click()`);
+    await waitFor(`/Stored on this machine/i.test(document.querySelector('.vx-content')?.innerText ?? '')`, { label: 'the storage card' });
+    const text = await evaluate(`document.querySelector('.vx-content').innerText`);
+    for (const marker of ['Data folder', 'Run history', 'Activity log', 'Show the tour again']) {
+      if (!text.includes(marker)) throw new Error(`the privacy page does not state "${marker}"`);
+    }
+    const checkbox = await evaluate(`(() => { const node = document.querySelector('#vx-privacy-identifiers'); return node ? node.checked : null; })()`);
+    record('info', `identifier setting in reports: ${checkbox}`);
+    if (checkbox === null) throw new Error('the identifier setting is not on the privacy page');
+    await screenshot('privacy');
+    return { checkbox };
+  });
+
+  await step('no page overflows horizontally at the minimum window size', async () => {
+    await resize(1024, 700);
+    const overflows = [];
+    for (const id of Object.keys(PAGE_EXPECTATIONS)) {
+      await clickPage(id);
+      await sleep(150);
+      const metrics = await evaluate(`({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        contentHeight: document.querySelector('.vx-content')?.scrollHeight ?? 0
+      })`);
+      if (metrics.scrollWidth > metrics.clientWidth + 2) overflows.push(`${id} (${metrics.scrollWidth} > ${metrics.clientWidth})`);
+    }
+    record('info', `1024x700: ${overflows.length === 0 ? 'no horizontal overflow' : `overflow on ${overflows.join(', ')}`}`);
+    await evaluate(`document.querySelector('.vx-nav__item[data-page="dashboard"]').click()`);
+    await screenshot('dashboard-1024x700');
+    await resize(1280, 860);
+    if (overflows.length) throw new Error(`horizontal overflow at 1024x700: ${overflows.join(', ')}`);
+    return overflows;
+  }, 120_000);
+
+  await step('a 1.25x zoom factor does not break the layout', async () => {
+    // DPI scaling cannot be changed on a running window, but zoom exercises the same layout
+    // path: every dimension is multiplied and the page must reflow rather than clip.
+    target.webContents.setZoomFactor(1.25);
+    await sleep(600);
+    const metrics = await evaluate(`({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      text: (document.querySelector('.vx-content')?.innerText ?? '').length
+    })`);
+    record('info', `zoom 125%: content ${metrics.text} chars, scrollWidth ${metrics.scrollWidth} / client ${metrics.clientWidth}`);
+    await screenshot('dashboard-zoom-125');
+    target.webContents.setZoomFactor(1);
+    await sleep(400);
+    if (metrics.text < 40) throw new Error('the dashboard went blank at 125% zoom');
+    if (metrics.scrollWidth > metrics.clientWidth + 2) throw new Error('125% zoom introduced horizontal overflow');
+    return metrics;
   });
 
   // ── 9. Report generation ──────────────────────────────────────────────────

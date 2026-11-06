@@ -197,6 +197,7 @@ jobs:
             package-validation.json
             portable-smoke.json
             install-smoke.json
+            gui-shots/**
           if-no-files-found: ignore
           retention-days: 30
 

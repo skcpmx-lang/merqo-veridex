@@ -69,8 +69,19 @@ export const STEPS = Object.freeze([
  */
 export function onboardingState(settings = {}) {
   const values = settings?.values ?? {};
-  const completedAt = typeof values['privacy.firstRunComplete'] === 'string' ? values['privacy.firstRunComplete'] : null;
-  const finished = values['privacy.firstRunComplete'] === true || completedAt !== null;
+  // The completion time is written to `firstRunCompletedAt`; an older build wrote the ISO
+  // string into `firstRunComplete` itself, and that shape is still read so an existing profile
+  // does not lose its history. Reading only the old key left a completed tour reporting
+  // `completedAt: null` — the state machine knew the tour was done but not when.
+  const explicitCompletedAt = typeof values['privacy.firstRunCompletedAt'] === 'string' ? values['privacy.firstRunCompletedAt'] : null;
+  const legacyCompletedAt = typeof values['privacy.firstRunComplete'] === 'string' ? values['privacy.firstRunComplete'] : null;
+  const completedAt = explicitCompletedAt ?? legacyCompletedAt;
+  // An explicit `false` wins over a leftover timestamp. The two are contradictory only if the
+  // file was edited or a reset half-wrote, and in that case the user's choice (reset) is the
+  // one that should be honoured: showing the tour again is recoverable in one click, hiding
+  // it when it was asked for is not.
+  const explicitFalse = values['privacy.firstRunComplete'] === false;
+  const finished = !explicitFalse && (values['privacy.firstRunComplete'] === true || completedAt !== null);
   // A recorded step only counts if the run was not finished; it is what lets an interrupted tour
   // resume *visibly* (the interface can say "you were part-way through") without resuming silently.
   const savedStep = typeof values['privacy.firstRunStep'] === 'string' ? values['privacy.firstRunStep'] : null;

@@ -19,7 +19,7 @@
  * @module
  */
 
-import { redact } from '../core/logger.js';
+import { maskIdentifiers, redact } from '../core/logger.js';
 
 export const LEVELS = Object.freeze(['trace', 'debug', 'info', 'warn', 'error', 'fatal']);
 
@@ -159,7 +159,9 @@ export function buildExport(records, options = {}) {
       ts: record?.ts ?? null,
       level: record?.level ?? 'unknown',
       scope: record?.scope ?? 'app',
-      msg: String(record?.msg ?? '').slice(0, MAX_MESSAGE_LENGTH),
+      // The message is masked as well as the context. A caller that put an address or an
+      // account name into the message text would otherwise have it exported in clear.
+      msg: String(maskIdentifiers(String(record?.msg ?? ''))).slice(0, MAX_MESSAGE_LENGTH),
       ...(includeContext && record?.ctx ? { ctx: redact(record.ctx) } : {})
     };
     lines.push(JSON.stringify(safe));

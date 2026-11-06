@@ -27,19 +27,39 @@ export const SENSITIVE_KEYS = Object.freeze([
   'serialnumberid',
   'mac',
   'macaddress',
+  'ip',
+  'ipv4',
   'ipv6',
+  'ipaddress',
+  'hostname',
+  'host',
   'username',
   'user',
   'account',
+  'accountname',
   'ssid',
+  'wifi',
   'computername',
+  'deviceid',
   'machineguid',
+  'windowsproductid',
+  'productid',
   'productkey',
   'licensekey',
   'token',
   'password',
+  'secret',
   'bitlockerkey',
-  'recoverykey'
+  'recoverykey',
+  // Command lines are never logged, and these keys are what a caller would use if it tried.
+  // Refusing the key is weaker than refusing to pass one, but it is the last line: the
+  // runner's logging path already records only the exit code.
+  'commandline',
+  'cmdline',
+  'command',
+  'args',
+  'argv',
+  'arguments'
 ]);
 
 /**
@@ -49,6 +69,26 @@ export const SENSITIVE_KEYS = Object.freeze([
 export function isSensitiveKey(key) {
   const normalised = String(key).toLowerCase().replace(/[^a-z0-9_]/g, '');
   return SENSITIVE_KEYS.some((sensitive) => normalised === sensitive.replace(/_/g, '') || normalised.endsWith(sensitive.replace(/_/g, '')));
+}
+
+/**
+ * Mask identifiers that appear *inside* a string.
+ *
+ * Key-based redaction cannot help when a caller writes a value into the message itself -
+ * `logger.info(`bios serial ${serial}`)` - and that happens. These are the shapes that can be
+ * recognised without guessing: MAC addresses, IPv4 addresses, and the account name inside a
+ * Windows user path. Values that carry no recognisable shape (a serial number, a token) cannot
+ * be found this way, which is why the rule for callers is still "do not put values in messages".
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function maskIdentifiers(text) {
+  return String(text)
+    .replace(/\b([0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b/gi, '••:••:••:••:••:••')
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '[ip]')
+    .replace(/(\\{1,2}Users\\)([^\\/:*?"<>|]+)/gi, '$1[user]')
+    .replace(/\bSERIAL[-_ ]?[A-Z0-9]{6,}\b/gi, '[serial]');
 }
 
 /**
@@ -63,8 +103,8 @@ export function redact(value, depth = 0) {
   if (depth > 6) return '[depth-limit]';
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
-    if (/^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(value.trim())) return '••:••:••:••:••:••';
-    return value.length > 500 ? `${value.slice(0, 500)}…[truncated]` : value;
+    const masked = maskIdentifiers(value);
+    return masked.length > 500 ? `${masked.slice(0, 500)}…[truncated]` : masked;
   }
   if (typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.slice(0, 100).map((item) => redact(item, depth + 1));

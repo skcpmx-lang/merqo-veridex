@@ -82,7 +82,14 @@ async function execute(electron) {
 
   const command = isExecutableRun ? packagedExe : electron.path;
   console.log(`Launching: ${command} ${args.join(' ')}`);
+  // Any screenshots from a previous run would be counted as this run's evidence, so the
+  // folder is emptied first. The report names every file it wrote, which is what the
+  // artifact check compares against.
+  const shotsDir = path.join(path.dirname(reportPath), 'gui-shots');
+  await rm(shotsDir, { recursive: true, force: true }).catch(() => null);
+
   console.log(`  electron ${electron.version}; report → ${reportPath}`);
+  console.log(`  screenshots → ${shotsDir}`);
 
   const child = spawn(command, args, {
     cwd: appPath,
@@ -161,6 +168,18 @@ async function execute(electron) {
   const okCount = verdict.findings.filter((finding) => finding.level === 'ok').length;
   const warnCount = verdict.findings.filter((finding) => finding.level === 'warn').length;
 
+  // Evidence that a screenshot pass happened, or an explicit statement that it did not.
+  // A run that claims to have looked at the interface without producing an image is a run
+  // whose visual claims nobody can check.
+  const shots = Array.isArray(verdict.screenshots) ? verdict.screenshots : [];
+  const onDisk = shots.filter((shot) => existsSync(path.join(shotsDir, shot.file)));
+  console.log(`  screenshots: ${onDisk.length} of ${shots.length} recorded`);
+  if (shots.length === 0) {
+    emit('warning', 'gui-smoke screenshots', 'no screenshots were captured in this run');
+  } else if (onDisk.length !== shots.length) {
+    verdict.problems.push(`${shots.length - onDisk.length} screenshot(s) named in the verdict are missing from disk`);
+  }
+
   console.log('');
   console.log(`VERDICT: ${verdict.problems.length === 0 ? 'PASS' : 'FAIL'}`);
   console.log(`  electron ${verdict.electron}, packaged=${verdict.packaged}, ${okCount} steps passed, ${warnCount} warnings, ${verdict.problems.length} problems`);
@@ -181,6 +200,8 @@ async function execute(electron) {
       '| Level | Finding |',
       '| --- | --- |',
       ...verdict.findings.map((finding) => `| ${finding.level} | ${String(finding.message).replace(/\|/g, '\\|').slice(0, 220)} |`),
+      '',
+      `Screenshots captured: **${onDisk.length}**`,
       '',
       verdict.problems.length === 0
         ? 'No problems. This proves the window opens, the pages render and the IPC contract holds — **not** that any diagnostic value is correct, and not that the installer installs.'

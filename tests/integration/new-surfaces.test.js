@@ -528,3 +528,36 @@ test('the dashboard survives an issues payload it did not expect', { skip }, asy
     restore();
   }
 });
+
+// ── The Windows GUI harness's page table, validated against the real renderer ──
+
+test('every marker the Windows GUI harness expects is actually rendered', { skip }, async () => {
+  // The harness runs only on a Windows runner, so without this test its expectations could
+  // drift from the renderer for months. Each marker is checked against the page as jsdom
+  // renders it from the same fake bridge the rest of this file uses.
+  const { PAGE_EXPECTATIONS, PAGE_ORDER } = await import('../../src/app/gui-pages.js');
+  const scan = scanFixture();
+  const { document, restore } = await bootWithBridge(
+    baseAnswers({
+      'scan:last': { ok: true, data: { scan } },
+      'logs:recent': { ok: true, data: logData },
+      'logs:stats': { ok: true, data: { files: 2, bytes: 1024, maxBytes: 2097152, maxFiles: 5, level: 'info' } },
+      'processes:snapshot': { ok: true, data: { processes: [], generatedAt: '2026-03-04T09:14:00.000Z' } },
+      'events:recent': { ok: true, data: { events: [], windowDays: 7 } }
+    })
+  );
+  try {
+    const missing = [];
+    for (const id of PAGE_ORDER) {
+      const nav = document.querySelector(`.vx-nav__item[data-page="${id}"]`);
+      assert.ok(nav, `page "${id}" has no navigation item`);
+      nav.click();
+      await waitFor(() => (document.querySelector('.vx-content')?.textContent ?? '').length > 20, { label: `page ${id}` });
+      const text = document.querySelector('.vx-content').textContent;
+      if (!PAGE_EXPECTATIONS[id].test(text)) missing.push(`${id}: ${JSON.stringify(text.slice(0, 90))}`);
+    }
+    assert.deepEqual(missing, [], 'these pages do not render what the GUI harness waits for');
+  } finally {
+    restore();
+  }
+});
