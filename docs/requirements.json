@@ -1080,15 +1080,15 @@
       "id": "R-12-02",
       "mod": "12 Inventory",
       "req": "Windows components, startup apps, background processes, running services, scheduled tasks, features",
-      "impl": "src/diagnostics/software.js#registerSoftware (startup keys)",
-      "primary": "CIM + Get-ScheduledTask",
-      "alt": "schtasks /query",
+      "impl": "src/diagnostics/software.js#registerSoftware, src/diagnostics/windows.js#registerWindows",
+      "primary": "Get-ScheduledTask | schtasks /query; Get-Service; Get-WindowsOptionalFeature; Run/RunOnce keys and both Startup folders; process snapshot",
+      "alt": "schtasks /query /fo csv when the ScheduledTasks module is missing",
       "perm": "none",
       "ui": "drivers",
-      "test": "tests/unit/windows-extended.test.js",
+      "test": "tests/unit/scheduled-tasks.test.js, tests/unit/windows-extended.test.js, tests/unit/windows-modules-depth.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "IP",
-      "note": "Startup entries from the Run/RunOnce keys are implemented and tested. Scheduled tasks, running services and Windows components are still missing."
+      "st": "TS",
+      "note": "Startup entries are read from the four Run/RunOnce keys and from the per-user and all-users Startup folders; scheduled tasks through Get-ScheduledTask, with a csV schtasks fallback that states it cannot report the author or the action; running services and automatic-but-stopped services through Get-Service; optional features through Get-WindowsOptionalFeature; background processes through the process snapshot. Read-only throughout: no task, service or feature is started, stopped, disabled or changed. Not VERIFIED: none of it has been run on physical hardware, and the schtasks fallback has never been exercised on a machine that lacks the ScheduledTasks module."
     },
     {
       "id": "R-12-03",
@@ -1355,14 +1355,15 @@
       "id": "R-18-02",
       "mod": "18 Layout",
       "req": "High-DPI / display-scaling and multi-monitor handling",
-      "impl": "src/diagnostics/display.js",
-      "primary": "every display enumerated with bounds, work area, rotation and scale factor; the GUI harness checks 1024x700 and 125% zoom",
-      "alt": "no per-monitor window placement or scale-aware sizing of the shell",
+      "impl": "src/app/window-placement.js, src/diagnostics/display.js",
+      "primary": "every display enumerated with bounds, work area, rotation and scale factor; the window opens on the display under the pointer, inside that display work area, no larger than it; the harness asserts the real window is inside the work area at 1024x700 and that 125 % zoom reflows without overflow",
+      "alt": "no remembered window position between runs: the window opens on the pointer display each time",
       "perm": "n/a",
       "ui": "all",
-      "test": "tests/integration/gui-coverage.test.js",
+      "test": "tests/unit/window-placement.test.js, tests/integration/gui-coverage.test.js",
       "doc": "docs/DESIGN_SYSTEM.md",
-      "st": "IP"
+      "st": "TS",
+      "note": "Placement is computed from the work area rather than the resolution, so a work area smaller than the design minimum produces a window the size of the work area and says so in the log and the harness report. A window stranded by an unplugged monitor is moved back by the display-removed and display-metrics-changed handlers. Not VERIFIED: the CI runner has a single 1024x700 display, so the second-monitor and negative-origin cases are covered by unit tests, not by a window a person looked at on two screens. There is no remembered position between runs, which is stated rather than implied."
     },
     {
       "id": "R-19-01",

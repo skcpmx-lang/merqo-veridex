@@ -254,6 +254,7 @@ test('all four modules register, and every provider has a deliberate confidence 
   assert.deepEqual([...registry.tasks.keys()].sort(), [
     'processes.snapshot',
     'software.installed',
+    'software.scheduledTasks',
     'software.startup',
     'windows.componentHealth',
     'windows.events'

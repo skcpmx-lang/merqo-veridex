@@ -184,6 +184,69 @@ export function describeApplications(summary, source) {
   return fields;
 }
 
+/** Task Scheduler's own folder for Microsoft's tasks. */
+export const MICROSOFT_TASK_ROOT = /^\\Microsoft\\/i;
+
+/**
+ * Is this task something Microsoft shipped?
+ *
+ * Two independent signals, because neither is complete: the folder is reliable for built-in
+ * tasks, but third-party installers put their tasks in the root, and the author field is
+ * frequently blank on tasks created by scripting. A task counts as Microsoft's only when one
+ * of the two says so, so the list a reader scans is the list they should scan.
+ *
+ * @param {{path?:string|null, author?:string|null}} task
+ */
+export function isMicrosoftTask(task) {
+  if (!task) return false;
+  if (task.path && MICROSOFT_TASK_ROOT.test(task.path)) return true;
+  return /^(microsoft|windows)( corporation)?$/i.test(String(task.author ?? '').trim());
+}
+
+/**
+ * Normalise one scheduled task.
+ *
+ * The action is reported, not judged: it is the text Windows would run at the trigger, and
+ * hiding it would leave the user with a list of names and no way to see what any of them do.
+ *
+ * @param {object} entry
+ * @returns {{name:string, path:string|null, state:string|null, author:string|null, action:string|null, disabled:boolean}|null}
+ */
+export function normaliseScheduledTask(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const name = cleanString(entry.name ?? entry.TaskName);
+  if (!name) return null;
+  return {
+    name: name.slice(0, 160),
+    path: cleanString(entry.path)?.slice(0, 160) ?? null,
+    state: cleanString(entry.state) ?? null,
+    author: cleanString(entry.author)?.slice(0, 120) ?? null,
+    action: cleanString(entry.action)?.slice(0, 240) || null,
+    disabled: entry.disabled === true || String(entry.state ?? '').toLowerCase() === 'disabled'
+  };
+}
+
+/**
+ * Summarise the task list.
+ *
+ * "Running" counts a task executing right now, which is a smaller and different number from
+ * "ready": a task in Ready state has armed triggers, and reading that as activity would
+ * overstate what the machine is doing.
+ *
+ * @param {object[]} items
+ */
+export function summariseScheduledTasks(items) {
+  const tasks = asArray(items).map(normaliseScheduledTask).filter(Boolean);
+  const thirdParty = tasks.filter((task) => !isMicrosoftTask(task));
+  return {
+    total: tasks.length,
+    nonMicrosoft: thirdParty,
+    disabled: tasks.filter((task) => task.disabled).length,
+    running: tasks.filter((task) => String(task.state ?? '').toLowerCase() === 'running').length,
+    temporary: thirdParty.filter((task) => /appdata\\local\\temp|\\temp\\/i.test(task.action ?? ''))
+  };
+}
+
 /**
  * Register the installed-software task.
  * @param {import('../engine/provider-registry.js').ProviderRegistry} registry
@@ -291,6 +354,23 @@ export function registerSoftware(registry) {
         '    $entries += [pscustomobject]@{ name = $property.Name; command = [string]$property.Value; location = $key }',
         '  }',
         '}',
+        '# The same list Windows appends to the Run keys: shortcuts dropped in the Startup folders.',
+        '# They were missing while the provider title claimed to read them, so a start-up program',
+        '# added the way Windows itself suggests - drop a shortcut here - was invisible to a review.',
+        '$folders = @(',
+        "  [pscustomobject]@{ path = [Environment]::GetFolderPath('Startup'); label = 'Startup folder (user)' },",
+        "  [pscustomobject]@{ path = [Environment]::GetFolderPath('CommonStartup'); label = 'Startup folder (all users)' }",
+        ')',
+        'foreach ($folder in $folders) {',
+        '  if (-not $folder.path) { continue }',
+        '  try {',
+        '    $files = @(Get-ChildItem -LiteralPath $folder.path -File -ErrorAction Stop |',
+        "      Where-Object { $_.Extension -in '.lnk', '.url', '.exe', '.bat', '.cmd' })",
+        '  } catch { continue }',
+        '  foreach ($file in $files) {',
+        '    $entries += [pscustomobject]@{ name = $file.BaseName; command = $file.FullName; location = $folder.label }',
+        '  }',
+        '}',
         '$entries | ConvertTo-Json -Compress -Depth 3',
         'return'
       ].join('\n');
@@ -335,5 +415,134 @@ export function registerSoftware(registry) {
     title: 'Startup programs',
     quick: false,
     providers: ['powershell.startup']
+  });
+
+  // Scheduled tasks are the third place Windows starts software from, and the one a security
+  // review cares about most: an installer can register a task that runs as SYSTEM at every
+  // logon and never appears in either the Run keys or the Startup folders.
+  registry.registerProvider({
+    id: 'powershell.scheduledTasks',
+    title: 'Scheduled tasks',
+    priority: 2,
+    timeoutMs: 45_000,
+    collect: async (ctx) => {
+      // `Get-ScheduledTask` needs the ScheduledTasks module, which is present on Windows 8 and
+      // later but can be disabled or removed on a stripped image. `schtasks` is the older
+      // interface and is always there; it cannot report the author or the action in a form that
+      // survives translation, so the fallback says so instead of inventing those two fields.
+      const body = [
+        '$items = @()',
+        '$source = "scheduledtasks"',
+        '$failure = $null',
+        'try {',
+        '  $items = @(Get-ScheduledTask -ErrorAction Stop | ForEach-Object {',
+        '    $task = $_',
+        '    $actions = @($task.Actions | ForEach-Object { (([string]$_.Execute) + " " + ([string]$_.Arguments)).Trim() })',
+        '    [pscustomobject]@{',
+        '      name = [string]$task.TaskName',
+        '      path = [string]$task.TaskPath',
+        '      state = [string]$task.State',
+        '      author = [string]$task.Author',
+        '      action = ($actions -join "; ")',
+        '      disabled = [bool]($null -ne $task.Settings -and $task.Settings.Enabled -eq $false)',
+        '    }',
+        '  })',
+        '} catch {',
+        '  $failure = $_.Exception.Message',
+        '  $source = "schtasks"',
+        '  try {',
+        '    $items = @(schtasks.exe /query /fo csv /nh 2>$null | ForEach-Object {',
+        '      $columns = @($_ -split \'","\')',
+        '      if ($columns.Count -lt 3) { return }',
+        '      [pscustomobject]@{',
+        '        name = ($columns[0] -replace \'^"\', \'\')',
+        '        path = ""',
+        '        state = ($columns[2] -replace \'"$\', \'\')',
+        '        author = ""',
+        '        action = ""',
+        '        disabled = $false',
+        '      }',
+        '    } | Where-Object { $_.name -and $_.name -ne "TaskName" -and $_.name -ne "Folder: " })',
+        '  } catch { $items = @() }',
+        '}',
+        '[pscustomobject]@{ items = @($items); source = $source; failure = $failure }'
+      ].join('\n');
+
+      const result = await ctx.runner.powershellJson(body, { name: 'software:scheduledTasks', timeoutMs: 40_000 });
+      if (!result.ok) {
+        return {
+          scheduledTaskCount: unavailable(`Scheduled tasks could not be read${summariseToolOutput({ stdout: result.stdout, stderr: result.error ?? result.stderr })}`, 'powershell.scheduledTasks', {
+            notes: ['An unread task list is not an empty task list. Treat scheduled tasks as unknown on this machine.']
+          })
+        };
+      }
+
+      // `powershellJson` always hands back an array, so the summary object is its first element.
+      const first = Array.isArray(result.data) ? result.data[0] : result.data;
+      const payload = first && typeof first === 'object' && Array.isArray(first.items)
+        ? first
+        : { items: asArray(result.data), source: 'scheduledtasks', failure: null };
+      const items = asArray(payload.items);
+      // An empty list from a query that threw is an absence of data, and reporting "0 tasks"
+      // would be a clean bill of health for a machine that was never read.
+      if (items.length === 0 && payload.failure) {
+        return {
+          scheduledTaskCount: unavailable(`The task list could not be read: ${String(payload.failure).slice(0, 200)}`, 'powershell.scheduledTasks', {
+            notes: ['An unread task list is not an empty task list. Treat scheduled tasks as unknown on this machine.']
+          })
+        };
+      }
+
+      const summary = summariseScheduledTasks(items);
+      /** @type {Record<string, import('../core/field.js').FieldValue>} */
+      const fields = {
+        scheduledTaskCount: available(summary.total, 'powershell.scheduledTasks', {
+          notes: [
+            `${summary.nonMicrosoft.length} of ${summary.total} tasks are not published by Microsoft.`,
+            payload.source === 'schtasks'
+              ? 'Read through `schtasks`, because `Get-ScheduledTask` was unavailable; the author and the action are not reported by that interface.'
+              : 'A task whose triggers are armed is counted here; the count is inventory, not activity.'
+          ]
+        }),
+        scheduledTaskStates: available(`${summary.running} running, ${summary.disabled} disabled of ${summary.total}`, 'powershell.scheduledTasks')
+      };
+
+      fields.scheduledTaskList = summary.nonMicrosoft.length > 0
+        ? available(summary.nonMicrosoft.slice(0, 40).map((task) => ({
+          name: task.name,
+          folder: task.path || null,
+          state: task.state,
+          action: task.action
+        })), 'powershell.scheduledTasks', {
+          notes: [`The first ${Math.min(40, summary.nonMicrosoft.length)} non-Microsoft tasks, in the order Windows returned them.`]
+        })
+        : available([], 'powershell.scheduledTasks', {
+          notes: ['Every task on this machine is published by Microsoft, or the machine has no tasks at all.']
+        });
+
+      if (summary.temporary.length > 0) {
+        fields.scheduledTaskWarning = field(summary.temporary.map((task) => task.name).slice(0, 10), {
+          status: Status.WARNING,
+          source: 'powershell.scheduledTasks',
+          notes: ['At least one non-Microsoft task runs its action from a temporary folder. Software that runs from %TEMP% usually cannot be trusted to stay the same software between runs.']
+        });
+      }
+
+      return fields;
+    }
+  });
+
+  registry.registerTask({
+    id: 'software.scheduledTasks',
+    module: 'software',
+    title: 'Scheduled tasks',
+    quick: false,
+    providers: ['powershell.scheduledTasks'],
+    validate: (fields) => {
+      const count = fields.scheduledTaskCount?.value;
+      if (typeof count === 'number' && count < 0) return ['the scheduled-task count was negative'];
+      if (typeof count === 'number' && count > 20000) return [`the scheduled-task count (${count}) is implausible; the query may have counted the same task once per trigger`];
+      return [];
+    }
   });
 }

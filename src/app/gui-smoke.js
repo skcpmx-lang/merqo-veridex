@@ -254,6 +254,36 @@ async function main() {
     if (!/^VERIDEX\b/.test(booted.value.title)) record('fail', `window title does not start with the product name: "${booted.value.title}"`);
   }
 
+  // ── 1a-ii. Placement ──────────────────────────────────────────────────────
+  // R-18-02. The window must open inside a display that exists, inside that display's work
+  // area rather than its full resolution, and no larger than that area — which is a different
+  // bound at every scale factor. On the evidence runner (1024x700 at 100 %) this is the tight
+  // case: the design size does not fit, so the window has to be the work area.
+  const placed = await step('the window opened inside a real display work area', async () => {
+    const { screen } = await import('electron');
+    const displays = screen.getAllDisplays();
+    if (displays.length === 0) throw new Error('Electron reported no displays');
+    const bounds = target.getBounds();
+    const display = screen.getDisplayMatching(bounds);
+    const area = display.workArea;
+    const tolerance = 2;
+    const overflow = {
+      left: area.x - bounds.x,
+      top: area.y - bounds.y,
+      right: (bounds.x + bounds.width) - (area.x + area.width),
+      bottom: (bounds.y + bounds.height) - (area.y + area.height)
+    };
+    record('info', `placement: window ${bounds.width}x${bounds.height} at ${bounds.x},${bounds.y}; display ${display.id} ${display.size.width}x${display.size.height} at ${Math.round(display.scaleFactor * 100)} %, work area ${area.width}x${area.height}; overflow ${JSON.stringify(overflow)}`);
+    if (bounds.width > area.width + tolerance || bounds.height > area.height + tolerance) {
+      throw new Error(`the window (${bounds.width}x${bounds.height}) is larger than the work area (${area.width}x${area.height}) at ${Math.round(display.scaleFactor * 100)} % scaling`);
+    }
+    for (const [edge, amount] of Object.entries(overflow)) {
+      if (amount > tolerance) throw new Error(`the window overflows the work area's ${edge} edge by ${amount}px, so part of the application is off-screen`);
+    }
+    return { bounds, display: display.id, scaleFactor: display.scaleFactor, workArea: area };
+  });
+  if (placed.ok) await screenshot('window-placement');
+
   // ── 1b. First run ─────────────────────────────────────────────────────────
   // A CI runner has an empty user profile, so this is genuinely the first launch: the tour
   // should be on screen before anything else can be. If the profile is warm, the tour is

@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 843 · pass 843 · fail 0
+tests 878 · pass 878 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -76,6 +76,8 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/stress-run.test.js` | 11 | consent, duration ceiling, thermal stop, cancellation, refusals, no PASS verdict |
 | `tests/unit/stress.test.js` | 16 | stress guard, elapsed time, transitions |
 | `tests/unit/windows-extended.test.js` | 22 | Windows inventory parsing beyond the core modules |
+| `tests/unit/scheduled-tasks.test.js` | 15 | R-12-02: scheduled tasks, the `schtasks` fallback, and the Startup folders the provider claimed to read |
+| `tests/unit/window-placement.test.js` | 20 | R-18-02: window placement across displays, work-area fit, DPI scaling and stranded windows |
 | `tests/unit/windows-modules-depth.test.js` | 31 | the four new modules against their per-module checklists |
 | `tests/unit/windowshealth-depth.test.js` | 11 | DISM parsing, unknown never PASS, non-admin honesty |
 | `tests/integration/artifacts.test.js` | 7 | release artifact verification: signatures, checksums, tampering |
@@ -111,7 +113,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **843** | |
+| **Total** | **878** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

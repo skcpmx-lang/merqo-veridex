@@ -20,7 +20,7 @@
  * docs/RELEASE_VERIFICATION.md as NOT VERIFIED.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, shell, session as electronSession } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, shell, session as electronSession } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +64,7 @@ import { applyPrivacyPreset } from '../security/privacy.js';
 import { InspectionSession } from '../manual/session.js';
 import { HistoryStore } from '../history/store.js';
 import { compareEntries } from '../history/compare.js';
+import { resolvePlacement, describePlacement, isStranded } from './window-placement.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -76,6 +77,8 @@ let logger;
 let settings;
 /** @type {AbortController|null} */
 let scanController = null;
+/** Display listeners are process-wide; createWindow runs again on macOS activation. */
+let displayListenersRegistered = false;
 /** @type {Awaited<ReturnType<typeof runScan>>|null} */
 let lastScan = null;
 /** @type {InspectionSession|null} */
@@ -163,11 +166,84 @@ function handle(channel, handler) {
   });
 }
 
+/**
+ * Where the window should open, and what it should say about it.
+ *
+ * R-18-02: the window opens on the display under the pointer, inside that display's *work
+ * area* (so the taskbar cannot cover the bottom of it) and no larger than the work area, which
+ * is a different bound at every scale factor. `screen` is only readable once the app is ready,
+ * which is why this is a function and not module state.
+ */
+function planWindowPlacement() {
+  let displays = [];
+  let primaryId;
+  let cursor;
+  try {
+    displays = screen.getAllDisplays();
+    primaryId = screen.getPrimaryDisplay()?.id;
+    cursor = screen.getCursorScreenPoint();
+  } catch (error) {
+    // `screen` before `app.whenReady()` throws. The window is still created; the log records
+    // that the placement decision was made without display data rather than pretending.
+    displays = [];
+    void logger?.warn('display information was unavailable when the window was created', {
+      scope: 'startup',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+  return resolvePlacement({
+    displays,
+    primaryId,
+    cursor,
+    preferred: { width: WINDOW_DEFAULTS.width, height: WINDOW_DEFAULTS.height },
+    limits: { minWidth: WINDOW_DEFAULTS.minWidth, minHeight: WINDOW_DEFAULTS.minHeight }
+  });
+}
+
+/**
+ * Keep a window on a screen that exists.
+ *
+ * Unplugging the monitor an application is running on leaves it at coordinates no connected
+ * display covers, where it cannot be dragged back. After any display change the window is
+ * tested against `isStranded` and moved to a display that does exist.
+ */
+function keepWindowOnScreen(reason) {
+  if (!window || window.isDestroyed()) return;
+  try {
+    const displays = screen.getAllDisplays();
+    const bounds = window.getBounds();
+    if (!isStranded(bounds, displays)) return;
+    const placement = planWindowPlacement();
+    window.setBounds(placement.bounds);
+    void logger?.warn('the window was moved back onto a connected display', {
+      scope: 'startup',
+      reason,
+      from: bounds,
+      to: placement.bounds
+    });
+  } catch (error) {
+    void logger?.warn('could not check whether the window is still on a display', {
+      scope: 'startup',
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
 async function createWindow() {
+  const placement = planWindowPlacement();
+  const chosen = screen.getAllDisplays().find((display) => display.id === placement.displayId) ?? null;
+  const fitLog = describePlacement(placement, chosen);
+
   window = new BrowserWindow({
     ...WINDOW_DEFAULTS,
-    minWidth: WINDOW_DEFAULTS.minWidth,
-    minHeight: WINDOW_DEFAULTS.minHeight,
+    x: placement.bounds.x,
+    y: placement.bounds.y,
+    width: placement.bounds.width,
+    height: placement.bounds.height,
+    // A work area smaller than the design minimum lowers the window's own floor, so the window
+    // can actually be the size it was placed at without Windows silently growing it back.
+    minWidth: placement.minimum.width,
+    minHeight: placement.minimum.height,
     icon: path.join(ROOT, 'assets', 'icons', 'icon.png'),
     title: 'VERIDEX',
     backgroundColor: WINDOW_DEFAULTS.backgroundColor,
@@ -211,7 +287,23 @@ async function createWindow() {
   // which never becomes visible has no other witness. The lines are small, they are useful to
   // anyone debugging their own machine, and they were what distinguished "the application
   // never asked to be shown" from "the desktop refused to show it".
-  await logger?.info('window created', { scope: 'startup', bounds: window.getBounds() });
+  await logger?.info('window created', {
+    scope: 'startup',
+    bounds: window.getBounds(),
+    display: placement.displayId,
+    placement: placement.reason,
+    belowMinimum: placement.belowMinimum,
+    detail: fitLog
+  });
+  // `display-removed` is the one that strands a window; `display-metrics-changed` covers a
+  // resolution change that leaves it hanging off an edge. Both go through the same check, and
+  // the listeners are registered once: `createWindow` runs again on macOS activation, and a
+  // listener added per window would run the check three times after three activations.
+  if (!displayListenersRegistered) {
+    displayListenersRegistered = true;
+    screen.on('display-removed', () => keepWindowOnScreen('display removed'));
+    screen.on('display-metrics-changed', () => keepWindowOnScreen('display metrics changed'));
+  }
   window.webContents.once('did-finish-load', () => {
     void logger?.info('renderer finished loading', { scope: 'startup', url: window.webContents.getURL() });
   });
