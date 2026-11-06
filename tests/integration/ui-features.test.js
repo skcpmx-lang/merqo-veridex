@@ -240,9 +240,17 @@ test('a toast appears, is dismissable, and is capped in number', { skip }, async
     assert.equal(host.children.length, 4, 'at most four toasts may be on screen');
     assert.match(host.textContent, /Event 5/, 'the newest toast must survive the cap');
 
+    // The page reserves room for the stack while it is on screen, so the last card is never
+    // permanently underneath a notification.
+    assert.equal(window.document.body.dataset.toasts, '4', 'the page must know toasts are covering it');
+
     const close = host.querySelector('.vx-toast__close');
     close.click();
     await waitFor(() => host.children.length === 3, { label: 'the dismissed toast to leave' });
+    assert.equal(window.document.body.dataset.toasts, '3', 'the reserve must follow the stack');
+
+    for (const node of [...host.children]) host.removeChild(node);
+    await waitFor(() => window.document.body.dataset.toasts === undefined, { label: 'the reserve to be released' });
   } finally {
     window.close();
   }

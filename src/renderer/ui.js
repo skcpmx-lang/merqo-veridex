@@ -408,7 +408,20 @@ function ensureToastHost() {
   if (toastHost && toastHost.isConnected) return toastHost;
   toastHost = el('div', { class: 'vx-toasts', attrs: { role: 'region', 'aria-live': 'polite', 'aria-label': 'Notifications' } });
   document.body.append(toastHost);
+  // The stack floats over the content, so the content needs to know it is there: with the
+  // attribute set, the scroll container reserves room for the toast instead of the last card
+  // sitting underneath it. A marker rather than a measurement, because the number of toasts is
+  // what changes and CSS can size the reserve.
+  syncToastMarker();
   return toastHost;
+}
+
+/** Mirror the number of visible toasts onto the document. */
+function syncToastMarker() {
+  if (typeof document === 'undefined' || !document.body) return;
+  const count = toastHost && toastHost.isConnected ? toastHost.children.length : 0;
+  if (count > 0) document.body.dataset.toasts = String(count);
+  else delete document.body.dataset.toasts;
 }
 
 /**
@@ -433,7 +446,10 @@ export function toast(options) {
     node.classList.add('is-leaving');
     // Removed on a timer rather than immediately so the transition can run; the element is
     // still removed synchronously when the document is going away.
-    const remove = () => node.remove();
+    const remove = () => {
+      node.remove();
+      syncToastMarker();
+    };
     if (typeof setTimeout === 'function') setTimeout(remove, 180); else remove();
   };
 
@@ -447,6 +463,7 @@ export function toast(options) {
 
   host.append(node);
   while (host.children.length > TOAST_LIMIT) host.children[0].remove();
+  syncToastMarker();
 
   const timeout = options.timeoutMs ?? (tone === 'bad' ? 12_000 : 6_000);
   if (timeout > 0 && typeof setTimeout === 'function') setTimeout(dismiss, timeout);

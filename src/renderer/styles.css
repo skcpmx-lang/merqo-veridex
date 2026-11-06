@@ -213,8 +213,11 @@ body { overflow: hidden; }
 .vx-content {
   padding: var(--vx-space-xl);
   /* The toast stack is fixed over the bottom-right corner. Without this the last row of a page
-     sat underneath it: the settings screenshot ended with a control half-hidden behind "Ready". */
+     sat underneath it: the settings screenshot ended with a control half-hidden behind "Ready".
+     A constant reserve could only fit one toast, so the reserve grows while toasts are on screen
+     (body[data-toasts], set by ui.js) and the reader can always scroll the last card clear. */
   padding-bottom: calc(var(--vx-space-xl) + 56px);
+  transition: padding-bottom var(--vx-motion) ease-out;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -222,6 +225,10 @@ body { overflow: hidden; }
   scrollbar-width: thin;
   scrollbar-color: var(--vx-line) transparent;
 }
+
+/* While notifications are on screen, the page reserves their height as well: one toast is about
+   88px, and four (the cap) is about 320px. */
+body[data-toasts] .vx-content { padding-bottom: calc(var(--vx-space-xl) + 152px); }
 
 /* A thin, theme-coloured scrollbar instead of the operating system's default ridge, which is
    the one element on screen that ignores every token in this file. */
