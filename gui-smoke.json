@@ -1,0 +1,525 @@
+{
+  "generatedAt": "2026-11-06T07:52:31.224Z",
+  "finishedAt": "2026-11-06T07:53:01.019Z",
+  "complete": true,
+  "electron": "45.2.3",
+  "chromium": "156.0.8078.80",
+  "node": "24.22.2",
+  "platform": "win32",
+  "arch": "x64",
+  "packaged": false,
+  "screenshots": [
+    {
+      "name": "tour-1",
+      "file": "01-tour-1.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "tour-2",
+      "file": "02-tour-2.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "tour-3",
+      "file": "03-tour-3.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "tour-4",
+      "file": "04-tour-4.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-dashboard",
+      "file": "05-page-dashboard.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-hardware",
+      "file": "06-page-hardware.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-battery",
+      "file": "07-page-battery.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-storage",
+      "file": "08-page-storage.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-network",
+      "file": "09-page-network.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-windows",
+      "file": "10-page-windows.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-reliability",
+      "file": "11-page-reliability.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-drivers",
+      "file": "12-page-drivers.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-processes",
+      "file": "13-page-processes.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-manual",
+      "file": "14-page-manual.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-performance",
+      "file": "15-page-performance.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-monitor",
+      "file": "16-page-monitor.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-reports",
+      "file": "17-page-reports.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-history",
+      "file": "18-page-history.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-settings",
+      "file": "19-page-settings.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-privacy",
+      "file": "20-page-privacy.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-logs",
+      "file": "21-page-logs.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "page-about",
+      "file": "22-page-about.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-surfaces-the-audit-added-are-visible-and-gat",
+      "file": "23-failure-the-surfaces-the-audit-added-are-visible-and-gat.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "populated-dashboard",
+      "file": "24-populated-dashboard.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "populated-hardware",
+      "file": "25-populated-hardware.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "populated-storage",
+      "file": "26-populated-storage.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "populated-reports",
+      "file": "27-populated-reports.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "populated-logs",
+      "file": "28-populated-logs.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "logs-populated",
+      "file": "29-logs-populated.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "reports-preview",
+      "file": "30-reports-preview.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "privacy",
+      "file": "31-privacy.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "dashboard-1024x700",
+      "file": "32-dashboard-1024x700.png",
+      "width": 1024,
+      "height": 700
+    },
+    {
+      "name": "dashboard-zoom-125",
+      "file": "33-dashboard-zoom-125.png",
+      "width": 1280,
+      "height": 860
+    }
+  ],
+  "findings": [
+    {
+      "level": "info",
+      "message": "a window was created (1 total)"
+    },
+    {
+      "level": "info",
+      "message": "windows open at startup: 1"
+    },
+    {
+      "level": "info",
+      "message": "→ a window exists and has loaded the dashboard"
+    },
+    {
+      "level": "ok",
+      "message": "a window exists and has loaded the dashboard (2003ms)"
+    },
+    {
+      "level": "ok",
+      "message": "window: \"VERIDEX — Advanced All-in-One Windows PC & Laptop Diagnostics\" 1024×720, visible"
+    },
+    {
+      "level": "info",
+      "message": "→ the first-run tour appears on a clean profile and can be completed"
+    },
+    {
+      "level": "info",
+      "message": "onboarding: needed=true step=welcome skipped=false"
+    },
+    {
+      "level": "info",
+      "message": "tour step 1: clicked \"Start\""
+    },
+    {
+      "level": "info",
+      "message": "tour step 2: clicked \"Understood\""
+    },
+    {
+      "level": "info",
+      "message": "tour step 3: clicked \"Understood\""
+    },
+    {
+      "level": "info",
+      "message": "tour step 4: clicked \"Finish\""
+    },
+    {
+      "level": "info",
+      "message": "skip path: reset needed=true → skipped=true needed=false"
+    },
+    {
+      "level": "info",
+      "message": "after the tour: needed=false closed=true steps=[\"step-1\",\"step-2\",\"step-3\",\"step-4\"]"
+    },
+    {
+      "level": "ok",
+      "message": "the first-run tour appears on a clean profile and can be completed (1813ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the navigation lists every documented page, and each one renders"
+    },
+    {
+      "level": "info",
+      "message": "navigation entries (18): dashboard, hardware, battery, storage, network, windows, reliability, drivers, processes, manual, performance, monitor, reports, history, settings, privacy, logs, about"
+    },
+    {
+      "level": "info",
+      "message": "visited and screenshotted 18 pages"
+    },
+    {
+      "level": "ok",
+      "message": "the navigation lists every documented page, and each one renders (1797ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the surfaces the audit added are visible and gated in the real window"
+    },
+    {
+      "level": "fail",
+      "message": "the surfaces the audit added are visible and gated in the real window threw: Script failed to execute, this normally means an error was thrown. Check the renderer console for the error."
+    },
+    {
+      "level": "info",
+      "message": "→ the window is hardened at runtime, not only in source"
+    },
+    {
+      "level": "info",
+      "message": "renderer sees node globals: false; bridge keys: invoke, on, channels"
+    },
+    {
+      "level": "info",
+      "message": "webPreferences: sandbox=true contextIsolation=true nodeIntegration=false"
+    },
+    {
+      "level": "ok",
+      "message": "the window is hardened at runtime, not only in source (3ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the dashboard renders before any scan"
+    },
+    {
+      "level": "info",
+      "message": "body text 3877 chars, 18 page containers"
+    },
+    {
+      "level": "ok",
+      "message": "the dashboard renders before any scan (3ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the navigation lists every documented page"
+    },
+    {
+      "level": "info",
+      "message": "navigation entries: dashboard, hardware, battery, storage, network, windows, reliability, drivers, processes, manual, performance, monitor, reports, history, settings, privacy, logs, about"
+    },
+    {
+      "level": "ok",
+      "message": "the navigation lists every documented page (2ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ app:info answers from the real main process"
+    },
+    {
+      "level": "info",
+      "message": "app:info → version=1.0.0"
+    },
+    {
+      "level": "ok",
+      "message": "app:info answers from the real main process (2ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ an unlisted channel is refused by the contract"
+    },
+    {
+      "level": "info",
+      "message": "unknown channel → absent-from-bridge"
+    },
+    {
+      "level": "ok",
+      "message": "an unlisted channel is refused by the contract (2ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ cancelling a sweep returns the app to idle"
+    },
+    {
+      "level": "info",
+      "message": "cancel reply: {\"cancelled\":false,\"reason\":\"No scan is running.\"}"
+    },
+    {
+      "level": "info",
+      "message": "after cancel: running=false lastScanAt=2026-11-06T07:52:48.028Z"
+    },
+    {
+      "level": "ok",
+      "message": "cancelling a sweep returns the app to idle (11123ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ a scan runs through the UI and finishes"
+    },
+    {
+      "level": "info",
+      "message": "scan:start reply: {\"ok\":true,\"data\":{\"startedAt\":\"2026-11-06T07:52:48.071Z\",\"tasks\":3,\"cancelled\":false}}"
+    },
+    {
+      "level": "info",
+      "message": "sweep finished; 3 progress events"
+    },
+    {
+      "level": "info",
+      "message": "slowest tasks: system.identity=1793951569873ms, cpu.info=2929ms, memory.info=770ms"
+    },
+    {
+      "level": "ok",
+      "message": "a scan runs through the UI and finishes (5519ms)"
+    },
+    {
+      "level": "info",
+      "message": "sweep: [{\"taskId\":\"system.identity\",\"ms\":1793951569873},{\"taskId\":\"cpu.info\",\"ms\":2929},{\"taskId\":\"memory.info\",\"ms\":770}]"
+    },
+    {
+      "level": "info",
+      "message": "→ the interface reflects the scan that just ran"
+    },
+    {
+      "level": "info",
+      "message": "dashboard signals: {\"score\":true,\"coverage\":false,\"scannedSomething\":true}"
+    },
+    {
+      "level": "ok",
+      "message": "the interface reflects the scan that just ran (2ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the dashboard shows a coverage-aware score, never a bare one"
+    },
+    {
+      "level": "info",
+      "message": "score-related lines: [\"Benchmark scores are VERIDEX-specific\",\"A weighted score over whatever has actually been measured: CPU 35%, memory 20%, disk 25%, GPU 20%. Weights are renormalised over the subsystems that were measured, and the misses are named rather than assumed. Event-loop lag during the run is a penalty, not an input.\"]"
+    },
+    {
+      "level": "ok",
+      "message": "the dashboard shows a coverage-aware score, never a bare one (4ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the populated pages are captured, not only their empty states"
+    },
+    {
+      "level": "info",
+      "message": "populated screenshots: dashboard, hardware, storage, reports, logs"
+    },
+    {
+      "level": "ok",
+      "message": "the populated pages are captured, not only their empty states (2247ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the activity log lists what the run just wrote, and filters it"
+    },
+    {
+      "level": "info",
+      "message": "log entries: 5 at trace+, 0 at error+; unparseable=0"
+    },
+    {
+      "level": "ok",
+      "message": "the activity log lists what the run just wrote, and filters it (62ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the reports page previews what the file will contain"
+    },
+    {
+      "level": "ok",
+      "message": "the reports page previews what the file will contain (59ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the privacy page states what is stored and offers the controls"
+    },
+    {
+      "level": "info",
+      "message": "identifier setting in reports: false"
+    },
+    {
+      "level": "ok",
+      "message": "the privacy page states what is stored and offers the controls (69ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ no page overflows horizontally at the minimum window size"
+    },
+    {
+      "level": "info",
+      "message": "1024x700: no horizontal overflow"
+    },
+    {
+      "level": "ok",
+      "message": "no page overflows horizontally at the minimum window size (3814ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ a 1.25x zoom factor does not break the layout"
+    },
+    {
+      "level": "info",
+      "message": "zoom 125%: content 2479 chars, scrollWidth 1024 / client 1024"
+    },
+    {
+      "level": "ok",
+      "message": "a 1.25x zoom factor does not break the layout (1082ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ report:build renders JSON, HTML and PDF to real bytes"
+    },
+    {
+      "level": "info",
+      "message": "report sizes: {\"json\":41432,\"html\":45819,\"pdf\":24083}"
+    },
+    {
+      "level": "ok",
+      "message": "report:build renders JSON, HTML and PDF to real bytes (69ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the renderer logged no uncaught errors"
+    },
+    {
+      "level": "info",
+      "message": "renderer console: 0 error(s), 0 warning(s)"
+    },
+    {
+      "level": "ok",
+      "message": "the renderer logged no uncaught errors (1ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the app closes its window without crashing"
+    },
+    {
+      "level": "info",
+      "message": "windows before close: 1"
+    }
+  ],
+  "problems": [
+    "the surfaces the audit added are visible and gated in the real window threw: Script failed to execute, this normally means an error was thrown. Check the renderer console for the error."
+  ],
+  "rendererConsole": []
+}
