@@ -31,6 +31,10 @@ Recorded runs:
 | [`42169801753`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42169801753) | push (design evidence) | ✅ 21 steps, 32 screenshots, 0 problems — first run with the boot fix and the imported-graph test |
 | [`42172738818`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738818) | push | ✅ Linux and Windows: 725 tests, static checks clean |
 | [`42172738822`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738822) | push (design evidence) | ✅ 21 steps, 32 screenshots, 0 problems, including the populated pages |
+| [`42179901603`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42179901603) | push | ❌ Linux and Windows: Windows failed, and the annotation said "no failing tests" — the annotation script only matched `not ok` at column zero, and the real failure was the new formatting rule meeting a checkout that had converted 145 files to CRLF |
+| [`42182778326`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42182778326) | push | ✅ Linux and Windows: 843 tests, static checks 0/0, licence audit clean, live platform smoke on real WMI (1,094 fields, 19 modules, score 84, 75 % coverage) |
+| [`42184099160`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184099160) | push (design evidence) | ❌ new step threw "Script failed to execute": a backslash-n inside a template literal arrived at the renderer as a real newline in a regex |
+| [`42184459268`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184459268) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems — includes the memory, GPU and responsiveness cards and the arrangement editor |
 
 Before run 42013425380 the workflow had been **failing on every push since it was added**,
 and this document incorrectly said it had not run at all. That was wrong in a way worth

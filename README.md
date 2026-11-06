@@ -113,6 +113,7 @@ Requires Node ≥ 20.11.0 for development. End users need nothing but the instal
 | [Test status](docs/TEST_STATUS.md) | What has actually been executed, and what has not |
 | [Requirements](docs/REQUIREMENTS.md) | All 130 requirements with per-item status |
 | [40-section audit](docs/AUDIT_40_SECTIONS.md) | Every specification section judged: implemented, tested, gaps, evidence |
+| [Verification report](docs/VERIFICATION_REPORT.md) | Executed, tested, inspected, unverified — kept apart |
 | [Release notes](docs/RELEASE_NOTES.md) | Why there is no release yet |
 | [CI/CD](docs/GITHUB_ACTIONS.md) | The two workflows and their current state |
 | [Release verification](docs/RELEASE_VERIFICATION.md) | The pre-release checklist; build, launch and installer are done on a VM, physical hardware is not |

@@ -1,6 +1,6 @@
 # VERIDEX — 40-section requirements audit
 
-**Commit audited:** `90c836d9f6c9656358069e9d2a8f031a231720ab`
+**Commit audited:** `d4185be944b7887122c482a739cdb35d79d03005`
 **Requirements audited:** 130 across 39 specification sections, plus the cross-cutting release gates as section 40.
 **Static gate:** `node scripts/check.mjs` → 0 errors, 0 warnings.
 **Test suite:** 843 tests, 843 passing, on ubuntu-latest and windows-latest.
@@ -17,7 +17,7 @@ Four claims are kept apart, and nothing is upgraded by being listed near somethi
 | **VM-verified (VER)** | A person ran the product on a Windows machine and saw this requirement work. | **0 requirements** |
 | **Physically verified** | A person confirmed behaviour that only hardware can show (a key press, a speaker, a panel). | **0 requirements** |
 
-The Windows **evidence** runs are real: Electron 45.2.3, a real BrowserWindow, real Chromium, on a hosted Windows runner, driving 21 steps and capturing 32 screenshots. That proves the window boots, the pages render, the IPC contract holds, scans run through the interface, and reports produce bytes on Windows. It does **not** prove that a diagnostic value is correct for the machine it describes, and it does not touch a single physical component. Everything below is graded against that distinction.
+The Windows **evidence** runs are real: Electron 45.2.3, a real BrowserWindow, real Chromium, on a hosted Windows runner, driving 23 steps and capturing 34 screenshots. That proves the window boots, the pages render, the IPC contract holds, scans run through the interface, and reports produce bytes on Windows. It does **not** prove that a diagnostic value is correct for the machine it describes, and it does not touch a single physical component. Everything below is graded against that distinction.
 
 Each section states what is implemented, what a user actually sees, where the gaps are, what is untested, and the evidence that exists.
 
@@ -637,7 +637,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 **Evidence**
 
-- tests/integration/renderer.test.js (18 pages), ui-features.test.js; 32 screenshots from run 42172268375 and successors.
+- tests/integration/renderer.test.js (18 pages), ui-features.test.js; 34 screenshots from run 42184459268 and its predecessors.
 
 
 ---
@@ -1089,7 +1089,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 | Static gate | 0 errors, 0 warnings | `node scripts/check.mjs` |
 | Test suite | 843/843 on Linux and Windows | run 42172738818 and successors |
 | Renderer import graph | no Node builtin reachable from the renderer | `tests/integration/renderer-graph.test.js` |
-| Real-window evidence | 21 steps, 32 screenshots, 0 problems | design-evidence runs, `ci/ui-*` branches |
+| Real-window evidence | 23 steps, 34 screenshots, 0 problems | design-evidence runs, `ci/ui-*` branches |
 | Installer and portable build | produced and verified for tree `3281c01`; **stale for the current tree** | `docs/RELEASE_VERIFICATION.md` |
 | Fresh artifact hashes | **do not exist for this tree** | blocked: `release.yml` cannot be dispatched from this environment |
 | Windows runtime on real hardware | **not done** | no VM available in this environment; see Phase 5 record |

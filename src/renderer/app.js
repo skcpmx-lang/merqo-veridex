@@ -1178,7 +1178,7 @@ function memoryStabilityCard() {
   );
 
   if (!mem) {
-    const controls = el('div', { class: 'vx-arrange__controls' });
+    const controls = el('div', { class: 'vx-arrange__controls', style: { flexDirection: 'column', alignItems: 'stretch' } });
     const box = el('input', { attrs: { type: 'checkbox', id: 'vx-memory-consent' } });
     box.checked = state.memoryCheck.consent === true;
     box.addEventListener('change', () => {
@@ -1187,9 +1187,14 @@ function memoryStabilityCard() {
       // disabled after a tick or enabled after an untick.
       render();
     });
+    // The consent sentence takes the whole row and the size controls sit under it, because in the
+    // first rendered build "… several seconds Buffer (MB) 256" read as one sentence.
     const consent = el('label', {
       class: 'vx-dim',
-      attrs: { for: 'vx-memory-consent', style: 'display:flex;gap:var(--vx-space-sm);align-items:flex-start' },
+      attrs: {
+        for: 'vx-memory-consent',
+        style: 'display:flex;gap:var(--vx-space-sm);align-items:flex-start;flex:1 1 100%;margin-bottom:var(--vx-space-sm)'
+      },
       children: [box, el('span', { text: 'I understand this allocates the selected buffer and holds it for several seconds' })]
     });
 
@@ -1215,7 +1220,9 @@ function memoryStabilityCard() {
     });
     passField.append(passInput);
 
-    controls.append(consent, sizeField, passField);
+    controls.append(consent);
+    const numbers = el('div', { style: { display: 'flex', gap: 'var(--vx-space-sm)', alignItems: 'center', flexWrap: 'wrap' } });
+    numbers.append(sizeField, passField);
 
     const run = button({
       label: 'Run stability check',
@@ -1227,7 +1234,8 @@ function memoryStabilityCard() {
       onClick: () => runMemoryStabilityCheck()
     });
     run.id = 'vx-memory-run';
-    controls.append(run);
+    numbers.append(run);
+    controls.append(numbers);
     card.append(controls);
   } else {
     card.append(
