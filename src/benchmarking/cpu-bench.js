@@ -245,10 +245,13 @@ export function mapCpuBenchmarkResults(results) {
     ? available(results.memory.sequentialGbps, source, { unit: 'GB/s', notes: ['Sequential read bandwidth from a managed-code traversal. Real-world bandwidth is higher because managed memory access carries overhead; use this for run-to-run comparison, not as a specification figure.'] })
     : failed(results.memory.error ?? 'memory bandwidth benchmark failed', source);
 
+  // A number and a unit, not "1%" as a string: the page composes the unit from the field, and a
+  // value that carries its own units cannot be aligned, sorted or converted.
   fields.sampleSpread = results.single.spreadPercent !== null
-    ? field(`${results.single.spreadPercent}%`, {
+    ? field(results.single.spreadPercent, {
         status: results.single.spreadPercent > 15 ? Status.WARNING : Status.PASS,
         source,
+        unit: '%',
         notes: results.single.spreadPercent > 15
           ? ['Run-to-run spread above 15% suggests the machine was not idle, was power-limited, or was throttling during the test. The median is still reported, but treat the figure with caution.']
           : ['Run-to-run spread is low, which indicates a stable measurement.']
