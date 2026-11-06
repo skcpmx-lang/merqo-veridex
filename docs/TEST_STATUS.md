@@ -101,6 +101,11 @@ platform-independent. It is still **not** evidence about real hardware: the test
 parsers and integration seams against recorded or simulated command output, and the
 providers run against a no-op runner.
 
+**Evidence for the count above:** commit `cbc50b3`, GitHub Actions run
+`42154671771` — *Static checks* success, *Tests (windows-latest)* success,
+*Tests (ubuntu-latest)* success. The `Windows package` job was skipped for this event, so
+this run proves the suite and not an installer.
+
 ---
 
 ## 3. What the tests genuinely prove
