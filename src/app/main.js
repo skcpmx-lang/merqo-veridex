@@ -41,6 +41,8 @@ import { projectScan } from './scan-projection.js';
 import { planExport, describeExport, verifyExport, EXPORT_PROMISE, formatBytes } from './driver-export.js';
 import { runElevatedTask } from './elevated-runner.js';
 import { onboardingState, advanceOnboarding, skipOnboarding, resetOnboarding } from './onboarding.js';
+import { benchmarkSingleCore, benchmarkMultiCore, benchmarkMemoryBandwidth, mapCpuBenchmarkResults } from '../benchmarking/cpu-bench.js';
+import { runDiskBenchmark } from '../benchmarking/disk-bench.js';
 import { parseLogText, filterRecords, summariseLog, buildExport, describeRetention, DEFAULT_LEVEL } from './logs.js';
 import { spawn as spawnChild } from 'node:child_process';
 import { readdir, readFile as readTextFile, rm, statfs, mkdir, writeFile } from 'node:fs/promises';
@@ -349,6 +351,61 @@ function registerHandlers() {
     return { saved: true, path: filePath };
   });
 
+  // ── Benchmarks ────────────────────────────────────────────────────────────
+  // The CPU and disk benchmark engines have existed since the first phase and were reachable
+  // only from tests: the Performance page said so in as many words. A tested engine behind no
+  // button is not a feature, it is a library.
+  handle('bench:cpu', async ({ mode }) => {
+    if (benchmarkRunning) throw new Error('A benchmark is already running.');
+    benchmarkRunning = true;
+    const startedAt = new Date().toISOString();
+    const started = Date.now();
+    try {
+      emit('bench:progress', { kind: 'cpu', stage: 'started', mode, startedAt });
+      const onProgress = (progress) => emit('bench:progress', { kind: 'cpu', stage: progress.stage ?? 'running', done: progress.done, total: progress.total });
+      const single = mode === 'multi' || mode === 'memory' ? null : await benchmarkSingleCore({ onProgress });
+      const multi = mode === 'single' || mode === 'memory' ? null : await benchmarkMultiCore();
+      const memory = mode === 'memory' || mode === 'all' ? await benchmarkMemoryBandwidth() : null;
+      const results = {
+        single: single ?? { opsPerSecond: null, samples: [], spreadPercent: null, checksumStable: false, error: 'not measured in this mode' },
+        multi: multi ?? { threads: 0, opsPerSecond: null, perThread: [], scaling: null, error: 'not measured in this mode' },
+        memory: memory ?? { sequentialGbps: null, stridedGbps: null, error: 'not measured in this mode' },
+        startedAt,
+        durationMs: Date.now() - started
+      };
+      benchmarkResults.cpu = { mode, at: startedAt, durationMs: results.durationMs, results, fields: mapCpuBenchmarkResults(results) };
+      emit('bench:progress', { kind: 'cpu', stage: 'finished', durationMs: results.durationMs });
+      return benchmarkResults.cpu;
+    } finally {
+      benchmarkRunning = false;
+    }
+  });
+
+  handle('bench:disk', async () => {
+    if (benchmarkRunning) throw new Error('A benchmark is already running.');
+    benchmarkRunning = true;
+    const startedAt = new Date().toISOString();
+    try {
+      const allowWrite = settings.get('benchmark.diskWriteTest') !== false;
+      const sizeMb = settings.get('benchmark.diskTestSizeMb');
+      emit('bench:progress', { kind: 'disk', stage: 'started', allowWrite, sizeMb });
+      const result = await runDiskBenchmark({
+        allowWrite,
+        sizeMb,
+        onProgress: (progress) => emit('bench:progress', { kind: 'disk', stage: progress.stage, done: progress.done, total: progress.total })
+      });
+      benchmarkResults.disk = { at: startedAt, allowWrite, sizeMb, ...result };
+      emit('bench:progress', { kind: 'disk', stage: 'finished', cleanupRemoved: result.cleanup?.removed === true });
+      // The benchmark writes a file. Whether it was removed is part of the result, not a detail.
+      if (!result.cleanup?.removed) await logger?.warn('disk benchmark left a temporary file behind', { scope: 'benchmark', path: result.cleanup?.path ?? null });
+      return benchmarkResults.disk;
+    } finally {
+      benchmarkRunning = false;
+    }
+  });
+
+  handle('bench:state', () => ({ cpu: benchmarkResults.cpu, disk: benchmarkResults.disk, running: benchmarkRunning }));
+
   handle('manual:suites', () => ({
     suites: session.suites,
     coverage: session.coverage(),
@@ -648,6 +705,10 @@ let guard;
 
 /** The live-sampling session, or null when nothing is running. */
 let monitor = null;
+
+/** Benchmark results for this session, and whether one is running. */
+const benchmarkResults = { cpu: null, disk: null };
+let benchmarkRunning = false;
 
 app.whenReady().then(async () => {
   logger = new Logger({ dir: logDir(), level: 'info' });

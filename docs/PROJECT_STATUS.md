@@ -19,7 +19,7 @@ is the narrative summary of it.
 | Implemented, untested | 18 |
 | In progress | 10 |
 | Not started | 3 |
-| Automated tests | 720, all passing |
+| Automated tests | 722, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.5 MiB + portable 106.5 MiB, unsigned |
 
@@ -74,6 +74,9 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
   and withheld scores preserved rather than rendered as zero.
 - Live monitoring wired to a real `Monitor` in the main process, which previously
   answered `{ started: true }` without starting anything.
+- Performance page wired to the real CPU and disk benchmark engines through `bench:cpu`,
+  `bench:disk` and `bench:state`, with progress on the event channel. It previously told
+  the user the engines existed but the page was not connected.
 - First-run tour: four steps, persisted progress, skip recorded as skip, reset offered
   from Privacy. It never asks for elevation.
 - Activity log page: level and text filters, unparseable lines shown rather than dropped,

@@ -53,6 +53,9 @@ export const CHANNELS = Object.freeze({
   'logs:stats': { args: [], description: 'Log volume, retention limits and the levels present.' },
   'logs:export': { args: [], description: 'Write a redacted log export to a file the user chooses.' },
   'logs:clear': { args: [], description: 'Delete the log files on this machine.' },
+  'bench:cpu': { args: ['mode'], description: 'Run a CPU benchmark: single-core, multi-core or memory bandwidth. Progress arrives on the event channel.' },
+  'bench:disk': { args: [], description: 'Run the disk benchmark against a temporary file that is always deleted. Honours the Performance settings.' },
+  'bench:state': { args: [], description: 'Last benchmark results, so the page survives navigation.' },
   'monitor:start': { args: [], description: 'Begin live sensor sampling. Samples arrive on the event channel.' },
   'monitor:stop': { args: [], description: 'Stop sampling.' },
   'shell:openDataFolder': { args: [], description: 'Reveal the local data folder in Explorer.' }
@@ -63,6 +66,7 @@ export const EVENTS = Object.freeze({
   'scan:progress': 'One task finished, with its section.',
   'scan:finished': 'The sweep ended, with a summary.',
   'monitor:sample': 'One live sensor sample.',
+  'bench:progress': 'One benchmark stage started or finished.',
   'monitor:stopped': 'Sampling ended, with the reason if it failed.',
   'settings:changed': 'A setting changed, with the new value.',
   'app:error': 'Something failed in the main process.'
@@ -270,6 +274,16 @@ export function validateRequest(channel, args = []) {
       const query = options.query === undefined ? '' : String(options.query);
       if (query.length > 120) return { ok: false, reason: 'The search text is too long.' };
       return { ok: true, value: { minLevel, scope: options.scope === undefined ? undefined : String(options.scope).slice(0, 60), query, limit: Math.floor(limit) } };
+    }
+
+    case 'bench:cpu': {
+      // Not a free-form string: the mode selects which measurement runs, and an unknown mode
+      // would silently fall through to "all" and take a minute on a laptop.
+      const mode = named?.mode === undefined ? 'all' : String(named.mode);
+      if (!['single', 'multi', 'memory', 'all'].includes(mode)) {
+        return { ok: false, reason: `"${mode}" is not a benchmark mode: single, multi, memory or all.` };
+      }
+      return { ok: true, value: { mode } };
     }
 
     case 'history:compare': {

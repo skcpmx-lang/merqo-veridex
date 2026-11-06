@@ -49,6 +49,9 @@ const INVOKE = [
   'logs:stats',
   'logs:export',
   'logs:clear',
+  'bench:cpu',
+  'bench:disk',
+  'bench:state',
   'monitor:start',
   'monitor:stop',
   'shell:openDataFolder'
@@ -59,6 +62,7 @@ const EVENTS = [
   'scan:progress',
   'scan:finished',
   'monitor:sample',
+  'bench:progress',
   'monitor:stopped',
   'settings:changed',
   'app:error'

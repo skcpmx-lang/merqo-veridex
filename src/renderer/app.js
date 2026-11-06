@@ -82,6 +82,7 @@ const state = {
   historyLoading: false,
   comparison: { selected: [], result: null, loading: false, error: null },
   onboarding: null,
+  bench: { cpu: null, disk: null, running: false, progress: null },
   logs: { entries: null, summary: null, retention: null, stats: null, statsLoading: false, unparseable: 0, level: 'info', query: '', loading: false, error: null },
   export: { destination: null, plan: null, result: null, running: false, error: null },
   monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
@@ -775,11 +776,150 @@ pages.performance = () => {
     })
   );
   const card = el('div', { class: 'vx-card' });
-  card.append(el('h2', { class: 'vx-card__title', text: 'Benchmarks' }));
-  card.append(emptyState('Benchmarks are not wired to this page yet', 'The CPU and disk benchmark engines exist and are tested; the interactive runner screen is not connected. Rather than show a button that does nothing, this page says so.'));
+  card.append(el('h2', { class: 'vx-card__title', text: 'CPU' }));
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Integer workload in isolated worker threads. The median of several samples is reported with its spread, so a noisy run is visible rather than hidden behind one number.'
+    })
+  );
+  const cpuState = state.bench?.cpu;
+  const cpuProgress = state.bench?.progress;
+  const runningCpu = cpuProgress?.kind === 'cpu';
+  const cpuActions = el('div', { style: { display: 'flex', gap: 'var(--vx-space-sm)', flexWrap: 'wrap' } });
+  for (const [mode, label] of [['single', 'Single core'], ['multi', 'Multi core'], ['memory', 'Memory bandwidth'], ['all', 'All three']]) {
+    cpuActions.append(
+      button({
+        label,
+        variant: mode === 'all' ? 'primary' : 'ghost',
+        disabled: !client.live || Boolean(state.bench?.running),
+        title: client.live ? (state.bench?.running ? 'A benchmark is already running.' : `Measure ${label.toLowerCase()}.`) : 'Benchmarks need the main process.',
+        onClick: () => runCpuBenchmark(mode)
+      })
+    );
+  }
+  card.append(cpuActions);
+  if (runningCpu) {
+    card.append(el('p', { class: 'vx-dim', text: 'Measuring… the machine is working, not frozen. Results appear when the run finishes.' }));
+  } else if (cpuState) {
+    const rows = el('div', { class: 'vx-rows' });
+    for (const [key, value] of Object.entries(cpuState.fields ?? {})) {
+      rows.append(
+        fieldRow(key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase()), value?.value, {
+          unit: value?.unit ?? null,
+          status: value?.status,
+          source: value?.source ?? null,
+          note: value?.notes?.join(' ') || null
+        })
+      );
+    }
+    rows.append(fieldRow('Run at', formatTimestamp(cpuState.at), { note: `Mode: ${cpuState.mode}` }));
+    card.append(rows);
+  } else {
+    card.append(emptyState('No CPU benchmark has run in this session', 'Choose a measurement. Nothing is written outside the application data folder and nothing is modified.'));
+  }
   wrapper.append(card);
+
+  const diskCard = el('div', { class: 'vx-card' });
+  diskCard.append(el('h2', { class: 'vx-card__title', text: 'Disk' }));
+  diskCard.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Written to a fresh temporary folder and deleted afterwards. No existing file is touched; if the cleanup fails the result says so and the path is logged.'
+    })
+  );
+  const diskState = state.bench?.disk;
+  const writeEnabled = state.settings?.values?.['benchmark.diskWriteTest'] !== false;
+  diskCard.append(
+    el('p', {
+      class: 'vx-dim',
+      text: writeEnabled
+        ? `Write test enabled (${state.settings?.values?.['benchmark.diskTestSizeMb'] ?? 256} MB). Turn it off in Settings to run read-only.`
+        : 'Write test disabled in Settings, so only read throughput and random-read IOPS are measured.'
+    })
+  );
+  diskCard.append(
+    button({
+      label: diskState ? 'Run again' : 'Run disk benchmark',
+      variant: 'primary',
+      disabled: !client.live || Boolean(state.bench?.running),
+      title: client.live ? (state.bench?.running ? 'A benchmark is already running.' : 'Measure this disk now.') : 'Benchmarks need the main process.',
+      onClick: () => runDiskBenchmark()
+    })
+  );
+  if (state.bench?.progress?.kind === 'disk') {
+    diskCard.append(el('p', { class: 'vx-dim', text: `Measuring… stage ${state.bench.progress.stage}` }));
+  } else if (diskState) {
+    const rows = el('div', { class: 'vx-rows' });
+    for (const [key, value] of Object.entries(diskState.fields ?? {})) {
+      rows.append(
+        fieldRow(key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase()), value?.value, {
+          unit: value?.unit ?? null,
+          status: value?.status,
+          source: value?.source ?? null,
+          note: value?.notes?.join(' ') || null
+        })
+      );
+    }
+    rows.append(
+      fieldRow('Temporary file', diskState.cleanup?.removed ? 'removed' : diskState.cleanup?.path ?? 'unknown', {
+        note: diskState.cleanup?.removed ? 'The benchmark file was deleted when the run finished.' : 'The benchmark could not confirm deletion; the path is recorded in the activity log.'
+      })
+    );
+    diskCard.append(rows);
+  } else {
+    diskCard.append(emptyState('No disk benchmark has run in this session', 'A benchmark measures this machine now, not the drive it was sold as. Run it twice if a figure looks wrong.'));
+  }
+  wrapper.append(diskCard);
+
+  // Stress testing is a different risk class and stays behind its own consent gate; the page
+  // says what exists rather than offering a button that does nothing.
+  const stressCard = el('div', { class: 'vx-card' });
+  stressCard.append(el('h2', { class: 'vx-card__title', text: 'Stress testing' }));
+  stressCard.append(
+    emptyState(
+      'Stress testing has no runner screen yet',
+      'The stress guard, its limits and its refusals are implemented and tested, but the screen that starts a run is not written. Until it is, this page does not offer a button that would do nothing.'
+    )
+  );
+  wrapper.append(stressCard);
   return wrapper;
 };
+
+/** Run a CPU benchmark and show the result. @param {string} mode */
+async function runCpuBenchmark(mode) {
+  if (!client.live || state.bench?.running) return;
+  state.bench = { ...(state.bench ?? {}), running: true, progress: { kind: 'cpu', stage: 'started' }, error: null };
+  render();
+  try {
+    const result = await client.invoke('bench:cpu', { mode });
+    if (!result.ok) throw new Error(result.error?.message ?? 'The benchmark could not be started.');
+    state.bench = { cpu: result.data, disk: state.bench?.disk ?? null, running: false, progress: null };
+  } catch (error) {
+    state.bench = { ...(state.bench ?? {}), running: false, progress: null };
+    toast({ tone: 'bad', title: 'The benchmark did not finish', body: error instanceof Error ? error.message : String(error) });
+  }
+  render();
+}
+
+/** Run the disk benchmark and show the result. */
+async function runDiskBenchmark() {
+  if (!client.live || state.bench?.running) return;
+  state.bench = { ...(state.bench ?? {}), running: true, progress: { kind: 'disk', stage: 'started' }, error: null };
+  render();
+  try {
+    const result = await client.invoke('bench:disk');
+    if (!result.ok) throw new Error(result.error?.message ?? 'The benchmark could not be started.');
+    state.bench = { cpu: state.bench?.cpu ?? null, disk: result.data, running: false, progress: null };
+    if (result.data?.cleanup?.removed === false) {
+      toast({ tone: 'warn', title: 'The temporary file could not be deleted', body: 'The path is recorded in the activity log. Nothing else on the machine was touched.' });
+    }
+  } catch (error) {
+    state.bench = { ...(state.bench ?? {}), running: false, progress: null };
+    toast({ tone: 'bad', title: 'The benchmark did not finish', body: error instanceof Error ? error.message : String(error) });
+  }
+  render();
+}
 
 pages.monitor = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
@@ -2233,6 +2373,22 @@ async function changeSetting(key, value) {
   render();
 }
 
+/**
+ * Results survive navigation and a page reload, because a benchmark takes a minute of the
+ * user's machine and losing the figure would mean asking for that minute again.
+ */
+async function loadBenchState() {
+  if (!client.live) return;
+  const result = await client.invoke('bench:state');
+  if (!result.ok) return;
+  state.bench = {
+    cpu: result.data.cpu ?? null,
+    disk: result.data.disk ?? null,
+    running: Boolean(result.data.running),
+    progress: result.data.running ? { stage: 'started' } : null
+  };
+}
+
 async function loadSettings() {
   const result = await client.invoke('app:settings');
   if (result.ok) state.settings = result.data;
@@ -2360,6 +2516,13 @@ function subscribe() {
     if (state.page === 'monitor') render();
   });
 
+  // Progress on the event channel keeps the page honest while a benchmark runs: the run itself
+  // is one invoke that does not return until it is done.
+  client.on('bench:progress', (payload) => {
+    state.bench = { ...(state.bench ?? {}), progress: payload, running: payload?.stage !== 'finished' };
+    if (state.page === 'performance') render();
+  });
+
   client.on('monitor:stopped', (payload) => {
     state.monitor.running = false;
     state.monitor.error = payload?.reason ?? null;
@@ -2387,6 +2550,7 @@ async function boot() {
     await loadSettings();
     await loadGuard();
     await loadLastScan();
+    await loadBenchState();
   }
 
   applyTheme(state.settings?.ui);

@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 720
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 722
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -189,8 +189,11 @@ SHA-256 in `SHA256SUMS.txt` against the published value before running the insta
 
 ## 14. Some UI features are not wired yet
 
-The renderer is complete and tested, but one action still has no main-process handler
-behind it: embedding performance results from the Performance page.
+**The Performance page is now wired**: `bench:cpu` and `bench:disk` run the real engines in
+the main process, progress arrives on the event channel, and results persist for the session
+through `bench:state`. The disk benchmark honours the write-test setting and reports whether
+its temporary file was deleted. Stress testing still has no runner screen — its guard and
+limits are tested, but the page says so instead of offering a button that would do nothing.
 
 The **history list is now wired**: it reads stored runs through `history:list` and shows
 each run's real score, rating and coverage. It distinguishes three states that used to be

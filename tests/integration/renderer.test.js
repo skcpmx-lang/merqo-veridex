@@ -141,7 +141,16 @@ test('the UI never claims a benchmark or monitor is running when it is not', { s
     document.querySelector('.vx-nav__item[data-page="performance"]').click();
     await waitFor(() => /Performance/.test(document.querySelector('.vx-topbar__title')?.textContent ?? ''), { label: 'the performance page' });
     const text = document.querySelector('.vx-content').textContent;
-    assert.match(text, /not wired to this page yet/);
+    // The runner exists, but in preview mode there is no main process to measure on, so the
+    // page must refuse with a reason rather than offer a live-looking button.
+    assert.match(text, /No CPU benchmark has run in this session/);
+    assert.match(text, /No disk benchmark has run in this session/);
+    assert.match(text, /Run disk benchmark/);
+    const benchButtons = [...document.querySelectorAll('.vx-content .vx-button')];
+    assert.ok(benchButtons.length >= 5, 'the benchmark runner offers its measurements');
+    assert.ok(benchButtons.every((node) => node.disabled), 'preview mode must not offer a runnable benchmark');
+    // No figure may be printed before a benchmark has run.
+    assert.ok(!/\d+\s*(ops\/s|MB\/s|GB\/s|IOPS)/.test(text), 'no benchmark figure may be invented in preview mode');
     // The safety warnings must be present regardless of wiring state.
     assert.match(text, /physical risk/);
     assert.match(text, /explicit consent/);

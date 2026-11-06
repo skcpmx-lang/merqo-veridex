@@ -141,6 +141,30 @@ test('the preload bridge exposes exactly the contract channels, no more', async 
   assert.deepEqual(grab('EVENTS'), EVENT_CHANNELS, 'preload event list must match the contract exactly');
 });
 
+test('every contract channel has a handler in the main process', async () => {
+  // The Performance page spent a phase saying "the engines exist but this page is not wired".
+  // That is what a tested engine plus a missing handler looks like from the outside, so the
+  // correspondence is asserted rather than left to review: a channel in the contract with no
+  // `handle()` behind it is an invitation to a dead button.
+  const { readFile } = await import('node:fs/promises');
+  const path = await import('node:path');
+  const root = path.resolve(import.meta.dirname, '..', '..');
+  const source = await readFile(path.join(root, 'src/app/main.js'), 'utf8');
+  const handled = new Set([...source.matchAll(/handle\('([^']+)'/g)].map((match) => match[1]));
+  const missing = INVOKE_CHANNELS.filter((channel) => !handled.has(channel));
+  assert.deepEqual(missing, [], `channels declared without a main-process handler: ${missing.join(', ')}`);
+});
+
+test('a benchmark mode is validated rather than passed through', () => {
+  assert.deepEqual(validateRequest('bench:cpu', [{ mode: 'multi' }]).value, { mode: 'multi' });
+  assert.equal(validateRequest('bench:cpu', [{}]).value.mode, 'all', 'a missing mode measures everything');
+  const refused = validateRequest('bench:cpu', [{ mode: 'gpu' }]);
+  assert.equal(refused.ok, false);
+  assert.match(refused.reason, /not a benchmark mode/);
+  // The disk benchmark takes its size and write policy from settings, not from the renderer.
+  assert.equal(validateRequest('bench:disk', []).ok, true);
+});
+
 test('the preload never exposes a raw ipcRenderer or a path-taking function', async () => {
   const { readFile } = await import('node:fs/promises');
   const path = await import('node:path');

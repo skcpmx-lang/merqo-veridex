@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 720 · pass 720 · fail 0
+tests 722 · pass 722 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -60,7 +60,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/health.test.js` | 24 | component scoring, coverage gating, rating |
 | `tests/unit/history-store.test.js` | 7 | persistence, id generation, retention, quarantine, comparison |
 | `tests/unit/ipc-arity.test.js` | 7 | every channel accepts exactly the arguments it declares |
-| `tests/unit/ipc-contract.test.js` | 17 | the preload surface, forbidden exposure |
+| `tests/unit/ipc-contract.test.js` | 19 | the preload surface, forbidden exposure, handler coverage, benchmark modes |
 | `tests/unit/logs-surface.test.js` | 13 | log parsing, filtering, summary, export redaction and retention |
 | `tests/unit/manual.test.js` | 48 | manual checklist, session, coverage separation |
 | `tests/unit/monitor.test.js` | 10 | sampling, series |
@@ -98,7 +98,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **720** | |
+| **Total** | **722** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is
