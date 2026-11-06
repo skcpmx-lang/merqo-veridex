@@ -37,7 +37,7 @@ Two complete palettes, `dark` and `light`, in `SURFACES`:
 | `bgInput` | `#0C1728` | `#EEF3F9` |
 | `ink` | `#E8F1FA` | dark text |
 | `inkSoft` | `#9FB2C8` | secondary |
-| `inkMuted` | `#6E8299` | tertiary |
+| `inkMuted` | `#7A8EA6` | tertiary (4.89:1 on a card, 5.58:1 on the page) |
 
 Dark is the default. Both modes are complete: neither is a filter over the other, because
 a light-mode "invert" produces muddy mid-tones.

@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 705 · pass 705 · fail 0
+tests 708 · pass 708 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -81,10 +81,10 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/audit-gate.test.js` | 6 | the requirement audit refuses a claim it cannot support |
 | `tests/integration/build-boundary.test.js` | 3 | nothing test-only or fixture-only can be packaged |
 | `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
-| `tests/integration/contrast.test.js` | 7 | contrast ratios for both themes and every accent, focus visibility, no hardcoded colours |
+| `tests/integration/contrast.test.js` | 9 | contrast ratios for both themes and every accent, focus visibility, no hardcoded colours |
 | `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
 | `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
-| `tests/integration/gui-coverage.test.js` | 5 | the Windows GUI harness covers every page and uploads its screenshots |
+| `tests/integration/gui-coverage.test.js` | 6 | the Windows GUI harness covers every page and uploads its screenshots |
 | `tests/integration/install-smoke-harness.test.js` | 9 | the installed build smoke harness itself |
 | `tests/integration/new-surfaces.test.js` | 23 | first-run tour, activity log, driver export card, Reports and Privacy |
 | `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
@@ -98,7 +98,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **704** | |
+| **Total** | **708** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is
@@ -152,8 +152,8 @@ Stated plainly, because this is the section that matters:
    has seen it.
 4. ~~That the installer installs.~~ **Done.** `npm run smoke:install` runs the real installer
    silently on the Windows runner, launches the installed application, checks its window,
-   title, preload bridge, one IPC round trip and all 15 pages, then runs the uninstaller and
-   confirms the files, directory and shortcuts are gone. 16 checks, no problems.
+   title, preload bridge, one IPC round trip and all 18 pages, then runs the uninstaller and
+   confirms the files, directory and shortcuts are gone. 17 checks, no problems.
 5. **That performance is acceptable on real hardware.** The ~800 ms cold / ~200 ms warm figure comes from
    this container running providers that mostly return `UNSUPPORTED` immediately. It says
    nothing about a Windows machine running 28 real queries.

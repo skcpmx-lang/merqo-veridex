@@ -19,7 +19,7 @@
   --vx-line-soft: #182739;
   --vx-ink: #E8F1FA;
   --vx-ink-soft: #9FB2C8;
-  --vx-ink-muted: #6E8299;
+  --vx-ink-muted: #7A8EA6;
   --vx-shadow: rgba(3, 8, 16, 0.55);
   --vx-accent: #22D3EE;
   --vx-accent-strong: #0EA5C6;
@@ -38,7 +38,7 @@
   --vx-space-md: 12px;
   --vx-space-lg: 18px;
   --vx-space-xl: 26px;
-  --vx-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --vx-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --vx-font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
   --vx-font-sm: 12px;
   --vx-font-md: 13px;

@@ -134,3 +134,19 @@ test('surface and tone tables are internally consistent', () => {
     }
   }
 });
+
+test('the stylesheet fallback block matches the default theme exactly', async () => {
+  // styles.css carries a copy of the dark/cyan tokens so the first frame is not unstyled.
+  // A copy drifts: this one had kept the old muted ink after theme.js was corrected, which
+  // means a slow start would have shown the unreadable value the fix removed.
+  const css = await readFile(path.join(ROOT, 'src/renderer/styles.css'), 'utf8');
+  const block = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')));
+  const declared = Object.fromEntries([...block.matchAll(/(--vx-[a-z-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  const { tokens } = themeTokens({ theme: 'dark', accent: 'cyan', density: 'comfortable' });
+  const drift = [];
+  for (const [token, value] of Object.entries(declared)) {
+    if (tokens[token] === undefined) continue;
+    if (tokens[token].replace(/\s+/g, '') !== value.replace(/\s+/g, '')) drift.push(`${token}: stylesheet says ${value}, theme says ${tokens[token]}`);
+  }
+  assert.deepEqual(drift, [], `the fallback block has drifted from the theme:\n${drift.join('\n')}`);
+});

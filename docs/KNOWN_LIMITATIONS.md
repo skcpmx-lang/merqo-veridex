@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 705
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 708
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -268,14 +268,48 @@ a product that treats "dismissed" as "consented" has learned nothing about its u
 
 ---
 
-## 19. Visual verification on this build was structural, not photographic
+## 19. The visual review is measured, not photographic — and the photographs exist but were not opened
 
-The interface was reviewed through the jsdom suite (every page builds, no `undefined`,
-`NaN` or `[object Object]`, focus and Escape behaviour, accessible names) and through a
-design harness in a browser. No screenshot-based review was possible in the environment
-where this milestone was assembled, so statements about spacing, contrast and layout rest
-on the design tokens and the stylesheet, not on a recorded image.
+There are two different questions here, and this milestone kept them apart.
 
-The harness lives outside the repository and a test asserts that no test, fixture,
-documentation or harness file is packaged.
+**What the Windows runner did.** On `windows-latest` the GUI harness launches the packaged
+application in a real BrowserWindow and walks all 18 pages, a sweep, history, live monitoring,
+settings, report generation, cancellation and shutdown. The last completed run before this
+report (`cbc50b3`) reported, in its own annotation on the checks API:
 
+```
+gui-smoke: electron 45.2.3 · 13 steps passed · 0 warning(s) · 0 problem(s)
+```
+
+A run that captures no screenshots emits an explicit warning, and no such warning appeared, so
+screenshots were captured and uploaded as `veridex-gui-evidence` (`gui-shots/**`). The
+installer was also installed, launched and uninstalled on that runner: `install-smoke: 17
+check(s) passed · 0 problem(s)`, `18 navigable page(s) rendered from the installed build`,
+`portable-smoke: 10 check(s) passed`.
+
+**What this milestone did not do.** It did not look at those images. Artifact download from
+this environment fails at the storage host (`EOF` from `productionresultssa13.blob.core...`),
+and no browser or display is available locally. So there is no verdict in this repository on
+spacing, alignment, density, or whether a page *looks* right at a given window size. Anyone
+with the artifact can produce that verdict; until then it is open.
+
+**What was done instead.** The part of a visual review that is arithmetic is now measured by
+`tests/integration/contrast.test.js`: every foreground/background pair the interface renders,
+in both themes, for all five accents — 10 combinations of theme and accent, 14 pairs each.
+It found two genuine defects, both fixed:
+
+| Defect | Measured | Now |
+| --- | --- | --- |
+| Light mode reused the dark theme's muted ink (`#6E8299`) on a light surface | 3.71:1 on the page | `#54647A`, 5.66:1 page / 6.03:1 card |
+| The dark theme's muted ink on a *card* | 4.16:1 | `#7A8EA6`, 4.89:1 card / 5.58:1 page |
+| Light mode put dark ink on a darkened accent button | 2.52:1 violet, 3.36:1 best case | white label, 4.92–7.10:1 |
+
+The same suite asserts that the renderer hardcodes no colour, that both themes declare the
+same tokens, that density changes spacing and never colour, that every status has a glyph and
+a word so colour is never the only signal, and that a focus style which removes the outline
+replaces it with a visible ring. A structural review of the remaining qualities (spacing,
+hierarchy, overflow) is in `docs/DESIGN_SYSTEM.md`; it is a description of intent, not an
+observation.
+
+The design harness used during development lives outside the repository, and a test asserts
+that no test, fixture, documentation or harness file is packaged.

@@ -72,3 +72,26 @@ test('the launcher clears stale screenshots before every run', async () => {
   assert.match(launcher, /rm\(shotsDir, \{ recursive: true, force: true \}\)/, 'a previous run must not be counted as this one');
   assert.match(launcher, /missing from disk/, 'a screenshot named in the verdict but absent must fail the run');
 });
+
+test('a run that captures no screenshots says so instead of passing quietly', async () => {
+  // The distinction this milestone kept having to make: "the harness ran" is not "somebody
+  // looked at the interface". A silent zero must therefore be a warning, and the count must be
+  // printed so a reviewer can see it in the log without downloading the artifact.
+  const launcher = await read('scripts/gui-smoke.mjs');
+  assert.match(launcher, /screenshots: \$\{onDisk\.length\} of \$\{shots\.length\} recorded/, 'the screenshot count must be printed');
+  assert.match(launcher, /shots\.length === 0[\s\S]{0,400}no screenshots were captured in this run/, 'zero screenshots must emit a warning');
+});
+
+test('the figures quoted about the Windows run match the code they describe', async () => {
+  // These numbers were stale for three commits: the document said 15 pages and 18 channels
+  // while the build had 18 pages and 32 channels, because the counts were typed once and the
+  // code moved on. A number in a release document is a claim about a specific build.
+  const { PAGE_ORDER } = await import('../../src/app/gui-pages.js');
+  const { INVOKE_CHANNELS } = await import('../../src/app/ipc-contract.js');
+  const pages = PAGE_ORDER.length;
+  const channels = INVOKE_CHANNELS.length;
+  const doc = await read('docs/RELEASE_VERIFICATION.md');
+  assert.match(doc, new RegExp(`${channels} invoke channels`), `the document must quote the real channel count (${channels})`);
+  assert.match(doc, new RegExp(`all ${pages} pages`, 'i'), `the document must quote the real page count (${pages})`);
+  assert.doesNotMatch(doc, /all 15 pages/i, 'the older page count is still quoted somewhere');
+});
