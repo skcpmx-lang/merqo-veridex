@@ -57,6 +57,9 @@ export const CHANNELS = Object.freeze({
   'bench:disk': { args: [], description: 'Run the disk benchmark against a temporary file that is always deleted. Honours the Performance settings.' },
   'bench:state': { args: [], description: 'Last benchmark results, so the page survives navigation.' },
   'bench:cancel': { args: [], description: 'Stop the benchmark that is running and terminate its workers.' },
+  'bench:gpu': { args: ['measurement'], description: 'Record a GPU measurement taken by the renderer\'s WebGL context. The main process validates and maps it.' },
+  'bench:responsiveness': { args: [], description: 'The responsiveness composite over whatever benchmarks have actually been measured in this session.' },
+  'app:recovery': { args: [], description: 'Whether the previous session ended mid-run, and what it was doing.' },
   'stress:start': { args: ['durationSec', 'threads', 'consent'], description: 'Start a bounded CPU stress run. Refused without consent, or when the safety guard cannot meet its conditions.' },
   'stress:stop': { args: [], description: 'Stop the stress run that is running and terminate its workers.' },
   'stress:state': { args: [], description: 'Whether a stress run is active and what the last run measured.' },
@@ -290,6 +293,40 @@ export function validateRequest(channel, args = []) {
         return { ok: false, reason: `"${mode}" is not a benchmark mode: single, multi, memory or all.` };
       }
       return { ok: true, value: { mode } };
+    }
+
+    case 'bench:gpu': {
+      // The renderer measured this, so every number is checked before it becomes a figure the
+      // application reports. A NaN, a negative time or a missing adapter is not a measurement.
+      const measurement = named?.measurement ?? named ?? {};
+      if (measurement.supported !== true) {
+        return { ok: true, value: { measurement: { supported: false, reason: String(measurement.reason ?? 'WebGL is not available in this session.') } } };
+      }
+      const frames = Number(measurement.frames);
+      const frameTimeMs = Number(measurement.frameTimeMs);
+      const fps = Number(measurement.fps);
+      const pixelsPerSecond = Number(measurement.pixelsPerSecond);
+      if (!Number.isFinite(frames) || frames < 1 || frames > 10_000) return { ok: false, reason: 'The frame count must be between 1 and 10000.' };
+      if (!Number.isFinite(frameTimeMs) || frameTimeMs <= 0 || frameTimeMs > 120_000) return { ok: false, reason: 'The frame time is not a plausible measurement.' };
+      if (!Number.isFinite(fps) || fps <= 0 || fps > 100_000) return { ok: false, reason: 'The frame rate is not a plausible measurement.' };
+      if (!Number.isFinite(pixelsPerSecond) || pixelsPerSecond <= 0) return { ok: false, reason: 'The fill rate is not a plausible measurement.' };
+      const text = (value) => (value === null || value === undefined ? null : String(value).slice(0, 200));
+      return {
+        ok: true,
+        value: {
+          measurement: {
+            supported: true,
+            reason: null,
+            frames: Math.round(frames),
+            frameTimeMs,
+            fps,
+            pixelsPerSecond,
+            renderer: text(measurement.renderer),
+            vendor: text(measurement.vendor),
+            error: null
+          }
+        }
+      };
     }
 
     case 'stress:start': {

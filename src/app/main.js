@@ -44,6 +44,9 @@ import { onboardingState, advanceOnboarding, skipOnboarding, resetOnboarding } f
 import { benchmarkSingleCore, benchmarkMultiCore, benchmarkMemoryBandwidth, mapCpuBenchmarkResults } from '../benchmarking/cpu-bench.js';
 import { runDiskBenchmark } from '../benchmarking/disk-bench.js';
 import { runCpuStress, stressCapabilities, UNSUPPORTED_STRESS_KINDS } from '../benchmarking/stress-run.js';
+import { mapGpuBenchmarkResults, gpuFrameTimeOf } from '../benchmarking/gpu-bench.js';
+import { computeResponsiveness, responsivenessFields } from '../benchmarking/responsiveness.js';
+import { writeMarker, readMarker, clearMarker, markerPath, describeInterrupted, markerIsStale } from './crash-marker.js';
 import { readSensors } from '../monitoring/monitor.js';
 import { parseLogText, filterRecords, summariseLog, buildExport, describeRetention, DEFAULT_LEVEL } from './logs.js';
 import { spawn as spawnChild } from 'node:child_process';
@@ -272,6 +275,12 @@ function registerHandlers() {
   handle('scan:start', async ({ tasks }) => {
     if (scanController) return { alreadyRunning: true, startedAt: lastScan?.startedAt ?? null };
     scanController = new AbortController();
+    // The marker is written before the first provider runs and removed after the last. If this
+    // process dies in between, the next start knows the run was interrupted instead of pretending
+    // nothing happened.
+    const markerFile = markerPath(dataDir());
+    await writeMarker(markerFile, { kind: 'scan', startedAt: new Date().toISOString(), appVersion: app.getVersion() })
+      .catch((error) => logger?.warn('could not write the recovery marker', { scope: 'recovery', error: error.message }));
     try {
       const scan = await runScan({
         logger,
@@ -302,6 +311,7 @@ function registerHandlers() {
       return { startedAt: scan.startedAt, tasks: scan.taskCount, cancelled: scan.cancelled };
     } finally {
       scanController = null;
+      await clearMarker(markerFile).catch(() => null);
     }
   });
 
@@ -352,6 +362,21 @@ function registerHandlers() {
     await logger?.info('report saved', { scope: 'report', format, bytes: Buffer.isBuffer(bytes) ? bytes.length : 0 });
     return { saved: true, path: filePath };
   });
+
+  /**
+   * Measure how far a timer drifts from its deadline over a short window.
+   *
+   * This is the application's own responsiveness, not the machine's: a machine with a busy CPU and
+   * a healthy application still has low lag, and that distinction is why the composite uses lag as
+   * a penalty rather than as a weighted input.
+   * @param {number} [windowMs]
+   */
+  async function measureEventLoopLag(windowMs = 200) {
+    const started = process.hrtime.bigint();
+    await new Promise((resolve) => setTimeout(resolve, windowMs));
+    const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+    return Math.max(0, Math.round((elapsedMs - windowMs) * 100) / 100);
+  }
 
   /**
    * Run a benchmark under a single controller, with a deadline and a cancel path.
@@ -443,6 +468,9 @@ function registerHandlers() {
     stressAbort = new AbortController();
     const controller = stressAbort;
     const runId = `stress-${Date.now()}`;
+    const markerFile = markerPath(dataDir());
+    await writeMarker(markerFile, { kind: 'stress', startedAt: new Date().toISOString(), id: runId, appVersion: app.getVersion() })
+      .catch(() => null);
     try {
       const result = await runCpuStress({
         durationSec,
@@ -470,6 +498,7 @@ function registerHandlers() {
       return stressLast;
     } finally {
       stressAbort = null;
+      await clearMarker(markerFile).catch(() => null);
     }
   });
 
@@ -500,6 +529,30 @@ function registerHandlers() {
         requireConsent: settings.get('stress.requireConsent') !== false
       }
     };
+  });
+
+  handle('bench:gpu', ({ measurement }) => {
+    const at = new Date().toISOString();
+    benchmarkResults.gpu = { at, measurement, fields: mapGpuBenchmarkResults(measurement) };
+    return benchmarkResults.gpu;
+  });
+
+  handle('bench:responsiveness', async () => {
+    const cpu = benchmarkResults.cpu?.results ?? null;
+    const disk = benchmarkResults.disk ?? null;
+    const gpu = benchmarkResults.gpu?.measurement ?? null;
+    // Event-loop lag is measured now, at rest, so a figure that says "the application was busy"
+    // comes from an actual observation rather than from the fact that a benchmark just ran.
+    const lag = await measureEventLoopLag();
+    const inputs = {
+      cpuSingleOpsPerSec: cpu?.single?.opsPerSecond ?? null,
+      memoryBandwidthGbps: cpu?.memory?.sequentialGbps ?? null,
+      diskRandomReadMs: disk?.fields?.randomReadLatency?.value ?? null,
+      gpuFrameTimeMs: gpuFrameTimeOf(gpu),
+      eventLoopLagMs: lag
+    };
+    const composite = computeResponsiveness(inputs);
+    return { inputs, eventLoopLagMs: lag, composite, fields: responsivenessFields(inputs) };
   });
 
   handle('bench:cancel', () => {
@@ -743,6 +796,24 @@ function registerHandlers() {
   // definition of module status and coverage.
   handle('scan:last', () => ({ scan: lastScan ? projectScan(lastScan) : null }));
 
+  handle('app:recovery', async () => {
+    const file = markerPath(dataDir());
+    const marker = await readMarker(file);
+    if (!marker) return { interrupted: null, hadMarker: false };
+    const interrupted = describeInterrupted(marker);
+    const stale = markerIsStale(marker);
+    // Reported once, then cleared: a marker that never goes away would greet the user with the
+    // same crash on every start. The interruption is also written to the activity log, which is
+    // where someone looks a week later.
+    const cleared = await clearMarker(file);
+    if (marker.corrupt) {
+      await logger?.error('recovery marker was unreadable', { scope: 'recovery', error: marker.error });
+    } else {
+      await logger?.warn('previous session ended during a run', { scope: 'recovery', kind: marker.kind, startedAt: marker.startedAt, stale });
+    }
+    return { interrupted, hadMarker: true, stale, cleared, marker };
+  });
+
   handle('history:list', async () => {
     const store = new HistoryStore({ file: historyFile(), ...wireAll(settings).history.storeOptions, logger });
     await store.load();
@@ -822,11 +893,47 @@ let stressLast = null;
 /** Ceilings that exist so a benchmark cannot run forever on a machine that never answers. */
 const BENCHMARK_DEADLINE_MS = Object.freeze({ cpu: 240_000, disk: 180_000 });
 
+/**
+ * Crash handling (R-25-02).
+ *
+ * There is no handler that logs and carries on: continuing after an uncaught exception leaves the
+ * application in a state nobody can describe, and every later figure becomes suspect. The
+ * application records the failure, leaves the recovery marker in place for the next start, and
+ * exits with a non-zero code. That is the behaviour the warning said had to be decided, and this
+ * is the decision.
+ */
+function installCrashHandlers() {
+  const fatal = (kind) => async (error) => {
+    const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    const stack = error instanceof Error ? error.stack ?? null : null;
+    try {
+      await logger?.fatal(`${kind}: ${message}`, { scope: 'crash', stack });
+    } catch {
+      // Logging must not be the reason the process stays alive in a broken state.
+    }
+    try {
+      await writeMarker(markerPath(dataDir()), {
+        kind: 'crash',
+        startedAt: new Date().toISOString(),
+        detail: message.slice(0, 500),
+        appVersion: app.getVersion()
+      });
+    } catch {
+      // The marker is best-effort; the exit code below is not.
+    }
+    app.exit(1);
+  };
+  process.on('uncaughtException', fatal('uncaught exception'));
+  process.on('unhandledRejection', fatal('unhandled rejection'));
+}
+
 app.whenReady().then(async () => {
   logger = new Logger({ dir: logDir(), level: 'info' });
   settings = new SettingsStore({ file: settingsFile(), logger });
   await settings.load();
   logger.setLevel(settings.get('storage.logLevel'));
+
+  installCrashHandlers();
 
   guard = new SecurityGuard({ policy: { allowNetwork: settings.get('privacy.allowNetwork') }, logger });
   // Installed before any diagnostics run, so nothing can reach the network even if

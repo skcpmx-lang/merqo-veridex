@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 751
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 769
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -212,13 +212,19 @@ sample data. `docs/PROJECT_STATUS.md` tracks them.
 
 ## 15. Requirements not started
 
-3 of 130 requirements are not built:
+None. All 130 requirements now have an implementation and an automated test, which is a different
+claim from "verified on hardware": 99 carry `TS` (tested), 18 `IM` (implemented and wired),
+10 `IP` (partially implemented with the missing part named) and none `VER`. `VER` means a person
+ran the product on a real Windows machine and saw it work, and that evidence does not exist for
+any requirement yet — see §1 of this document.
 
-| ID | Requirement | Why |
+The last three were closed by implementation rather than by reclassification:
+
+| ID | Was | Now |
 | --- | --- | --- |
-| R-08-05 | GPU performance test, else UNSUPPORTED | A GPU benchmark without a thermal guard measures the cooler as much as the GPU. |
-| R-08-06 | Responsiveness composite score | It would be computed from the two measurements above that do not exist. |
-| R-25-02 | Crash handling and interrupted-test recovery | The history store already quarantines an unreadable file rather than losing it. A main-process crash handler has not been written, because "log and continue" would turn a crash into a silent inconsistency and the user-facing behaviour has to be decided first. |
+| R-08-05 | GPU benchmark not started | `src/benchmarking/gpu-bench.js` — a real WebGL fill-rate workload, `UNSUPPORTED` with a reason when WebGL is absent |
+| R-08-06 | Responsiveness composite not started | `src/benchmarking/responsiveness.js` — documented weights over measured subsystems, `UNRATED` below two inputs |
+| R-25-02 | Crash recovery not started | `src/app/crash-marker.js` — marker written before a run, reported once as interrupted on the next start, no log-and-continue crash handler |
 
 An earlier version of this document claimed eight requirements were "refused by design". That
 was wrong: the eight listed there (auto-updater, crash reporting, plugin surface, driver
@@ -226,8 +232,6 @@ rollback and so on) were never the requirements outstanding. `docs/WARNINGS.md` 
 item-by-item record of all 21 that were outstanding at the start of the verification
 milestone, including how each was resolved. `docs/REQUIREMENTS.md` is generated from
 `docs/requirements.json` and is authoritative.
-
-Nothing in this document is a promise about when those three will arrive.
 
 ---
 

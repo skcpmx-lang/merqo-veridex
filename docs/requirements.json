@@ -870,27 +870,27 @@
       "id": "R-08-05",
       "mod": "08 Benchmark",
       "req": "GPU performance test where supported, else UNSUPPORTED",
-      "impl": "n/a",
-      "primary": "WebGL compute/fill-rate workload in renderer",
-      "alt": "CPU software rasterizer fallback (labelled)",
+      "impl": "src/benchmarking/gpu-bench.js",
+      "primary": "WebGL fill-rate/shader workload in the renderer; UNSUPPORTED with a reason when WebGL is unavailable",
+      "alt": "No software fallback: a rasteriser result labelled GPU would be a claim the application cannot support",
       "perm": "none",
       "ui": "benchmark",
-      "test": "n/a",
+      "test": "tests/unit/gpu-responsiveness-recovery.test.js",
       "doc": "docs/KNOWN_LIMITATIONS.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-08-06",
       "mod": "08 Benchmark",
       "req": "System responsiveness composite score from measured subsystems",
-      "impl": "n/a",
-      "primary": "documented weighted aggregation",
+      "impl": "src/benchmarking/responsiveness.js",
+      "primary": "weighted aggregation over measured cpu/memory/disk/gpu figures with renormalised weights and a documented model",
       "alt": "n/a",
       "perm": "none",
       "ui": "benchmark",
-      "test": "n/a",
+      "test": "tests/unit/gpu-responsiveness-recovery.test.js",
       "doc": "docs/KNOWN_LIMITATIONS.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-08-07",
@@ -1525,14 +1525,14 @@
       "id": "R-25-02",
       "mod": "25 Security",
       "req": "Crash handling, unexpected-shutdown recovery, interrupted-test recovery",
-      "impl": "n/a",
-      "primary": "crash marker + journal replay",
-      "alt": "n/a",
+      "impl": "src/app/crash-marker.js",
+      "primary": "recovery marker before a run, removed on clean finish, reported once on the next start; uncaught exceptions are logged, marked and the process exits non-zero",
+      "alt": "the history store quarantines an unreadable file rather than deleting it",
       "perm": "n/a",
       "ui": "all",
-      "test": "n/a",
+      "test": "tests/unit/gpu-responsiveness-recovery.test.js",
       "doc": "docs/KNOWN_LIMITATIONS.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-25-03",

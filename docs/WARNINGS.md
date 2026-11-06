@@ -1,9 +1,9 @@
 # Warnings: an item-by-item decision record
 
-`node scripts/check.mjs` currently reports **0 errors, 3 warnings**. Each of the 3 is a
-requirement that is genuinely not built. Everything else that was previously listed as a
-warning has been investigated and either implemented, partially implemented and honestly
-downgraded to *in progress*, or recorded as a documentation requirement that is now met.
+`node scripts/check.mjs` currently reports **0 errors, 0 warnings**. The three requirements that
+were still open at the start of this milestone — R-08-05, R-08-06 and R-25-02 — are now built and
+tested (see §1 below). Nothing was suppressed and no rule was relaxed: the warnings went away
+because the requirements were implemented, not because the gate stopped checking.
 
 This file is the decision record for all 21 requirements that were marked *not started* at the
 start of this milestone. Nothing was suppressed, no rule was relaxed, and no status was changed
@@ -20,15 +20,24 @@ without evidence in the repository.
 
 ---
 
-## 1. The 3 that remain
+## 1. The last three, now built
 
-| ID | Requirement | Why it is still not started | Implementable safely? | Decision |
-| --- | --- | --- | --- | --- |
-| R-08-05 | GPU performance test where supported, else UNSUPPORTED | A GPU benchmark that means anything needs a stable workload and a way to distinguish a slow GPU from a thermally throttled one. Neither exists yet; reporting `UNSUPPORTED` for every machine would satisfy the letter of the requirement and teach the user nothing. | Yes, with a workload and a thermal guard | **Not started.** Not refused by design — deferred, and it stays visible as a warning. |
-| R-08-06 | System responsiveness composite score from measured subsystems | Depends on the RAM and GPU measurements above; a composite of two missing measurements would be a number invented from nothing. | Yes, after R-08-03 and R-08-05 | **Not started.** Deferred with a stated dependency. |
-| R-25-02 | Crash handling, unexpected-shutdown recovery, interrupted-test recovery | The history store already quarantines an unreadable file rather than losing it, which is the recovery half. What does not exist is a main-process `uncaughtException` path. That is deliberate for now: an uncaught-exception handler that logs and continues turns a crash into a silent inconsistency, and the design question — show a dialog and quit, or restore and continue — is a product decision that has not been made. | Yes, once the behaviour is decided | **Not started.** The warning is the reminder that the decision is owed. |
+These were the final three warnings. Each was implemented rather than reclassified, and each has
+tests that fail if the implementation is removed.
 
----
+| ID | Requirement | What was built | Evidence |
+| --- | --- | --- | --- |
+| R-08-05 | GPU performance test where supported, else UNSUPPORTED | `src/benchmarking/gpu-bench.js`: a full-viewport WebGL fill-rate and shader workload run in the renderer, with a warm-up frame and a `readPixels` barrier so the timing measures the GPU rather than the command queue. The main process validates every number the renderer reports (`bench:gpu`) and owns the mapping. When WebGL is unavailable the result is `UNSUPPORTED` with the reason — no software rasteriser is dressed up as a GPU figure. | `tests/unit/gpu-responsiveness-recovery.test.js` (fake context: refuses without WebGL, measures frames, forces a drain, surfaces compile failures), `tests/integration/contracts.test.js` (field/unit contracts) |
+| R-08-06 | Responsiveness composite from measured subsystems | `src/benchmarking/responsiveness.js`: CPU 35%, memory 20%, disk 25%, GPU 20%, renormalised over the subsystems that were actually measured, with the reference points, weights and arithmetic printed beside the result. Fewer than two measured subsystems yields `UNRATED` with the reason. Event-loop lag is a capped penalty, not a weighted input, because it describes the application rather than the machine. | `tests/unit/gpu-responsiveness-recovery.test.js` (gating, monotonicity, weight renormalisation, penalty cap, nonsense inputs treated as missing) |
+| R-25-02 | Crash handling, unexpected-shutdown recovery, interrupted-test recovery | `src/app/crash-marker.js`: a marker written before a scan, stress run, export or report, removed on a clean finish, and reported once on the next start as *interrupted* — never as complete. An uncaught exception or unhandled rejection is logged at FATAL, marked, and the process exits non-zero; there is deliberately no log-and-continue handler. | `tests/unit/gpu-responsiveness-recovery.test.js` (marker round trip, atomic write, corrupt marker as evidence, staleness, per-kind descriptions, no evidence fields) |
+
+**What is still not proven for these three.** The GPU figures have never been taken on real
+hardware — the unit tests use a fake WebGL context, and the Windows harness runs headless
+(`--headless` is not used, but the evidence run's window does create a context; nothing in it
+records the GPU adapter). The responsiveness composite has never been computed from two real
+benchmarks on a real machine. The crash marker's *crash* path has never been exercised by an
+actual process kill, only by leaving a marker behind. These are VM/hardware gaps, not code gaps,
+and they are recorded as such in `docs/RELEASE_VERIFICATION.md`.
 
 ## 2. Implemented in this milestone (11 warnings cleared)
 
@@ -96,10 +105,10 @@ candidates were considered and refused on their merits:
 ## 6. Verification of this record
 
 ```text
-node scripts/check.mjs                 → 0 error(s), 3 warning(s)
+node scripts/check.mjs                 → 0 error(s), 0 warning(s)
 node scripts/audit-requirements.mjs    → every claimed status matches the repository contents
 ```
 
-The three remaining warnings are the three requirements in §1. They are visible on every push,
+There are no remaining warnings. When one appears it is visible on every push,
 in `npm run check`, and in CI's static-checks job. Removing them without building the features
 would be the one thing this document exists to prevent.

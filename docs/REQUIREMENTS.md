@@ -131,8 +131,8 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 99 
 | R-08-02 | CPU multi-core benchmark with bounded worker pool | `src/benchmarking/cpu-bench.js` | `tests/unit/bench-cpu.test.js` | **TS** |
 | R-08-03 | RAM performance, bandwidth and stability tests | `src/benchmarking/cpu-bench.js + src/benchmarking/worker.js` | `tests/unit/bench-cpu.test.js` | **IP** |
 | R-08-04 | Storage sequential/random read and write benchmark using a non-destructive temp file | `src/benchmarking/disk-bench.js` | `tests/unit/bench-disk.test.js` | **TS** |
-| R-08-05 | GPU performance test where supported, else UNSUPPORTED | `n/a` | — | **NS** |
-| R-08-06 | System responsiveness composite score from measured subsystems | `n/a` | — | **NS** |
+| R-08-05 | GPU performance test where supported, else UNSUPPORTED | `src/benchmarking/gpu-bench.js` | `tests/unit/gpu-responsiveness-recovery.test.js` | **TS** |
+| R-08-06 | System responsiveness composite score from measured subsystems | `src/benchmarking/responsiveness.js` | `tests/unit/gpu-responsiveness-recovery.test.js` | **TS** |
 
 ## 08 Stress
 
@@ -276,7 +276,7 @@ Total requirements: **130** · Verified on Windows: 0 · Tested (automated): 99 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
 | R-25-01 | Read-only diagnostics by default; destructive operations impossible without explicit consent | `src/security/guard.js` | `tests/unit/security.test.js` | **IM** |
-| R-25-02 | Crash handling, unexpected-shutdown recovery, interrupted-test recovery | `n/a` | — | **NS** |
+| R-25-02 | Crash handling, unexpected-shutdown recovery, interrupted-test recovery | `src/app/crash-marker.js` | `tests/unit/gpu-responsiveness-recovery.test.js` | **TS** |
 | R-25-03 | Secure local storage, sensitive-field redaction, user-controlled deletion and export scoping | `src/security/privacy.js` | — | **IM** |
 
 ## 26 Offline

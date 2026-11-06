@@ -19,7 +19,7 @@ is the narrative summary of it.
 | Implemented, untested | 18 |
 | In progress | 10 |
 | Not started | 3 |
-| Automated tests | 751, all passing |
+| Automated tests | 769, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.5 MiB + portable 106.5 MiB, unsigned |
 
@@ -87,8 +87,9 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
 - Privacy page states what is stored, where, and how large it is.
 
 ### Tooling
-- `scripts/check.mjs` static gate: 0 errors, 3 warnings — the three requirements that are
-  genuinely not built, each explained in `docs/WARNINGS.md`.
+- `scripts/check.mjs` static gate: 0 errors, 0 warnings — every requirement has an
+  implementation and a test; the record of how each of the 21 outstanding ones was closed is
+  in `docs/WARNINGS.md`.
 - Packaging boundary test: no test, fixture, documentation or harness file can be packaged.
 - Requirement audit gate: `tests/integration/audit-gate.test.js` proves the audit refuses a
   missing test, missing code, an unearned VERIFIED status and an unexplained BLOCKED one.

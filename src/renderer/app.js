@@ -21,6 +21,9 @@ import { SHORTCUTS, shortcutOf } from './shortcuts.js';
 // promises asserted by the tests are literally the same strings.
 import { STEPS as ONBOARDING_STEPS } from '../app/onboarding.js';
 import { PRIVACY_GUARANTEES, exportVerdict, withheldCount } from '../security/privacy.js';
+// Renderer-safe by construction: the GPU probe needs a canvas, the composite is pure arithmetic,
+// and neither reaches `node:*` (tests/integration/renderer-graph.test.js enforces the second part).
+import { probeGpu } from '../benchmarking/gpu-bench.js';
 import { el, icon, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
 
 const client = createClient();
@@ -88,7 +91,8 @@ const state = {
   export: { destination: null, plan: null, result: null, running: false, error: null },
   monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
   guard: null,
-  bootError: null
+  bootError: null,
+  recovery: null
 };
 
 /** @type {HTMLElement|null} */
@@ -368,6 +372,18 @@ const pages = {};
 pages.dashboard = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
+
+  // A previous session that ended mid-run is reported here, once, with what it was doing. It is
+  // not resumed: an interrupted scan has no partial state worth trusting.
+  if (state.recovery?.interrupted) {
+    wrapper.append(
+      callout({
+        tone: 'warn',
+        title: state.recovery.interrupted.title,
+        body: state.recovery.interrupted.body
+      })
+    );
+  }
 
   // A startup read that did not answer is named here. The alternative is a page that looks
   // complete while one of its figures is quietly missing.
@@ -818,19 +834,7 @@ pages.performance = () => {
       })
     );
   } else if (cpuState) {
-    const rows = el('div', { class: 'vx-rows' });
-    for (const [key, value] of Object.entries(cpuState.fields ?? {})) {
-      rows.append(
-        fieldRow(key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase()), value?.value, {
-          unit: value?.unit ?? null,
-          status: value?.status,
-          source: value?.source ?? null,
-          note: value?.notes?.join(' ') || null
-        })
-      );
-    }
-    rows.append(fieldRow('Run at', formatTimestamp(cpuState.at), { note: `Mode: ${cpuState.mode}` }));
-    card.append(rows);
+    card.append(benchmarkRows(cpuState.fields, cpuState.at));
   } else {
     card.append(emptyState('No CPU benchmark has run in this session', 'Choose a measurement. Nothing is written outside the application data folder and nothing is modified.'));
   }
@@ -896,9 +900,90 @@ pages.performance = () => {
   }
   wrapper.append(diskCard);
 
-  wrapper.append(stressCard());
+  wrapper.append(gpuCard(), responsivenessCard(), stressCard());
   return wrapper;
 };
+
+/** GPU benchmark card (R-08-05): a real WebGL workload, or UNSUPPORTED with the reason. */
+function gpuCard() {
+  const card = el('div', { class: 'vx-card' });
+  card.append(el('h2', { class: 'vx-card__title', text: 'GPU' }));
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'A fill-rate and shader workload drawn in this window through WebGL. It measures the path Electron actually uses, which on a laptop with switchable graphics may be the integrated adapter rather than the discrete one.'
+    })
+  );
+  const gpu = state.bench?.gpu;
+  card.append(
+    button({
+      label: gpu ? 'Run again' : 'Run GPU benchmark',
+      variant: 'primary',
+      disabled: !client.live || Boolean(state.bench?.running),
+      title: client.live ? 'Measure this window\'s WebGL path.' : 'Benchmarks need the main process.',
+      onClick: () => runGpuBenchmark()
+    })
+  );
+  if (gpu?.fields) card.append(benchmarkRows(gpu.fields, gpu.at));
+  else {
+    card.append(
+      emptyState(
+        'No GPU benchmark has run in this session',
+        'If WebGL is unavailable in this session the result will say UNSUPPORTED and give the reason, rather than substituting a software figure.'
+      )
+    );
+  }
+  return card;
+}
+
+/** Responsiveness composite card (R-08-06). */
+function responsivenessCard() {
+  const card = el('div', { class: 'vx-card' });
+  card.append(el('h2', { class: 'vx-card__title', text: 'System responsiveness' }));
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'A weighted score over whatever has actually been measured: CPU 35%, memory 20%, disk 25%, GPU 20%. Weights are renormalised over the subsystems that were measured, and the misses are named rather than assumed. Event-loop lag during the run is a penalty, not an input.'
+    })
+  );
+
+  const composite = state.bench?.responsiveness;
+  if (!composite) {
+    card.append(
+      button({
+        label: 'Compute from this session\'s measurements',
+        variant: 'ghost',
+        disabled: !client.live,
+        onClick: () => loadResponsiveness(),
+      })
+    );
+    card.append(emptyState('Not computed yet', 'Run the CPU and disk benchmarks, then compute the composite. One measurement is not a composite and this page will not pretend it is.'));
+    return card;
+  }
+
+  const summary = el('div', { class: 'vx-coverage' });
+  summary.append(
+    el('div', { class: 'vx-coverage__cell', children: [
+      el('span', { class: 'vx-coverage__value', text: composite.score === null ? 'Unrated' : String(composite.score) }),
+      el('span', { class: 'vx-coverage__label', text: 'OF 100' })
+    ] }),
+    el('div', { class: 'vx-coverage__cell', children: [
+      el('span', { class: 'vx-coverage__value', text: composite.rating }),
+      el('span', { class: 'vx-coverage__label', text: 'RATING' })
+    ] })
+  );
+  card.append(summary);
+  card.append(el('p', { class: 'vx-dim', text: composite.statement }));
+  if (composite.contributions?.length > 0) {
+    const rows = el('div', { class: 'vx-rows' });
+    for (const entry of composite.contributions) {
+      rows.append(fieldRow(entry.label, entry.points, { unit: 'points', note: `Weight ${(entry.weight * 100).toFixed(0)}%, ${Math.round(entry.normalized * 100)}% of its reference point.` }));
+    }
+    card.append(rows);
+  }
+  card.append(button({ label: 'Recompute', variant: 'ghost', disabled: !client.live, onClick: () => loadResponsiveness() }));
+  return card;
+}
 
 /**
  * The stress card. CPU load only, and it says so: the kinds that are named in the specification
@@ -1113,6 +1198,63 @@ function benchmarkEndedWithoutResult(data) {
     return true;
   }
   return false;
+}
+
+/** Field rows for any benchmark result map. @param {Record<string,any>} fields @param {string} [at] */
+function benchmarkRows(fields, at) {
+  const rows = el('div', { class: 'vx-rows' });
+  for (const [key, value] of Object.entries(fields ?? {})) {
+    const label = key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (character) => character.toUpperCase());
+    const notes = (value?.notes ?? []).join(' ');
+    rows.append(
+      fieldRow(label, value?.value, {
+        unit: value?.unit ?? null,
+        status: value?.status,
+        source: value?.source ?? null,
+        note: value?.error ?? (notes.length > 0 ? notes : null)
+      })
+    );
+  }
+  if (at) rows.append(fieldRow('Run at', formatTimestamp(at)));
+  return rows;
+}
+
+/**
+ * Run the GPU benchmark. The measurement happens here, in the window that owns the WebGL context;
+ * the main process validates it and decides what it means.
+ */
+async function runGpuBenchmark() {
+  if (!client.live || state.bench?.running) return;
+  state.bench = { ...(state.bench ?? {}), running: true };
+  render();
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 768;
+    const measurement = probeGpu({ canvas, frames: 30, width: 1024, height: 768 });
+    const result = await client.invoke('bench:gpu', { measurement });
+    if (!result.ok) throw new Error(result.error?.message ?? 'The GPU measurement was rejected.');
+    state.bench = { ...(state.bench ?? {}), running: false, gpu: result.data };
+    if (result.data?.measurement?.supported !== true) {
+      toast({ tone: 'warn', title: 'GPU measurement not available', body: result.data.measurement.reason });
+    }
+  } catch (error) {
+    state.bench = { ...(state.bench ?? {}), running: false };
+    toast({ tone: 'bad', title: 'The GPU benchmark failed', body: error instanceof Error ? error.message : String(error) });
+  }
+  render();
+}
+
+/** Ask the main process for the responsiveness composite over this session's measurements. */
+async function loadResponsiveness() {
+  if (!client.live) return;
+  const result = await client.invoke('bench:responsiveness');
+  if (!result.ok) {
+    toast({ tone: 'bad', title: 'The composite could not be computed', body: result.error?.message ?? '' });
+    return;
+  }
+  state.bench = { ...(state.bench ?? {}), responsiveness: result.data.composite, responsivenessInputs: result.data.inputs };
+  render();
 }
 
 /** Run a CPU benchmark and show the result. @param {string} mode */
@@ -2651,6 +2793,14 @@ async function loadInfo() {
   if (result.ok) state.info = result.data;
 }
 
+/** Read the recovery report for the previous session, if it ended mid-run. */
+async function loadRecovery() {
+  if (!client.live) return;
+  const result = await withDeadline(client.invoke('app:recovery'));
+  if (!result.ok) return;
+  state.recovery = result.data ?? null;
+}
+
 /**
  * Results survive navigation and a page reload, because a benchmark takes a minute of the
  * user's machine and losing the figure would mean asking for that minute again.
@@ -2867,7 +3017,8 @@ async function boot() {
       loadGuard(),
       loadLastScan(),
       loadBenchState(),
-      loadStressState()
+      loadStressState(),
+      loadRecovery()
     ]);
     const failed = loaded.filter((entry) => entry.status === 'rejected');
     if (failed.length > 0) {
