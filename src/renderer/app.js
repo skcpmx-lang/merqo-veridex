@@ -20,6 +20,7 @@ import { SHORTCUTS, shortcutOf } from './shortcuts.js';
 // The first-run copy lives with the main-process state machine so the words on screen and the
 // promises asserted by the tests are literally the same strings.
 import { STEPS as ONBOARDING_STEPS } from '../app/onboarding.js';
+import { PRIVACY_GUARANTEES, exportVerdict, withheldCount } from '../security/privacy.js';
 import { el, icon, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
 
 const client = createClient();
@@ -573,6 +574,17 @@ pages.dashboard = () => {
  * reader wants to see together, and three separate sidebar entries would bury them.
  * @param {Array<() => HTMLElement>} builders
  */
+/**
+ * The progress panel is context, not furniture.
+ *
+ * It used to be appended to every diagnostics page, so eleven pages carried a large card saying
+ * "No scan has run yet" above or below the thing the page was actually about. It now appears
+ * where it has something to say: while a scan is running, or when one ended in an error.
+ */
+function progressIsRelevant() {
+  return Boolean(state.scan.running || state.scan.error);
+}
+
 function stackPages(builders, extras = null) {
   return () => {
     const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
@@ -584,7 +596,7 @@ function stackPages(builders, extras = null) {
         wrapper.append(child);
       }
     }
-    wrapper.append(scanProgressCard());
+    if (progressIsRelevant()) wrapper.append(scanProgressCard());
     // Extras are page-specific panels that are not scan modules (the export card, for instance).
     // They come after the evidence, because a reader looking for driver state wants the drivers.
     if (typeof extras === 'function') for (const child of extras() ?? []) if (child) wrapper.append(child);
@@ -633,7 +645,7 @@ function modulePage(moduleId, title, description, emptyHint) {
       card.append(rows);
     }
     wrapper.append(card);
-    wrapper.append(scanProgressCard());
+    if (progressIsRelevant()) wrapper.append(scanProgressCard());
     return wrapper;
   };
 }
@@ -947,14 +959,20 @@ pages.reports = () => {
   const card2 = el('div', { class: 'vx-card' });
   card2.append(el('h2', { class: 'vx-card__title', text: 'Choose a format' }));
 
-  const privacy = state.settings?.values?.['diagnostics.includeSensitiveInReport'];
+  // The verdict comes from the export gate itself, and the count from the redaction summary.
+  // Both existed in src/security/privacy.js, both were unreferenced, and the page carried its
+  // own prose instead - which said "identifiers are redacted" without ever saying how many, and
+  // could not have known whether this particular scan held any.
+  const policy = { includeSensitive: state.settings?.values?.['diagnostics.includeSensitiveInReport'] === true };
+  const verdict = exportVerdict(policy, { format: 'pdf' });
+  const withheld = withheldCount(Object.values(state.scan.modules ?? {}), policy);
   card2.append(
     callout({
-      tone: privacy ? 'warn' : 'ok',
-      title: privacy ? 'This export will include identifiers' : 'Identifiers are redacted',
-      body: privacy
-        ? 'Serial numbers, network addresses and account names will appear in the file. Treat it as personal data.'
-        : 'Serial numbers, MAC and IP addresses, hostnames and account names are replaced with [redacted] before the document is written. Turn this on in Privacy if you need them.'
+      tone: policy.includeSensitive ? 'warn' : 'ok',
+      title: verdict.includeSensitive ? 'This export will include identifiers' : 'Identifiers are redacted',
+      body: verdict.includeSensitive
+        ? verdict.warnings.join(' ')
+        : `${withheld === 0 ? 'No identifier fields were found in this scan' : `${withheld} identifier field${withheld === 1 ? '' : 's'} in this scan will be written as [redacted]`}. Serial numbers, MAC and IP addresses, hostnames and account names are replaced before the document is written. Turn this on in Privacy if you need them.`
     })
   );
 
@@ -1242,15 +1260,20 @@ pages.privacy = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
 
+  // The promises are drawn from the security layer's own list, not retyped here. Retyped, they
+  // drift: this page claimed secrets were "refused at collection time rather than redacted
+  // afterwards" while nothing called the collector's rule, and two of the five guarantees in
+  // privacy.js were not on the page at all.
   const guarantees = el('div', { class: 'vx-card' });
   guarantees.append(el('h2', { class: 'vx-card__title', text: 'Guarantees' }));
-  for (const line of [
-    ['No diagnostic data leaves this device', 'VERIDEX makes no outbound request. The source tree contains no network client, and the runtime guard refuses any attempt a dependency might make.'],
-    ['Identifiers are redacted before export', 'Serial numbers, MAC and IP addresses, hostnames and account names are replaced with [redacted] in every format before a renderer runs, unless you opt in.'],
-    ['Diagnostics are read-only', 'Formatting, partitioning, driver removal, registry cleaning and security disabling are refused by the command guard, not merely discouraged in a dialog.'],
-    ['Secrets are never collected', 'Product keys, passwords and recovery keys are refused at collection time rather than redacted afterwards.']
-  ]) {
-    guarantees.append(callout({ tone: 'ok', title: line[0], body: line[1] }));
+  for (const guarantee of PRIVACY_GUARANTEES) {
+    guarantees.append(
+      callout({
+        tone: 'ok',
+        title: guarantee.title,
+        body: `${guarantee.detail} Enforced by ${guarantee.enforcedBy}.`
+      })
+    );
   }
   wrapper.append(guarantees);
 

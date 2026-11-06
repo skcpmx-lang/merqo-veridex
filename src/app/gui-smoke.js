@@ -496,6 +496,28 @@ async function main() {
     return scoreLine;
   });
 
+  // The page screenshots above were taken before the sweep, so every one of them showed an
+  // empty state. Reviewing a design from those alone means reviewing the part of the interface
+  // that has no data in it, which is the easy half: a full table is where alignment, density and
+  // truncation actually break. These are the same pages again, populated.
+  await step('the populated pages are captured, not only their empty states', async () => {
+    const captured = [];
+    for (const id of ['dashboard', 'hardware', 'storage', 'reports', 'activity-log']) {
+      const page = id === 'activity-log' ? 'logs' : id;
+      const clicked = await clickPage(page);
+      if (!clicked) {
+        record('warn', `no navigation entry for "${page}"`);
+        continue;
+      }
+      await sleep(400);
+      const file = await screenshot(`populated-${page}`);
+      if (file) captured.push(page);
+    }
+    record('info', `populated screenshots: ${captured.join(', ') || 'none'}`);
+    if (captured.length < 3) throw new Error(`only ${captured.length} populated page(s) could be captured`);
+    return { captured };
+  });
+
   // ── 8b. The three new surfaces, with data in them ─────────────────────────
   await step('the activity log lists what the run just wrote, and filters it', async () => {
     await evaluate(`document.querySelector('.vx-nav__item[data-page="logs"]').click()`);
