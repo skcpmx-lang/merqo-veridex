@@ -561,3 +561,43 @@ test('every marker the Windows GUI harness expects is actually rendered', { skip
     restore();
   }
 });
+
+// ── Dashboard widget arrangement (R-19-02) ─────────────────────────────────
+
+test('the dashboard honours the configured widget list, in order', { skip }, async () => {
+  // `dashboard.widgets` was declared and forwarded to the renderer but never read, so the
+  // setting changed nothing while its description promised it would.
+  const { document, restore } = await bootWithBridge(
+    baseAnswers({
+      'scan:last': { ok: true, data: { scan: scanFixture() } },
+      'app:settings': { ok: true, data: { values: { 'dashboard.widgets': ['actions', 'components'] }, specs: [], ui: { theme: 'dark', widgets: ['actions', 'components'] } } }
+    })
+  );
+  try {
+    await waitFor(() => document.querySelector('.vx-content').textContent.length > 40, { label: 'the dashboard' });
+    const text = document.querySelector('.vx-content').textContent;
+    assert.match(text, /Quick actions/, 'a listed widget must be shown');
+    assert.match(text, /Components/, 'a listed widget must be shown');
+    assert.doesNotMatch(text, /Device health/, 'a widget that is not listed must not be rendered');
+    assert.doesNotMatch(text, /Coverage/, 'a widget that is not listed must not be rendered');
+  } finally {
+    restore();
+  }
+});
+
+test('an empty widget list restores every widget rather than blanking the page', { skip }, async () => {
+  const { document, restore } = await bootWithBridge(
+    baseAnswers({
+      'scan:last': { ok: true, data: { scan: scanFixture() } },
+      'app:settings': { ok: true, data: { values: { 'dashboard.widgets': [] }, specs: [], ui: { theme: 'dark', widgets: [] } } }
+    })
+  );
+  try {
+    await waitFor(() => document.querySelector('.vx-content').textContent.length > 40, { label: 'the dashboard' });
+    const text = document.querySelector('.vx-content').textContent;
+    assert.match(text, /Device health/);
+    assert.match(text, /Quick actions/);
+  } finally {
+    restore();
+  }
+});

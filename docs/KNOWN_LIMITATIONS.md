@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 662
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 697
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -209,13 +209,22 @@ sample data. `docs/PROJECT_STATUS.md` tracks them.
 
 ## 15. Requirements not started
 
-21 of 130 requirements are not started. Eight of those are **refused by design** rather
-than deferred — an auto-updater, crash reporting, a plugin surface, driver rollback,
-driver version comparison against a catalogue, and two GPU/panel judgements that need
-hardware. `docs/WARNINGS.md` lists all 21 with the reason for each; `docs/REQUIREMENTS.md`
-is generated from `docs/requirements.json` and is the authoritative list.
+3 of 130 requirements are not built:
 
-Nothing in this document is a promise about when the other thirteen will arrive.
+| ID | Requirement | Why |
+| --- | --- | --- |
+| R-08-05 | GPU performance test, else UNSUPPORTED | A GPU benchmark without a thermal guard measures the cooler as much as the GPU. |
+| R-08-06 | Responsiveness composite score | It would be computed from the two measurements above that do not exist. |
+| R-25-02 | Crash handling and interrupted-test recovery | The history store already quarantines an unreadable file rather than losing it. A main-process crash handler has not been written, because "log and continue" would turn a crash into a silent inconsistency and the user-facing behaviour has to be decided first. |
+
+An earlier version of this document claimed eight requirements were "refused by design". That
+was wrong: the eight listed there (auto-updater, crash reporting, plugin surface, driver
+rollback and so on) were never the requirements outstanding. `docs/WARNINGS.md` is the
+item-by-item record of all 21 that were outstanding at the start of the verification
+milestone, including how each was resolved. `docs/REQUIREMENTS.md` is generated from
+`docs/requirements.json` and is authoritative.
+
+Nothing in this document is a promise about when those three will arrive.
 
 ---
 

@@ -24,8 +24,12 @@ import { readFile, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const JSON_PATH = path.join(ROOT, 'docs/requirements.json');
-const MD_PATH = path.join(ROOT, 'docs/REQUIREMENTS.md');
+// `--json` exists so the audit itself can be tested: a gate nobody has seen fail is a gate
+// nobody knows is closed. The default is the real file, and CI never passes the flag.
+const jsonFlag = process.argv.indexOf('--json');
+const JSON_PATH = jsonFlag > -1 && process.argv[jsonFlag + 1] ? path.resolve(process.argv[jsonFlag + 1]) : path.join(ROOT, 'docs/requirements.json');
+const mdFlag = process.argv.indexOf('--md');
+const MD_PATH = mdFlag > -1 && process.argv[mdFlag + 1] ? path.resolve(process.argv[mdFlag + 1]) : path.join(ROOT, 'docs/REQUIREMENTS.md');
 const checkOnly = process.argv.includes('--check');
 
 const STATUS_ORDER = ['VER', 'TS', 'IM', 'IP', 'BL', 'NS'];

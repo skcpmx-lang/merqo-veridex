@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 662 · pass 662 · fail 0
+tests 697 · pass 697 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -78,22 +78,26 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/windows-modules-depth.test.js` | 31 | the four new modules against their per-module checklists |
 | `tests/unit/windowshealth-depth.test.js` | 11 | DISM parsing, unknown never PASS, non-admin honesty |
 | `tests/integration/artifacts.test.js` | 7 | release artifact verification: signatures, checksums, tampering |
+| `tests/integration/audit-gate.test.js` | 6 | the requirement audit refuses a claim it cannot support |
 | `tests/integration/build-boundary.test.js` | 3 | nothing test-only or fixture-only can be packaged |
 | `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
 | `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
 | `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
+| `tests/integration/gui-coverage.test.js` | 5 | the Windows GUI harness covers every page and uploads its screenshots |
 | `tests/integration/install-smoke-harness.test.js` | 9 | the installed build smoke harness itself |
-| `tests/integration/new-surfaces.test.js` | 20 | first-run tour, activity log, driver export card, Reports and Privacy |
+| `tests/integration/new-surfaces.test.js` | 23 | first-run tour, activity log, driver export card, Reports and Privacy |
 | `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
+| `tests/integration/privacy-verification.test.js` | 7 | redaction on disk and on export, retention, reset safety |
 | `tests/integration/provider-invocation.test.js` | 13 | CI workflows reference scripts that exist; tests gate publishing |
 | `tests/integration/providers.test.js` | 7 | every provider executes and explains itself, including when its runner fails |
 | `tests/integration/renderer.test.js` | 17 | all 18 pages render under jsdom; live-mode pages with a fake bridge |
+| `tests/integration/report-consistency.test.js` | 14 | one scan, four formats, compared field by field |
 | `tests/integration/scan-path.test.js` | 12 | the twelve scan:last data-flow checks from engine to report |
 | `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
 | `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **662** | |
+| **Total** | **697** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

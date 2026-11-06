@@ -494,17 +494,12 @@ pages.dashboard = () => {
     componentCard.append(emptyState('No components assessed', 'Each component is scored only from evidence that was actually collected.'));
   }
 
-  wrapper.append(
-    el('div', { class: 'vx-grid vx-grid--2', children: [healthCard, coverageCard] }),
-    scanProgressCard(),
-    componentCard
-  );
-
   // Issues
   const issues = state.scan.issues;
   const issueCount = issues ? issues.warnings.length + issues.errors.length + (issues.messages?.length ?? 0) : 0;
+  let issuesCard = null;
   if (issues && issueCount > 0) {
-    const issuesCard = el('div', { class: 'vx-card' });
+    issuesCard = el('div', { class: 'vx-card' });
     issuesCard.append(el('h2', { class: 'vx-card__title', text: 'Needs attention' }));
     for (const error of issues.errors) {
       issuesCard.append(callout({ tone: 'bad', title: 'Error', body: error }));
@@ -515,7 +510,6 @@ pages.dashboard = () => {
     for (const message of issues.messages ?? []) {
       issuesCard.append(callout({ tone: 'warn', title: 'Issue', body: String(message) }));
     }
-    wrapper.append(issuesCard);
   }
 
   const actions = el('div', { class: 'vx-card' });
@@ -527,7 +521,44 @@ pages.dashboard = () => {
     button({ label: 'Build report', onClick: () => navigate('reports'), disabled: !state.scan.finished })
   );
   actions.append(row);
-  wrapper.append(actions);
+
+  // ── Widget arrangement ────────────────────────────────────────────────────
+  // `dashboard.widgets` is an ordered list of widget ids. It was declared, forwarded to the
+  // renderer and never read, so editing it changed nothing — a setting that lies. It is read
+  // here: the cards appear in the order the list names them, and a card the list omits is not
+  // rendered. An empty or missing list means "everything", because that is what a person who
+  // has never opened Settings expects to see.
+  const nodes = {
+    health: healthCard,
+    coverage: coverageCard,
+    progress: scanProgressCard(),
+    components: componentCard,
+    issues: issuesCard,
+    actions
+  };
+  const configured = state.settings?.ui?.widgets;
+  const chosen = Array.isArray(configured) && configured.length > 0 ? configured.filter((id) => nodes[id]) : Object.keys(nodes);
+
+  let healthAndCoverageDrawn = false;
+  for (const id of chosen) {
+    if (id === 'health' || id === 'coverage') {
+      if (healthAndCoverageDrawn) continue;
+      const both = chosen.includes('health') && chosen.includes('coverage');
+      wrapper.append(both ? el('div', { class: 'vx-grid vx-grid--2', children: [healthCard, coverageCard] }) : nodes[id]);
+      healthAndCoverageDrawn = true;
+      continue;
+    }
+    if (nodes[id]) wrapper.append(nodes[id]);
+  }
+
+  if (chosen.length === 0) {
+    wrapper.append(
+      emptyState(
+        'No dashboard widgets are selected',
+        'Every widget has been removed from the arrangement. Settings → Dashboard lists them; add the ones you want back.'
+      )
+    );
+  }
 
   return wrapper;
 };

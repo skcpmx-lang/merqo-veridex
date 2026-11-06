@@ -15,11 +15,11 @@ is the narrative summary of it.
 | --- | --- |
 | Requirements | 130 across 39 modules |
 | Verified on Windows | **0** |
-| Tested (automated) | 93 |
-| Implemented, untested | 14 |
-| In progress | 2 |
-| Not started | 21 |
-| Automated tests | 662, all passing |
+| Tested (automated) | 99 |
+| Implemented, untested | 18 |
+| In progress | 10 |
+| Not started | 3 |
+| Automated tests | 697, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.4 MiB + portable 106.5 MiB, unsigned |
 
@@ -84,9 +84,11 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
 - Privacy page states what is stored, where, and how large it is.
 
 ### Tooling
-- `scripts/check.mjs` static gate: 0 errors, 21 warnings — all of them requirements that
-  are not started, each listed in `docs/WARNINGS.md` with its reason.
+- `scripts/check.mjs` static gate: 0 errors, 3 warnings — the three requirements that are
+  genuinely not built, each explained in `docs/WARNINGS.md`.
 - Packaging boundary test: no test, fixture, documentation or harness file can be packaged.
+- Requirement audit gate: `tests/integration/audit-gate.test.js` proves the audit refuses a
+  missing test, missing code, an unearned VERIFIED status and an unexplained BLOCKED one.
 - Requirement auditor that refuses a `VER` status without recorded evidence.
 - Artifact verifier producing `SHA256SUMS.txt`.
 - Documentation checks: paths named in docs must exist, and the CSP quoted in

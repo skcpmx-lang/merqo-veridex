@@ -98,9 +98,9 @@ export const SETTINGS_SPEC = [
     label: 'Dashboard widgets',
     group: 'Dashboard',
     type: 'string[]',
-    default: ['overview', 'health', 'cpu', 'gpu', 'memory', 'storage', 'battery', 'thermal', 'network', 'progress', 'quick-actions'],
-    description: 'Ordered widget list. Removing a widget hides it from the dashboard grid; order controls layout.',
-    appliesTo: 'src/app/settings-wiring.js'
+    default: ['health', 'coverage', 'progress', 'components', 'issues', 'actions'],
+    description: 'Ordered widget list. Removing a widget hides it from the dashboard grid; order controls layout. Valid ids: health, coverage, progress, components, issues, actions. An empty list shows every widget.',
+    appliesTo: 'src/renderer/app.js'
   },
   {
     key: 'dashboard.greetingName',

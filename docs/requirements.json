@@ -338,13 +338,13 @@
       "mod": "01 Hardware",
       "req": "Independent SATA and NVMe diagnostic providers with fallback",
       "impl": "src/providers/smart-ata.js + src/providers/smart-nvme.js",
-      "primary": "ATA provider, NVMe provider",
+      "primary": "independent SATA (ATA SMART via IOCTL) and NVMe (health log) providers, merged with fallback",
       "alt": "reliability counter provider",
       "perm": "admin",
       "ui": "storage",
       "test": "tests/unit/smart.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-01-26",
@@ -455,13 +455,13 @@
       "mod": "02 Battery",
       "req": "Multi-provider battery fallback chain with per-method success/failure logging",
       "impl": "src/diagnostics/battery.js",
-      "primary": "WMI \u2192 powercfg batteryreport \u2192 systeminformation",
+      "primary": "five-provider chain: CIM, firmware WMI, powercfg report, systeminformation, battery.info",
       "alt": "n/a",
       "perm": "none",
       "ui": "battery",
       "test": "tests/unit/battery.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-02-09",
@@ -844,14 +844,14 @@
       "id": "R-08-03",
       "mod": "08 Benchmark",
       "req": "RAM performance, bandwidth and stability tests",
-      "impl": "n/a",
-      "primary": "typed-array sequential/random access + verify pass",
-      "alt": "n/a",
+      "impl": "src/benchmarking/cpu-bench.js + src/benchmarking/worker.js",
+      "primary": "memory bandwidth workload measured and reported",
+      "alt": "stability test not implemented",
       "perm": "none",
       "ui": "benchmark",
-      "test": "n/a",
-      "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "test": "tests/unit/bench-cpu.test.js",
+      "doc": "docs/KNOWN_LIMITATIONS.md",
+      "st": "IP"
     },
     {
       "id": "R-08-04",
@@ -888,8 +888,8 @@
       "alt": "n/a",
       "perm": "none",
       "ui": "benchmark",
-      "test": "tests/unit/bench-cpu.test.js",
-      "doc": "docs/ARCHITECTURE.md",
+      "test": "n/a",
+      "doc": "docs/KNOWN_LIMITATIONS.md",
       "st": "NS"
     },
     {
@@ -949,13 +949,13 @@
       "mod": "09 Monitoring",
       "req": "Sensor availability, source labelling, configurable interval, data export",
       "impl": "src/monitoring/monitor.js",
-      "primary": "availability registry + settings interval",
-      "alt": "n/a",
+      "primary": "sensor availability, per-sensor source labels, configurable interval via monitoring.intervalMs",
+      "alt": "samples are shown live but cannot be exported",
       "perm": "n/a",
       "ui": "monitor",
       "test": "tests/unit/monitor.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "IP"
     },
     {
       "id": "R-10-01",
@@ -1029,26 +1029,26 @@
       "mod": "11 Drivers",
       "req": "Driver inventory: name, manufacturer, version, provider, date, class, status, signing, instance id, error code",
       "impl": "src/diagnostics/drivers.js",
-      "primary": "Win32_PnPSignedDriver + Win32_PnPEntity ConfigManagerErrorCode",
+      "primary": "CIM Win32_PnPSignedDriver: name, provider, manufacturer, version, date, class, instance id, signing, error code",
       "alt": "SetupAPI via PowerShell Get-PnpDevice",
       "perm": "none",
       "ui": "drivers",
       "test": "tests/unit/drivers.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-11-02",
       "mod": "11 Drivers",
       "req": "Driver health classification: missing, disabled, error state, signing failure \u2014 evidence-based only",
-      "impl": "src/diagnostics/drivers.js",
-      "primary": "error-code map + status enum",
+      "impl": "src/diagnostics/drivers.js#classifyDriverHealth",
+      "primary": "evidence-based classification from the Config Manager error code, status string and signing state",
       "alt": "n/a",
       "perm": "none",
       "ui": "drivers",
-      "test": "tests/unit/drivers.test.js",
+      "test": "tests/unit/windows-modules-depth.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-11-03",
@@ -1290,27 +1290,27 @@
       "id": "R-16-01",
       "mod": "16 Compatibility",
       "req": "Vendor-agnostic detection across Dell/HP/Lenovo/ASUS/Acer/MSI/Surface/Samsung/Toshiba/Gigabyte/Apple Boot Camp with UNSUPPORTED rendering for absent data",
-      "impl": "n/a",
-      "primary": "SMBIOS identity + per-vendor battery/driver paths",
+      "impl": "src/diagnostics/system.js",
+      "primary": "vendor and model table for 20 vendors including Dell, HP, Lenovo, ASUS, Acer, MSI, Surface, Samsung, Toshiba/Dynabook, Gigabyte and Apple Boot Camp",
       "alt": "generic Windows paths",
       "perm": "varies",
       "ui": "system",
-      "test": "tests/unit/cpu.test.js",
+      "test": "tests/unit/windows-extended.test.js",
       "doc": "docs/COMPATIBILITY.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-16-02",
       "mod": "16 Compatibility",
       "req": "Windows 10/11 x64 support matrix with documented build constraints",
-      "impl": "n/a",
-      "primary": "runtime platform gate",
+      "impl": "docs/COMPATIBILITY.md",
+      "primary": "Windows 10 1903+ and Windows 11 x64 support matrix with documented build constraints",
       "alt": "n/a",
       "perm": "n/a",
       "ui": "startup",
-      "test": "tests/unit/field.test.js",
+      "test": "n/a",
       "doc": "docs/COMPATIBILITY.md",
-      "st": "NS"
+      "st": "IM"
     },
     {
       "id": "R-17-01",
@@ -1355,14 +1355,14 @@
       "id": "R-18-02",
       "mod": "18 Layout",
       "req": "High-DPI / display-scaling and multi-monitor handling",
-      "impl": "n/a",
-      "primary": "Electron DPI-aware window + screen API",
-      "alt": "n/a",
+      "impl": "src/diagnostics/display.js",
+      "primary": "every display enumerated with bounds, work area, rotation and scale factor; the GUI harness checks 1024x700 and 125% zoom",
+      "alt": "no per-monitor window placement or scale-aware sizing of the shell",
       "perm": "n/a",
       "ui": "all",
-      "test": "n/a",
+      "test": "tests/integration/gui-coverage.test.js",
       "doc": "docs/DESIGN_SYSTEM.md",
-      "st": "NS"
+      "st": "IP"
     },
     {
       "id": "R-19-01",
@@ -1381,14 +1381,14 @@
       "id": "R-19-02",
       "mod": "19 Animation",
       "req": "Dashboard widget customization and arrangement persistence",
-      "impl": "n/a",
-      "primary": "ordered widget layout in DB",
-      "alt": "n/a",
+      "impl": "src/renderer/app.js",
+      "primary": "dashboard.widgets is an ordered list; the dashboard renders the listed widgets in that order and hides the rest",
+      "alt": "drag-and-drop arrangement is not implemented",
       "perm": "n/a",
       "ui": "dashboard",
-      "test": "n/a",
+      "test": "tests/integration/new-surfaces.test.js",
       "doc": "docs/USER_GUIDE.md",
-      "st": "NS"
+      "st": "IP"
     },
     {
       "id": "R-20-01",
@@ -1531,7 +1531,7 @@
       "perm": "n/a",
       "ui": "all",
       "test": "n/a",
-      "doc": "docs/SECURITY.md",
+      "doc": "docs/KNOWN_LIMITATIONS.md",
       "st": "NS"
     },
     {
@@ -1551,40 +1551,40 @@
       "id": "R-26-01",
       "mod": "26 Offline",
       "req": "Offline-first operation, zero paid dependencies, no telemetry, no data upload, license-clean dependencies",
-      "impl": "n/a",
-      "primary": "network denial in renderer + dependency licence audit",
-      "alt": "n/a",
+      "impl": "src/security/guard.js",
+      "primary": "no network client exists in src/, enforced by test; nothing is uploaded; no telemetry, no account",
+      "alt": "dependency licence cleanliness is not yet checked by a script",
       "perm": "n/a",
       "ui": "all",
-      "test": "n/a",
+      "test": "tests/integration/no-network.test.js",
       "doc": "docs/SECURITY.md",
-      "st": "NS"
+      "st": "IP"
     },
     {
       "id": "R-27-01",
       "mod": "27 Architecture",
       "req": "Layered module separation with documented interfaces and no circular dependencies (enforced by script)",
-      "impl": "src/**",
-      "primary": "scripts/check.mjs import-graph analysis",
-      "alt": "n/a",
+      "impl": "scripts/check.mjs",
+      "primary": "every module parsed and imported, imports resolved, entry points checked",
+      "alt": "no circular-dependency check",
       "perm": "n/a",
       "ui": "n/a",
-      "test": "n/a",
+      "test": "tests/integration/audit-gate.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "IP"
     },
     {
       "id": "R-27-02",
       "mod": "27 Architecture",
       "req": "Clean code gate: syntax check, no dead entry points, no unresolved imports, consistent formatting",
       "impl": "scripts/check.mjs",
-      "primary": "static analysis gate",
-      "alt": "n/a",
+      "primary": "syntax, named-import and entry-point gate; 0 errors",
+      "alt": "no formatter enforcement",
       "perm": "n/a",
       "ui": "n/a",
-      "test": "n/a",
+      "test": "tests/integration/audit-gate.test.js",
       "doc": "docs/ARCHITECTURE.md",
-      "st": "NS"
+      "st": "IP"
     },
     {
       "id": "R-28-01",
@@ -1603,14 +1603,14 @@
       "id": "R-29-01",
       "mod": "29 CI/CD",
       "req": "GitHub Actions on windows-latest: checkout, setup, restore, format check, static analysis, unit tests, integration tests, build, package, installer, portable, artifact validation, SHA-256, release on tag",
-      "impl": "n/a",
-      "primary": "workflow definitions",
-      "alt": "n/a",
+      "impl": ".github/workflows/build.yml",
+      "primary": "checkout, setup-node, npm ci, static checks, requirement audit, tests on ubuntu and windows, packaging on Windows",
+      "alt": "no format check step",
       "perm": "n/a",
       "ui": "n/a",
-      "test": "n/a",
+      "test": "tests/integration/workflow.test.js",
       "doc": "docs/GITHUB_ACTIONS.md",
-      "st": "NS"
+      "st": "IP"
     },
     {
       "id": "R-30-01",
@@ -1643,13 +1643,13 @@
       "mod": "32 Unsigned",
       "req": "Unsigned EXE build, SHA-256 publication, SmartScreen disclosure without unsafe bypass advice",
       "impl": "electron-builder.config.mjs + scripts/verify-artifacts.mjs",
-      "primary": "unsigned NSIS + portable + SHA256SUMS",
-      "alt": "n/a",
+      "primary": "unsigned build, SHA-256 manifest produced per build, SmartScreen disclosure in README and SECURITY",
+      "alt": "publication of hashes waits for an authorised release",
       "perm": "n/a",
       "ui": "download",
-      "test": "n/a",
+      "test": "tests/integration/artifacts.test.js",
       "doc": "docs/KNOWN_LIMITATIONS.md",
-      "st": "NS"
+      "st": "IM"
     },
     {
       "id": "R-33-01",
@@ -1681,40 +1681,40 @@
       "id": "R-34-01",
       "mod": "34 Testing",
       "req": "Virtual/physical Windows validation and explicit disclosure of everything not verifiable here",
-      "impl": "docs/TEST_STATUS.md",
-      "primary": "windows-latest CI run + maintainer hardware checklist",
+      "impl": "docs/TEST_STATUS.md + scripts/audit-requirements.mjs",
+      "primary": "VM and automated results recorded separately from physical hardware; the audit refuses a VER claim without machine evidence",
       "alt": "n/a",
       "perm": "n/a",
       "ui": "n/a",
-      "test": "docs/TEST_STATUS.md",
-      "doc": "docs/KNOWN_LIMITATIONS.md",
-      "st": "NS"
+      "test": "tests/integration/audit-gate.test.js",
+      "doc": "docs/TEST_STATUS.md",
+      "st": "IM"
     },
     {
       "id": "R-35-01",
       "mod": "35 Audit",
       "req": "Automated requirement audit that fails when a requirement claims a status its artifacts do not support",
       "impl": "scripts/audit-requirements.mjs",
-      "primary": "artifact existence + test-name verification",
+      "primary": "fails on a status its artifacts do not support: missing test, missing implementation, VER without evidence, BL without reason",
       "alt": "n/a",
       "perm": "n/a",
       "ui": "n/a",
-      "test": "n/a",
+      "test": "tests/integration/audit-gate.test.js",
       "doc": "docs/REQUIREMENTS.md",
-      "st": "NS"
+      "st": "TS"
     },
     {
       "id": "R-35-02",
       "mod": "35 Audit",
       "req": "Final documentation set and release verification report",
-      "impl": "docs/**",
-      "primary": "documented deliverables and release evidence",
-      "alt": "n/a",
+      "impl": "docs/RELEASE_VERIFICATION.md",
+      "primary": "documentation set complete; release verification report exists and marks every unchecked item",
+      "alt": "VM re-run for the three new pages outstanding at the time of writing",
       "perm": "n/a",
       "ui": "n/a",
-      "test": "tests/integration/docs.test.js",
+      "test": "n/a",
       "doc": "docs/RELEASE_NOTES.md",
-      "st": "NS"
+      "st": "IM"
     }
   ]
 }
