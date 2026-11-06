@@ -13,6 +13,14 @@ on:
     branches: ['**']
   pull_request:
   workflow_dispatch:
+    inputs:
+      # The only evidence that cannot be read through the checks API is a screenshot.
+      # Dispatching with this on publishes the GUI shots to a throwaway branch, so a
+      # reviewer whose network stops at the artifact host can still look at them.
+      capture_evidence:
+        description: 'Publish GUI screenshots to a ci/evidence-<run> branch for review'
+        type: boolean
+        default: false
 
 concurrency:
   group: build-${{ github.ref }}
@@ -246,3 +254,62 @@ jobs:
             dist/SHA256SUMS.txt
             dist/BUILD-MANIFEST.txt
           retention-days: 30
+
+  # The screenshots are the one piece of evidence a run produces that cannot be read
+  # through the checks API: artifacts are served from a storage host that some networks
+  # cannot reach, and a screenshot cannot be described in an annotation. This job exists
+  # so the images can be *looked at* rather than assumed, by publishing them to a
+  # throwaway branch that anyone with repository read access can fetch.
+  #
+  # It runs only when the workflow is dispatched with `capture_evidence`, so ordinary
+  # pushes never write to the repository. The branch is `ci/evidence-<run id>`: it is a
+  # snapshot, it is never merged, and it is safe to delete.
+  publish-evidence:
+    name: Publish GUI evidence
+    needs: package
+    if: always() && inputs.capture_evidence
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the evidence artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: veridex-gui-evidence
+          path: evidence
+
+      - name: Publish it to a branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          shots=$(find evidence/gui-shots -type f | wc -l)
+          if [ "$shots" -eq 0 ]; then
+            echo "::warning title=evidence::the run produced no screenshots to publish"
+            exit 0
+          fi
+          branch="ci/evidence-${GITHUB_RUN_ID}"
+          git config user.name 'VERIDEX evidence'
+          git config user.email 'actions@users.noreply.github.com'
+          git checkout -q --orphan "$branch"
+          git rm -rq --cached . >/dev/null 2>&1 || true
+          rm -rf src tests scripts docs assets dist package.json package-lock.json
+          mv evidence/* .
+          rmdir evidence 2>/dev/null || true
+          {
+            echo "# GUI evidence from run ${GITHUB_RUN_ID}"
+            echo
+            echo "Commit: ${GITHUB_SHA}  ·  branch: ${GITHUB_REF_NAME}"
+            echo
+            echo "Produced by \`gui-smoke\` on windows-latest. This branch is a snapshot for review;"
+            echo "it is not part of the application and is safe to delete."
+            echo
+            echo "\`\`\`"
+            echo "$shots screenshot(s)"
+            echo "\`\`\`"
+          } > README.md
+          git add -A
+          git commit -q -m "GUI evidence from run ${GITHUB_RUN_ID}"
+          git push -q origin "$branch"
+          echo "::notice title=evidence::published ${shots} screenshot(s) to ${branch}"

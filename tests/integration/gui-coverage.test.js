@@ -112,3 +112,17 @@ test('IPC handlers are registered before the window loads the renderer', async (
   assert.ok(created !== -1, 'createWindow() must be called at startup');
   assert.ok(registered < created, 'registerHandlers() must run before createWindow(), or the renderer can invoke a channel that has no handler');
 });
+
+test('screenshots can leave the runner, not just the artifact store', async () => {
+  // An artifact is only evidence to someone who can download it. The publish-evidence job
+  // exists because that download is blocked on some networks - including the machine this
+  // project is verified from - and a screenshot that cannot be opened cannot be reviewed.
+  // Ordinary pushes must never write to the repository, so the job is gated on a dispatch
+  // input and pushes only a snapshot branch.
+  const workflow = await read('.github/workflows/build.yml');
+  assert.match(workflow, /capture_evidence:/, 'the dispatch input must exist');
+  assert.match(workflow, /needs: package/, 'the publishing job must run after the screenshots exist');
+  assert.match(workflow, /if: always\(\) && inputs\.capture_evidence/, 'it must not run on ordinary pushes');
+  assert.match(workflow, /ci\/evidence-\$\{GITHUB_RUN_ID\}/, 'it must publish to a per-run branch');
+  assert.match(workflow, /contents: write/, 'it needs write access to publish a branch');
+});
