@@ -71,19 +71,24 @@ test('the monitor samples on an interval and stops cleanly', async () => {
   const runner = { isWindows: false, run: async () => ({ ok: false, code: 1, stdout: '', stderr: '', timedOut: false, durationMs: 0, command: '' }), powershellJson: async () => ({ ok: false, data: null, error: '', durationMs: 0, raw: '' }) };
   const monitor = new Monitor({ runner, intervalMs: 500 });
   let callbacks = 0;
+  let failure = null;
   monitor.onSample = () => { callbacks += 1; };
+  monitor.onError = (error) => { failure = error; };
   monitor.start();
 
-  // Wait for a sample to arrive rather than for 1200 ms to pass. A fixed wait assumes the
-  // first poll completes quickly, which is true of a Linux container with no sensors to
-  // read and false of a Windows runner where every sensor is actually queried — the
-  // Windows CI job failed here while Linux passed.
-  const deadline = Date.now() + 10_000;
-  while (callbacks === 0 && Date.now() < deadline) {
+  // Wait for a sample to arrive rather than for a fixed period to pass. A fixed wait assumes
+  // the first poll completes quickly, which is true of a Linux container with no sensors to
+  // read and false of a Windows runner where every sensor is a real query - the Windows job
+  // failed here while Linux passed. The deadline is generous because the thing being asserted
+  // is "a sample arrives", not "the machine is fast"; a real error is reported immediately
+  // rather than being converted into a timeout that says nothing about the cause.
+  const deadline = Date.now() + 60_000;
+  while (callbacks === 0 && failure === null && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   monitor.stop();
-  assert.ok(callbacks >= 1, 'at least one sample is delivered');
+  assert.equal(failure, null, `the monitor reported an error instead of a sample: ${failure?.message}`);
+  assert.ok(callbacks >= 1, `at least one sample is delivered (waited ${Math.round((Date.now() - (deadline - 60_000)) / 1000)}s)`);
   assert.equal(monitor.running, false);
   const status = monitor.status();
   assert.ok(status.length === SENSORS.length);
@@ -105,4 +110,23 @@ test('a series set keeps one series per sensor id', () => {
   assert.equal(set.list().length, 1);
   assert.equal(set.get('a').stats().current, 2);
   assert.equal(set.snapshot()[0].id, 'a');
+});
+
+test('the deadline helper gives up on a counter that never answers', async () => {
+  // systeminformation shells out for several counters. A provider that stops answering does not
+  // throw - it waits - and the monitoring page would then sit on its first sample looking exactly
+  // like a hung application. `within` is the guard readSensors puts around every counter.
+  const { within } = await import('../../src/monitoring/monitor.js');
+  const started = Date.now();
+  const hung = await within(new Promise(() => {}), 120, 'The counter');
+  assert.equal(hung.ok, false);
+  assert.match(hung.reason, /did not answer within/i);
+  assert.ok(Date.now() - started < 2000, 'the deadline must be the deadline, not a suggestion');
+
+  const answered = await within(Promise.resolve(42), 1000, 'The counter');
+  assert.deepEqual(answered, { ok: true, value: 42 });
+
+  const threw = await within(Promise.reject(new Error('WMI said no')), 1000, 'The counter');
+  assert.equal(threw.ok, false);
+  assert.match(threw.reason, /WMI said no/);
 });

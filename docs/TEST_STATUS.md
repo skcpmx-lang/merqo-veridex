@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 717 · pass 717 · fail 0
+tests 718 · pass 718 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -63,7 +63,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/ipc-contract.test.js` | 17 | the preload surface, forbidden exposure |
 | `tests/unit/logs-surface.test.js` | 13 | log parsing, filtering, summary, export redaction and retention |
 | `tests/unit/manual.test.js` | 48 | manual checklist, session, coverage separation |
-| `tests/unit/monitor.test.js` | 9 | sampling, series |
+| `tests/unit/monitor.test.js` | 10 | sampling, series |
 | `tests/unit/network.test.js` | 8 | adapter parsing, socket derivation |
 | `tests/unit/onboarding.test.js` | 12 | first-run steps, advance, skip, reset, no elevation |
 | `tests/unit/pe-metadata.test.js` | 6 | PE header parsing used by the artifact checks |
@@ -98,7 +98,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **717** | |
+| **Total** | **718** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

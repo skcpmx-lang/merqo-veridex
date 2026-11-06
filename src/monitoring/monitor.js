@@ -72,6 +72,46 @@ export function sanitiseReading(value, id) {
  * @param {boolean} [context.includePrivileged] Whether ACPI thermal zones may be queried.
  * @returns {Promise<{readings: Record<string, {value:number|null, source:string|null, status:string, reason:string|null}>, cpuTemperatureAvailable:boolean}>}
  */
+
+/**
+ * Honest deadline for a live counter.
+ *
+ * `systeminformation` shells out for several of these, and a WMI provider that has stopped
+ * answering does not fail - it waits. Without a deadline the monitoring page sits on its first
+ * sample forever, which looks exactly like an application that has hung. A timed-out counter is
+ * recorded as unavailable with a reason, which is the same treatment every other missing value
+ * gets.
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {string} label
+ * @returns {Promise<{ok:true, value:T} | {ok:false, reason:string}>}
+ */
+export function within(promise, ms, label) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve({ ok: false, reason: `${label} did not answer within ${Math.round(ms / 1000)}s and was skipped` });
+    }, ms);
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ ok: true, value });
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ ok: false, reason: `${label} failed: ${error instanceof Error ? error.message : String(error)}` });
+      }
+    );
+  });
+}
+
 export async function readSensors(context) {
   /** @type {Record<string, {value:number|null, source:string|null, status:string, reason:string|null}>} */
   const readings = {};
@@ -86,18 +126,25 @@ export async function readSensors(context) {
     };
   };
 
+  // A counter that does not answer is unavailable, not a hang.
+  const guarded = async (call, ms, label) => {
+    const outcome = await within(Promise.resolve().then(call), ms, label);
+    if (!outcome.ok) throw new Error(outcome.reason);
+    return outcome.value;
+  };
+
   const loaded = await loadSystemInformation();
   if (loaded.ok) {
     const si = loaded.si;
     try {
-      const load = await si.currentLoad();
+      const load = await guarded(() => si.currentLoad(), 4_000, 'The CPU load counter');
       record('cpu.load', num(load?.currentLoad) === null ? null : Math.round((num(load.currentLoad) ?? 0) * 10) / 10);
     } catch {
       record('cpu.load', null, 'CPU load counters could not be read');
     }
 
     try {
-      const speed = await si.cpuCurrentSpeed();
+      const speed = await guarded(() => si.cpuCurrentSpeed(), 4_000, 'The CPU clock counter');
       const avg = num(speed?.avg);
       record('cpu.clock', avg !== null && avg > 0 ? Math.round(avg * 1000) : null, 'The OS did not report a current CPU clock');
     } catch {
@@ -105,7 +152,7 @@ export async function readSensors(context) {
     }
 
     try {
-      const graphics = await si.graphics();
+      const graphics = await guarded(() => si.graphics(), 5_000, 'Graphics counters');
       const controllers = Array.isArray(graphics?.controllers) ? graphics.controllers : [];
       const utilisation = controllers.map((controller) => num(controller.utilizationGpu)).filter((value) => value !== null);
       record('gpu.load', utilisation.length > 0 ? Math.round((utilisation[0] ?? 0) * 10) / 10 : null, 'This GPU driver does not expose a utilisation counter');
@@ -118,7 +165,7 @@ export async function readSensors(context) {
     }
 
     try {
-      const mem = await si.mem();
+      const mem = await guarded(() => si.mem(), 4_000, 'Memory counters');
       const total = nonNegative(mem?.total);
       const used = nonNegative(mem?.used);
       record('memory.used', total && used !== null && total > 0 ? Math.round((used / total) * 1000) / 10 : null, 'Memory counters could not be read');
@@ -127,7 +174,7 @@ export async function readSensors(context) {
     }
 
     try {
-      const stats = await si.networkStats();
+      const stats = await guarded(() => si.networkStats(), 5_000, 'Network statistics');
       const first = Array.isArray(stats) ? stats[0] : null;
       const rx = nonNegative(first?.rx_sec);
       const tx = nonNegative(first?.tx_sec);
@@ -139,7 +186,7 @@ export async function readSensors(context) {
     }
 
     try {
-      const battery = await si.battery();
+      const battery = await guarded(() => si.battery(), 5_000, 'Battery state');
       const percent = num(battery?.percent);
       // A machine with no battery reports percent 0; that is an absence, not a
       // charge level, so it must not appear as "0 %".
