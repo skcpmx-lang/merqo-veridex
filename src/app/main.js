@@ -47,6 +47,7 @@ import { benchmarkSingleCore, benchmarkMultiCore, benchmarkMemoryBandwidth, mapC
 import { runDiskBenchmark } from '../benchmarking/disk-bench.js';
 import { runCpuStress, stressCapabilities, UNSUPPORTED_STRESS_KINDS } from '../benchmarking/stress-run.js';
 import { mapGpuBenchmarkResults, gpuFrameTimeOf } from '../benchmarking/gpu-bench.js';
+import { runMemoryStability } from '../benchmarking/memory-stability.js';
 import { computeResponsiveness, responsivenessFields } from '../benchmarking/responsiveness.js';
 import { writeMarker, readMarker, clearMarker, markerPath, describeInterrupted, markerIsStale } from './crash-marker.js';
 import { readSensors } from '../monitoring/monitor.js';
@@ -579,6 +580,22 @@ function registerHandlers() {
     };
   });
 
+  // The stability check runs through the same single-benchmark controller as CPU and disk, so a
+  // second run cannot start beside it and Cancel reaches the worker.
+  handle('bench:memory', async ({ megabytes, passes, consent }) => runBenchmark('memory', async (signal) => {
+    const startedAt = new Date().toISOString();
+    emit('bench:progress', { kind: 'memory', stage: 'started', megabytes, passes });
+    const result = await runMemoryStability({ megabytes, passes, consentGiven: consent === true, signal });
+    benchmarkResults.memory = { at: startedAt, ...result };
+    emit('bench:progress', {
+      kind: 'memory',
+      stage: result.refused ? 'refused' : result.cancelled ? 'cancelled' : 'finished',
+      mismatches: result.mismatches ?? null
+    });
+    if (result.refused) await logger?.warn('memory stability check refused', { scope: 'benchmark', reason: result.reason });
+    return benchmarkResults.memory;
+  }));
+
   handle('bench:gpu', async ({ measurement }) => {
     const at = new Date().toISOString();
     benchmarkResults.gpu = { at, measurement, fields: mapGpuBenchmarkResults(measurement) };
@@ -984,7 +1001,7 @@ let monitor = null;
 let monitorSession = null;
 
 /** Benchmark results for this session, and whether one is running. */
-const benchmarkResults = { cpu: null, disk: null };
+const benchmarkResults = { cpu: null, disk: null, memory: null };
 let benchmarkRunning = false;
 /** The running benchmark's abort controller, and the reason it was stopped if we stopped it. */
 let benchmarkAbort = null;
@@ -992,7 +1009,7 @@ let benchmarkAbort = null;
 let stressAbort = null;
 let stressLast = null;
 /** Ceilings that exist so a benchmark cannot run forever on a machine that never answers. */
-const BENCHMARK_DEADLINE_MS = Object.freeze({ cpu: 240_000, disk: 180_000 });
+const BENCHMARK_DEADLINE_MS = Object.freeze({ cpu: 240_000, disk: 180_000, memory: 120_000 });
 
 /**
  * Crash handling (R-25-02).

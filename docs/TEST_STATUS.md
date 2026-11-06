@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 819 · pass 819 · fail 0
+tests 843 · pass 843 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -92,6 +92,9 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/history-rows.test.js` | 5 | benchmark and stress entries render as what they measured, not as unrated scans |
 | `tests/unit/monitor-export.test.js` | 9 | monitoring session exported as CSV and JSON; missing readings stay missing |
 | `tests/unit/history-entries.test.js` | 10 | history entries for benchmarks and stress runs, from the runners' own result shapes |
+| `tests/unit/memory-stability.test.js` | 10 | consent and bounds, a real 64 MB worker round trip, injected mismatches, cancellation |
+| `tests/integration/licence-audit.test.js` | 11 | the licence audit refuses undeclared, copyleft-runtime and unallowlisted licences |
+| `tests/integration/performance-card.test.js` | 3 | the memory card's consent gate in both directions, and the invoke arguments |
 | `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
 | `tests/integration/gui-coverage.test.js` | 9 | the Windows GUI harness covers every page and uploads its screenshots |
 | `tests/integration/install-smoke-harness.test.js` | 9 | the installed build smoke harness itself |
@@ -108,7 +111,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **819** | |
+| **Total** | **843** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

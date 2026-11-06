@@ -15,11 +15,11 @@ is the narrative summary of it.
 | --- | --- |
 | Requirements | 130 across 39 modules |
 | Verified on Windows | **0** |
-| Tested (automated) | 108 |
+| Tested (automated) | 110 |
 | Implemented, untested | 18 |
-| In progress | 4 |
+| In progress | 2 |
 | Not started | 0 |
-| Automated tests | 819, all passing |
+| Automated tests | 843, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.5 MiB + portable 106.5 MiB, unsigned |
 
@@ -135,10 +135,8 @@ honestly partial:
 
 | ID | Requirement | What exists | What is missing |
 | --- | --- | --- | --- |
-| R-08-03 | RAM performance, bandwidth and stability | memory bandwidth workload measured and reported | a sustained-load stability test |
 | R-12-02 | Windows components, scheduled tasks, services | startup entries from the Run/RunOnce keys | scheduled tasks, running services, Windows components |
 | R-18-02 | High-DPI and multi-monitor handling | every display enumerated; 125 % zoom asserted in the harness | per-monitor window placement, scale-aware shell sizing |
-| R-26-01 | Offline-first, zero paid dependencies | no network client exists, enforced by a test | a script that audits dependency licences |
 
 `docs/AUDIT_40_SECTIONS.md` is the section-by-section record: for each of the 40 specification
 sections it lists the requirements, what a user sees, where the gaps are, and what evidence

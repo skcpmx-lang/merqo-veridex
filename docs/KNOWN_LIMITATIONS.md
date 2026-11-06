@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 819
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 843
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -225,19 +225,29 @@ sample data. `docs/PROJECT_STATUS.md` tracks them.
 ## 15. Requirements not started
 
 None. All 130 requirements now have an implementation, which is a different claim from
-"verified on hardware": 108 carry `TS` (tested), 18 `IM` (implemented and wired), 4 `IP`
+"verified on hardware": 110 carry `TS` (tested), 18 `IM` (implemented and wired), 2 `IP`
 (partially implemented, with the missing part named per requirement) and none `VER`. `VER` means
 a person ran the product on a real Windows machine and saw it work, and that evidence does not
 exist for any requirement yet — see §1 of this document.
 
-The four still partial are named precisely in `docs/REQUIREMENTS.md`:
+The two still partial are named precisely in `docs/REQUIREMENTS.md`:
 
 | ID | What exists | What does not |
 | --- | --- | --- |
-| R-08-03 | memory bandwidth measured and reported | a sustained-load stability test |
 | R-12-02 | startup entries from the Run/RunOnce keys | scheduled tasks, running services, Windows components |
 | R-18-02 | every display enumerated; 125 % zoom checked in the harness | per-monitor window placement, scale-aware shell sizing |
-| R-26-01 | no network client exists, enforced by test | a script that audits dependency licences |
+
+Two that were partial have since been closed by building the missing half rather than by
+rewording the requirement: R-08-03 now has a bounded write/read-back stability check
+(`src/benchmarking/memory-stability.js`), and R-26-01 now has a dependency licence audit
+(`scripts/licence-audit.mjs`) that fails a build on an undeclared, copyleft-runtime or
+unallowlisted licence.
+
+A stability check is worth describing carefully, because it is easy to overstate: it writes a
+pattern into a buffer it allocated and reads it back. A word that does not match is real
+evidence of a fault; zero mismatches over a few hundred megabytes is **not** evidence that the
+memory is healthy, and it cannot say which module failed. The result is therefore `UNRATED`, and
+its note says exactly that.
 
 The last three were closed by implementation rather than by reclassification:
 

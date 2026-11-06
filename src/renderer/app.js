@@ -101,7 +101,14 @@ const state = {
   historyLoading: false,
   comparison: { selected: [], result: null, loading: false, error: null },
   onboarding: null,
-  bench: { cpu: null, disk: null, running: false, progress: null },
+  bench: { cpu: null, disk: null, gpu: null, memory: null, running: false, progress: null },
+  /**
+   * The memory stability check's own controls.
+   *
+   * Kept out of `state.bench` on purpose: that object is replaced wholesale every time
+   * `bench:state` is read, which would silently reset consent and size on the next page load.
+   */
+  memoryCheck: { consent: false, megabytes: 256, passes: 3 },
   stress: { capabilities: null, limits: null, running: false, consent: false, durationSec: 30, threads: null, live: null, last: null },
   logs: { entries: null, summary: null, retention: null, stats: null, statsLoading: false, unparseable: 0, level: 'info', query: '', loading: false, error: null },
   export: { destination: null, plan: null, result: null, running: false, error: null },
@@ -1144,11 +1151,101 @@ pages.performance = () => {
   }
   wrapper.append(diskCard);
 
-  wrapper.append(gpuCard(), responsivenessCard(), stressCard());
+  wrapper.append(gpuCard(), memoryStabilityCard(), responsivenessCard(), stressCard());
   return wrapper;
 };
 
 /** GPU benchmark card (R-08-05): a real WebGL workload, or UNSUPPORTED with the reason. */
+/**
+ * The memory stability card (R-08-03).
+ *
+ * Consent comes first because the check allocates real memory, and the size and pass count are
+ * bounded in the interface for the same reason they are bounded in the engine: a number typed
+ * here reaches a worker that will allocate it.
+ */
+function memoryStabilityCard() {
+  const card = el('div', { class: 'vx-card' });
+  card.append(el('h2', { class: 'vx-card__title', text: 'Memory stability' }));
+
+  const mem = state.bench?.memory;
+  if (mem?.fields) card.append(benchmarkRows(mem.fields, mem.at));
+
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Writes a pattern into a bounded buffer and reads it back, once per pass. A word that does not match is real evidence; zero mismatches is not a clean bill of health, so the result is never a PASS.'
+    })
+  );
+
+  if (!mem) {
+    const controls = el('div', { class: 'vx-arrange__controls' });
+    const box = el('input', { attrs: { type: 'checkbox', id: 'vx-memory-consent' } });
+    box.checked = state.memoryCheck.consent === true;
+    box.addEventListener('change', () => {
+      state.memoryCheck = { ...state.memoryCheck, consent: box.checked };
+      // Re-render so the run button enables or disables with the box, rather than staying
+      // disabled after a tick or enabled after an untick.
+      render();
+    });
+    const consent = el('label', {
+      class: 'vx-dim',
+      attrs: { for: 'vx-memory-consent', style: 'display:flex;gap:var(--vx-space-sm);align-items:flex-start' },
+      children: [box, el('span', { text: 'I understand this allocates the selected buffer and holds it for several seconds' })]
+    });
+
+    const sizeField = el('label', { class: 'vx-dim', text: 'Buffer (MB) ' });
+    const sizeInput = el('input', {
+      class: 'vx-input',
+      attrs: { type: 'number', min: '64', max: '1024', step: '64', id: 'vx-memory-mb' }
+    });
+    sizeInput.value = String(state.memoryCheck.megabytes ?? 256);
+    sizeInput.addEventListener('change', () => {
+      state.memoryCheck = { ...state.memoryCheck, megabytes: Number(sizeInput.value) };
+    });
+    sizeField.append(sizeInput);
+
+    const passField = el('label', { class: 'vx-dim', text: 'Passes ' });
+    const passInput = el('input', {
+      class: 'vx-input',
+      attrs: { type: 'number', min: '1', max: '20', step: '1', id: 'vx-memory-passes' }
+    });
+    passInput.value = String(state.memoryCheck.passes ?? 3);
+    passInput.addEventListener('change', () => {
+      state.memoryCheck = { ...state.memoryCheck, passes: Number(passInput.value) };
+    });
+    passField.append(passInput);
+
+    controls.append(consent, sizeField, passField);
+
+    const run = button({
+      label: 'Run stability check',
+      variant: 'primary',
+      disabled: !client.live || Boolean(state.bench?.running) || state.memoryCheck.consent !== true,
+      title: client.live
+        ? (state.memoryCheck.consent ? 'Write and verify the buffer.' : 'Consent is required: the check allocates memory.')
+        : 'Benchmarks need the main process.',
+      onClick: () => runMemoryStabilityCheck()
+    });
+    run.id = 'vx-memory-run';
+    controls.append(run);
+    card.append(controls);
+  } else {
+    card.append(
+      button({
+        label: 'Run again',
+        variant: 'ghost',
+        disabled: !client.live || Boolean(state.bench?.running),
+        onClick: () => {
+          state.bench = { ...(state.bench ?? {}), memory: null };
+          render();
+        }
+      })
+    );
+  }
+
+  return card;
+}
+
 function gpuCard() {
   const card = el('div', { class: 'vx-card' });
   card.append(el('h2', { class: 'vx-card__title', text: 'GPU' }));
@@ -1467,6 +1564,38 @@ function benchmarkRows(fields, at) {
  * Run the GPU benchmark. The measurement happens here, in the window that owns the WebGL context;
  * the main process validates it and decides what it means.
  */
+/**
+ * Start the stability check.
+ *
+ * The numbers are clamped before they leave the renderer, and the engine validates them again.
+ * A refusal — no consent, out of bounds, a cancelled run — is reported as itself; it never
+ * renders as a completed check.
+ */
+async function runMemoryStabilityCheck() {
+  if (!client.live || state.bench?.running) return;
+  const megabytes = Math.max(64, Math.min(1024, Math.round(Number(state.memoryCheck.megabytes ?? 256) / 64) * 64));
+  const passes = Math.max(1, Math.min(20, Math.round(Number(state.memoryCheck.passes ?? 3))));
+  state.memoryCheck = { ...state.memoryCheck, megabytes, passes };
+  state.bench = { ...(state.bench ?? {}), running: true };
+  render();
+  try {
+    const result = await client.invoke('bench:memory', megabytes, passes, true);
+    if (!result.ok) throw new Error(result.error?.message ?? 'The stability check was refused.');
+    state.bench = { ...(state.bench ?? {}), running: false, memory: result.data };
+    if (result.data?.refused) {
+      toast({ tone: 'warn', title: 'Stability check refused', body: result.data.reason ?? '' });
+    } else if (result.data?.cancelled) {
+      toast({ tone: 'info', title: 'Stability check cancelled', body: 'No verdict is recorded for a cancelled run.' });
+    } else if (typeof result.data?.mismatches === 'number' && result.data.mismatches > 0) {
+      toast({ tone: 'bad', title: 'Pattern mismatch', body: `${result.data.mismatches} word(s) did not survive a write/read round trip. Repeat the run before drawing a conclusion.` });
+    }
+  } catch (error) {
+    state.bench = { ...(state.bench ?? {}), running: false };
+    toast({ tone: 'bad', title: 'The stability check failed', body: error instanceof Error ? error.message : String(error) });
+  }
+  render();
+}
+
 async function runGpuBenchmark() {
   if (!client.live || state.bench?.running) return;
   state.bench = { ...(state.bench ?? {}), running: true };
@@ -3153,8 +3282,11 @@ async function loadBenchState() {
   const result = await withDeadline(client.invoke('bench:state'));
   if (!result.ok) return;
   state.bench = {
+    ...(state.bench ?? {}),
     cpu: result.data.cpu ?? null,
     disk: result.data.disk ?? null,
+    gpu: result.data.gpu ?? state.bench?.gpu ?? null,
+    memory: result.data.memory ?? state.bench?.memory ?? null,
     running: Boolean(result.data.running),
     progress: result.data.running ? { stage: 'started' } : null
   };

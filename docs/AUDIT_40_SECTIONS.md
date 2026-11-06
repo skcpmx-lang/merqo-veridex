@@ -1,9 +1,9 @@
 # VERIDEX — 40-section requirements audit
 
-**Commit audited:** `bdb6841a43d7f56a8c4c5628f538c664cc5b46f3`
+**Commit audited:** `90c836d9f6c9656358069e9d2a8f031a231720ab`
 **Requirements audited:** 130 across 39 specification sections, plus the cross-cutting release gates as section 40.
 **Static gate:** `node scripts/check.mjs` → 0 errors, 0 warnings.
-**Test suite:** 819 tests, 819 passing, on ubuntu-latest and windows-latest.
+**Test suite:** 843 tests, 843 passing, on ubuntu-latest and windows-latest.
 
 ## How to read this document
 
@@ -12,8 +12,8 @@ Four claims are kept apart, and nothing is upgraded by being listed near somethi
 | Claim | Meaning | Count in this audit |
 | --- | --- | --- |
 | **Implemented (IM)** | The code exists and is wired into the product. It may not have a dedicated test. | 18 requirements |
-| **Tested (TS)** | An automated test executes the behaviour and fails if it is removed. | 108 requirements |
-| **In progress (IP)** | Part of the requirement exists; the missing part is named in its section below. | 4 requirements |
+| **Tested (TS)** | An automated test executes the behaviour and fails if it is removed. | 110 requirements |
+| **In progress (IP)** | Part of the requirement exists; the missing part is named in its section below. | 2 requirements |
 | **VM-verified (VER)** | A person ran the product on a Windows machine and saw this requirement work. | **0 requirements** |
 | **Physically verified** | A person confirmed behaviour that only hardware can show (a key press, a speaker, a panel). | **0 requirements** |
 
@@ -311,29 +311,28 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 ## 10. Benchmark (spec 08)
 
-**Requirements:** 6 — TS 5, IM 0, IP 1, NS 0
+**Requirements:** 6 — TS 6, IM 0, IP 0, NS 0
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
 | R-08-01 | CPU single-core benchmark with deterministic workload | `src/benchmarking/cpu-bench.js` | `tests/unit/bench-cpu.test.js` | **TS** |
 | R-08-02 | CPU multi-core benchmark with bounded worker pool | `src/benchmarking/cpu-bench.js` | `tests/unit/bench-cpu.test.js` | **TS** |
-| R-08-03 | RAM performance, bandwidth and stability tests | `src/benchmarking/cpu-bench.js + src/benchmarking/worker.js` | `tests/unit/bench-cpu.test.js` | **IP** |
+| R-08-03 | RAM performance, bandwidth and stability tests | `src/benchmarking/cpu-bench.js + src/benchmarking/memory-stability.js` | `tests/unit/bench-cpu.test.js, tests/unit/memory-stability.test.js` | **TS** |
 | R-08-04 | Storage sequential/random read and write benchmark using a non-destructive temp file | `src/benchmarking/disk-bench.js` | `tests/unit/bench-disk.test.js` | **TS** |
 | R-08-05 | GPU performance test where supported, else UNSUPPORTED | `src/benchmarking/gpu-bench.js` | `tests/unit/gpu-responsiveness-recovery.test.js` | **TS** |
 | R-08-06 | System responsiveness composite score from measured subsystems | `src/benchmarking/responsiveness.js` | `tests/unit/gpu-responsiveness-recovery.test.js` | **TS** |
 
 **What a user sees**
 
-- CPU single-core, multi-core and memory bandwidth runs with a median, a spread and a stability check; disk read/write/random-read with a temporary file that is always removed.
+- CPU single-core, multi-core and memory bandwidth runs with a median and a spread; a consent-gated memory write/read-back stability check over a 64–1024 MB buffer; disk read/write/random-read with a temporary file that is always removed.
 - A run can be cancelled from the page; the workers are terminated and no partial figure is recorded.
 - GPU runs a real WebGL fill-rate workload, or reports UNSUPPORTED with the reason.
 - The responsiveness composite is computed over whatever was measured, with the weights and reference points printed.
 
 **Gaps, placeholders and limits**
 
-- R-08-03 stays IP: bandwidth is measured, but the stability half (sustained load, error detection) is the stress runner’s job and is CPU-only.
-- Veridet figures are comparable between VERIDEX runs, not to 3DMark or CrystalDiskMark, and every result says so.
-- In progress in this section: R-08-03.
+- The stability check finds gross faults only: it writes a pattern into a buffer it allocated and reads it back, so a marginal cell, a fault that needs heat, or an error the operating system corrected before the process saw it will not appear. Zero mismatches is reported as UNRATED, never as a pass, and no module is identified.
+- VERIDEX figures are comparable between VERIDEX runs, not to 3DMark or CrystalDiskMark, and every result says so.
 
 **Evidence**
 
@@ -847,20 +846,20 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 ## 30. Offline (spec 26)
 
-**Requirements:** 1 — TS 0, IM 0, IP 1, NS 0
+**Requirements:** 1 — TS 1, IM 0, IP 0, NS 0
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
-| R-26-01 | Offline-first operation, zero paid dependencies, no telemetry, no data upload, license-clean dependencies | `src/security/guard.js` | `tests/integration/no-network.test.js` | **IP** |
+| R-26-01 | Offline-first operation, zero paid dependencies, no telemetry, no data upload, license-clean dependencies | `src/security/guard.js + scripts/licence-audit.mjs` | `tests/integration/no-network.test.js, tests/integration/licence-audit.test.js` | **TS** |
 
 **What a user sees**
 
 - No network client exists in src/; the guard blocks and logs attempts; no dependency makes an outbound call at runtime.
+- Every dependency licence is audited offline by scripts/licence-audit.mjs, which fails the build on an undeclared, copyleft-runtime or unallowlisted licence.
 
 **Gaps, placeholders and limits**
 
-- R-26-01 is IP because “offline-first” also covers the licence-audit script, which does not exist. Dependency licensing is documented in SECURITY.md but not machine-checked.
-- In progress in this section: R-26-01.
+- The licence audit reads the lockfile and the installed manifests, so it cannot see a licence that a future install would introduce until that lockfile exists; it contacts no registry, by design.
 
 **Evidence**
 
@@ -1088,7 +1087,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 | --- | --- | --- |
 | Requirements complete | 130 of 130 implemented, 0 marked NS | `docs/requirements.json`, this document |
 | Static gate | 0 errors, 0 warnings | `node scripts/check.mjs` |
-| Test suite | 819/819 on Linux and Windows | run 42172738818 and successors |
+| Test suite | 843/843 on Linux and Windows | run 42172738818 and successors |
 | Renderer import graph | no Node builtin reachable from the renderer | `tests/integration/renderer-graph.test.js` |
 | Real-window evidence | 21 steps, 32 screenshots, 0 problems | design-evidence runs, `ci/ui-*` branches |
 | Installer and portable build | produced and verified for tree `3281c01`; **stale for the current tree** | `docs/RELEASE_VERIFICATION.md` |
@@ -1106,19 +1105,17 @@ satisfied from inside this session, and neither is a code defect.
 
 | Status | Count |
 | --- | --- |
-| Tested (TS) | 108 |
+| Tested (TS) | 110 |
 | Implemented (IM) | 18 |
-| In progress (IP) | 4 |
+| In progress (IP) | 2 |
 | Not started (NS) | 0 |
 | VM-verified (VER) | 0 |
 | **Total** | **130** |
 
 ### Requirements still partially implemented
 
-- **R-08-03** RAM performance, bandwidth and stability tests — see section 10
 - **R-12-02** Windows components, startup apps, background processes, running services, scheduled tasks, features — see section 15
 - **R-18-02** High-DPI / display-scaling and multi-monitor handling — see section 22
-- **R-26-01** Offline-first operation, zero paid dependencies, no telemetry, no data upload, license-clean dependencies — see section 30
 
 ### What this audit does not prove
 

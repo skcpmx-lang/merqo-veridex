@@ -21,6 +21,7 @@
     "test:integration": "node --test \"tests/integration/*.test.js\"",
     "audit:requirements": "node scripts/audit-requirements.mjs",
     "check": "node scripts/check.mjs",
+    "audit:licences": "node scripts/licence-audit.mjs",
     "icon": "node scripts/build-icon.mjs",
     "build:win": "node scripts/build-icon.mjs && electron-builder --config electron-builder.config.mjs --win nsis portable --x64 --publish never",
     "build:dir": "node scripts/build-icon.mjs && electron-builder --config electron-builder.config.mjs --dir --win --x64",

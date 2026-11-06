@@ -223,6 +223,11 @@ read-only except where it says otherwise:
   present the result as a GPU figure. Frame time and fill rate are not the GPU's peak
   performance, and on a laptop with switchable graphics the figure may belong to the
   integrated adapter.
+- The **memory stability** check needs consent, because it really does allocate the buffer you
+  choose (64–1024 MB) and hold it for the passes you choose. It writes a pattern and reads it
+  back; a word that does not match is real evidence of a fault, but zero mismatches is **not** a
+  clean bill of health and the result is never shown as a pass. It cannot tell you which memory
+  module is at fault.
 - The **responsiveness** composite combines what was actually measured (CPU 35 %, memory
   20 %, disk 25 %, GPU 20 %, renormalised over what ran) and prints its formula and
   reference points beside the score. With fewer than two measured subsystems the score is

@@ -234,7 +234,7 @@ Thirteen channels were added, each with an argument validator in
   `drivers:lastExport`
 - `logs:recent`, `logs:stats`, `logs:export`, `logs:clear`
 
-`src/app/preload.cjs` exposes **43 invoke channels and 9 event channels**. That list is
+`src/app/preload.cjs` exposes **44 invoke channels and 9 event channels**. That list is
 generated from `INVOKE_CHANNELS` and `EVENT_CHANNELS`, not typed by hand: a test compares
 the exposed surface with the contract, and a hand-edited list drifted from it once
 already.

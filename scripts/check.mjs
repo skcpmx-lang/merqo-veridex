@@ -79,9 +79,20 @@ export function findCycles(graph) {
 export function formatProblems(relative, source) {
   const problems = [];
   const lines = source.split('\n');
+
+  // A file checked out with CRLF fails on every line, which buries the one thing the reader needs
+  // to know. When *every* line break is CRLF the finding is made once, for the file, and the
+  // per-line CR check is skipped. This actually happened: a Windows checkout without
+  // .gitattributes produced 39,641 findings and turned a real rule into a wall of noise.
+  const crlfLines = lines.filter((line) => line.endsWith('\r')).length;
+  const uniformCrlf = crlfLines > 0 && crlfLines === lines.length - 1;
+  if (uniformCrlf) {
+    problems.push(`${relative}: carriage returns throughout — this file was checked out with CRLF endings; the repository pins LF in .gitattributes`);
+  }
+
   lines.forEach((line, index) => {
     const where = `${relative}:${index + 1}`;
-    if (line.includes('\r')) problems.push(`${where}: carriage return (this repository uses LF endings)`);
+    if (line.includes('\r') && !uniformCrlf) problems.push(`${where}: carriage return (this repository uses LF endings)`);
     if (/\t/.test(line)) problems.push(`${where}: tab character (this repository indents with two spaces)`);
     if (/[ ]+$/.test(line)) problems.push(`${where}: trailing whitespace`);
   });
@@ -359,7 +370,21 @@ export async function runChecks({ only = null } = {}) {
   return { findings: selected, notes: [...notes] };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+/**
+ * Is this file the one node was asked to run?
+ *
+ * The comparison is case-insensitive on Windows: `C:\repo\scripts\check.mjs` from argv and
+ * `c:\repo\scripts\check.mjs` from import.meta describe one file, and a case mismatch would make
+ * the CLI silently do nothing while exiting zero — a gate that reports success by not running.
+ */
+const isDirectRun = (() => {
+  if (!process.argv[1]) return false;
+  const invoked = path.resolve(process.argv[1]);
+  const self = path.resolve(import.meta.filename ?? '');
+  return process.platform === 'win32' ? invoked.toLowerCase() === self.toLowerCase() : invoked === self;
+})();
+
+if (isDirectRun) {
   // `--only formatting` runs the whole gate but only reports one area. CI uses it for the
   // formatting step so the log says which rule failed instead of repeating every check.
   const onlyIndex = process.argv.indexOf('--only');

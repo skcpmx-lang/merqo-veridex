@@ -53,6 +53,7 @@ const INVOKE = [
   'bench:disk',
   'bench:state',
   'bench:cancel',
+  'bench:memory',
   'bench:gpu',
   'bench:responsiveness',
   'app:recovery',

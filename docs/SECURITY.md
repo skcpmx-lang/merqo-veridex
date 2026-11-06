@@ -81,6 +81,21 @@ The renderer additionally has no Node integration: `contextIsolation` is on,
 `nodeIntegration` is off, and `sandbox` is on. The only path from the interface to the
 system is the narrow, explicitly enumerated surface in `src/app/preload.cjs`.
 
+### 2.5 Dependency licences are audited, offline
+
+`scripts/licence-audit.mjs` reads `package-lock.json`, looks up each package's declared licence
+in its own manifest, and fails the build when a package declares none, declares a licence that
+is not on the allowlist, or carries a strong-copyleft licence (GPL, AGPL, SSPL) in a **runtime**
+dependency. Build-only copyleft is a warning rather than an error, because it never ships.
+
+The audit contacts no registry: it reads files on disk, which is the same constraint the product
+runs under. A licence that cannot be read is an error, not a default — the one exception is
+`png-js`, whose published manifest declares nothing while its upstream repository states MIT;
+that exception is written into the script with its source and review date, and it stays visible
+as a warning.
+
+CI runs it on every push (`npm run audit:licences`).
+
 ---
 
 ## 3. Read-only enforcement

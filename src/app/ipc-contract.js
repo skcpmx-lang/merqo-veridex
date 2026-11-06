@@ -57,6 +57,7 @@ export const CHANNELS = Object.freeze({
   'bench:disk': { args: [], description: 'Run the disk benchmark against a temporary file that is always deleted. Honours the Performance settings.' },
   'bench:state': { args: [], description: 'Last benchmark results, so the page survives navigation.' },
   'bench:cancel': { args: [], description: 'Stop the benchmark that is running and terminate its workers.' },
+  'bench:memory': { args: ['megabytes', 'passes', 'consent'], description: 'Run the bounded memory write/read-back stability check. Requires consent.' },
   'bench:gpu': { args: ['measurement'], description: 'Record a GPU measurement taken by the renderer\'s WebGL context. The main process validates and maps it.' },
   'bench:responsiveness': { args: [], description: 'The responsiveness composite over whatever benchmarks have actually been measured in this session.' },
   'app:recovery': { args: [], description: 'Whether the previous session ended mid-run, and what it was doing.' },
@@ -226,6 +227,22 @@ export function validateRequest(channel, args = []) {
         return { ok: false, reason: 'A monitoring export format is required: csv or json.' };
       }
       return { ok: true, value: { format } };
+    }
+
+    case 'bench:memory': {
+      // Bounds are enforced twice — here and in the engine — because a bad number that reaches
+      // the worker has already allocated the memory this check exists to bound.
+      const consent = named?.consent === true;
+      if (!consent) return { ok: false, reason: 'A memory stability check needs explicit consent.' };
+      const megabytes = Number(named?.megabytes ?? 256);
+      const passes = Number(named?.passes ?? 3);
+      if (!Number.isInteger(megabytes) || megabytes < 64 || megabytes > 1024) {
+        return { ok: false, reason: 'The buffer size must be a whole number of megabytes between 64 and 1024.' };
+      }
+      if (!Number.isInteger(passes) || passes < 1 || passes > 20) {
+        return { ok: false, reason: 'The pass count must be a whole number between 1 and 20.' };
+      }
+      return { ok: true, value: { megabytes, passes, consent } };
     }
 
     case 'report:build':

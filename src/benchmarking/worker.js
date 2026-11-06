@@ -100,6 +100,58 @@ export async function stressWorkload(budgetMs, options = {}) {
 }
 
 /**
+ * Write a deterministic pattern into a buffer, read it back, and count what changed.
+ *
+ * The pattern is computed from the index and never stored twice: comparing against a second copy
+ * would double the memory cost and let one fault corrupt both copies the same way. Recomputation
+ * means a mismatch means "the word read is not the word this index must hold".
+ *
+ * @param {{megabytes:number, passes:number, shouldStop?: () => boolean,
+ *          onPass?: (info: {pass:number, mismatches:number}) => void}} options
+ */
+export async function memoryStabilityWorkload({ megabytes, passes, shouldStop = () => false, onPass = () => {} }) {
+  const bytes = Math.round(megabytes) * 1024 * 1024;
+  const words = Math.max(1, Math.floor(bytes / 4));
+  const buffer = new Uint32Array(words);
+  const pattern = (index) => ((index * 2654435761) ^ 0x9e3779b9) >>> 0;
+
+  let mismatches = 0;
+  let passesCompleted = 0;
+  let bytesVerified = 0;
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    if (shouldStop()) break;
+    // Fill in chunks and yield between them: one 1 GB loop would hold the thread for hundreds of
+    // milliseconds and make the stop button feel broken.
+    for (let start = 0; start < words; start += 65536) {
+      const end = Math.min(words, start + 65536);
+      for (let index = start; index < end; index += 1) buffer[index] = pattern(index);
+      await new Promise((resolve) => setImmediate(resolve));
+      if (shouldStop()) break;
+    }
+    if (shouldStop()) break;
+
+    let passMismatches = 0;
+    for (let start = 0; start < words; start += 65536) {
+      const end = Math.min(words, start + 65536);
+      for (let index = start; index < end; index += 1) {
+        if (buffer[index] !== pattern(index)) passMismatches += 1;
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+      if (shouldStop()) break;
+    }
+
+    mismatches += passMismatches;
+    passesCompleted += 1;
+    bytesVerified += bytes;
+    onPass({ pass: pass + 1, mismatches: passMismatches });
+    if (shouldStop()) break;
+  }
+
+  return { mismatches, passesCompleted, bytesVerified, megabytes };
+}
+
+/**
  * Dispatcher used by the worker entry point.
  * @param {{kind:string, payload:Record<string, unknown>}} task
  */
@@ -133,6 +185,10 @@ export function runTask(task) {
       // Handled asynchronously below; a synchronous case here would block the message port.
       throw new Error('stress tasks are dispatched asynchronously');
     }
+    case 'memory-stability': {
+      // Also asynchronous: it yields between passes so a stop message can be delivered.
+      throw new Error('memory-stability tasks are dispatched asynchronously');
+    }
     case 'noise': {
       // Generates unpredictable bytes so a hash/entropy measurement is not
       // measuring a cache-resident constant.
@@ -149,7 +205,14 @@ export function runTask(task) {
 
 // Only wire up the message port when actually loaded as a worker.
 if (parentPort) {
-  if (workerData?.kind === 'stress') {
+  if (workerData?.kind === 'memory-stability') {
+    memoryStabilityWorkload({
+      megabytes: Number(workerData?.payload?.megabytes ?? 256),
+      passes: Number(workerData?.payload?.passes ?? 3)
+    })
+      .then((result) => parentPort.postMessage({ ok: true, ...result, kind: 'memory-stability' }))
+      .catch((error) => parentPort.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+  } else if (workerData?.kind === 'stress') {
     let stopRequested = false;
     parentPort.on('message', (message) => {
       if (message?.type === 'stop') stopRequested = true;

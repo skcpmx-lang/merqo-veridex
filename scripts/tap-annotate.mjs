@@ -22,7 +22,7 @@ const MAX_DETAIL = 900;
  * @returns {{name:string, detail:string}}
  */
 function parseFailure(lines) {
-  const name = lines[0].replace(/^not ok\s+\d+\s*-\s*/, '').trim();
+  const name = lines[0].replace(/^\s*not ok\s+\d+\s*-\s*/, '').trim();
   const details = [];
   let readingError = false;
 
@@ -67,7 +67,11 @@ export function parseTapFailures(text) {
   let current = null;
 
   for (const line of lines) {
-    if (/^not ok\b/.test(line)) {
+    // Indentation is significant in TAP from `node --test`: a failure inside a file is reported
+    // one level in, and matching only column zero reported "no failing tests" for a run that had
+    // failed. That happened on the Windows leg of a real build, and the only reason it took a
+    // second run to understand was this regex.
+    if (/^\s*not ok\b/.test(line)) {
       if (current) failures.push(parseFailure(current));
       current = [line];
       continue;
@@ -101,5 +105,16 @@ if (process.argv.includes('--summary')) {
     const message = `${failure.name}${failure.detail ? ` — ${failure.detail}` : ''}`;
     console.log(`::error title=Test failed::${message}`);
   }
-  if (failures.length === 0) console.log('::notice title=Tests::no failing tests in the TAP output');
+  if (failures.length === 0) {
+    // No failure line but a non-zero exit is still a failure. Emitting the tail of the output as
+    // an annotation puts the reason where it can be read from the checks API, which is the whole
+    // point of this script: the log download is not always available to whoever is looking.
+    const text = Buffer.concat(chunks).toString('utf8');
+    const tail = text.split(/\r?\n/).filter(Boolean).slice(-40).join(' \u00b6 ').replace(/[%\r\n]+/g, ' ').slice(-MAX_DETAIL);
+    if (/^# fail [1-9]/m.test(text) || /\berror\b/i.test(tail)) {
+      console.log(`::error title=Test run::the runner exited non-zero but printed no failure line. Tail: ${tail}`);
+    } else {
+      console.log('::notice title=Tests::no failing tests in the TAP output');
+    }
+  }
 }

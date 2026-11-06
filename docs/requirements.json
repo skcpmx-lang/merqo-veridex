@@ -844,14 +844,14 @@
       "id": "R-08-03",
       "mod": "08 Benchmark",
       "req": "RAM performance, bandwidth and stability tests",
-      "impl": "src/benchmarking/cpu-bench.js + src/benchmarking/worker.js",
-      "primary": "memory bandwidth workload measured and reported",
-      "alt": "stability test not implemented",
+      "impl": "src/benchmarking/cpu-bench.js + src/benchmarking/memory-stability.js",
+      "primary": "memory bandwidth measured, and a bounded write/read-back stability check over a 64–1024 MB buffer with consent",
+      "alt": "the stability check finds gross faults only; it cannot attribute a fault to a module",
       "perm": "none",
       "ui": "benchmark",
-      "test": "tests/unit/bench-cpu.test.js",
+      "test": "tests/unit/bench-cpu.test.js, tests/unit/memory-stability.test.js",
       "doc": "docs/KNOWN_LIMITATIONS.md",
-      "st": "IP"
+      "st": "TS"
     },
     {
       "id": "R-08-04",
@@ -1551,14 +1551,14 @@
       "id": "R-26-01",
       "mod": "26 Offline",
       "req": "Offline-first operation, zero paid dependencies, no telemetry, no data upload, license-clean dependencies",
-      "impl": "src/security/guard.js",
-      "primary": "no network client exists in src/, enforced by test; nothing is uploaded; no telemetry, no account",
-      "alt": "dependency licence cleanliness is not yet checked by a script",
+      "impl": "src/security/guard.js + scripts/licence-audit.mjs",
+      "primary": "no network client exists in src/, enforced by test; nothing is uploaded; no telemetry, no account; dependency licences audited by scripts/licence-audit.mjs",
+      "alt": "the licence audit reads the lockfile and installed manifests; it does not contact a registry, because the product and its build must work offline",
       "perm": "n/a",
       "ui": "all",
-      "test": "tests/integration/no-network.test.js",
+      "test": "tests/integration/no-network.test.js, tests/integration/licence-audit.test.js",
       "doc": "docs/SECURITY.md",
-      "st": "IP"
+      "st": "TS"
     },
     {
       "id": "R-27-01",

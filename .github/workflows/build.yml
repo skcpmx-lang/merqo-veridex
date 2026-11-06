@@ -56,6 +56,9 @@ jobs:
       - name: Dependency cycles
         run: node scripts/check.mjs --only cycles
 
+      - name: Dependency licences
+        run: npm run audit:licences
+
       - name: Requirement status is consistent with the repository
         run: npm run audit:requirements -- --check
 
@@ -97,7 +100,7 @@ jobs:
         shell: bash
         run: |
           echo "::group::Failing tests"
-          grep -E "^not ok" test-output.tap || echo "no TAP failure lines found"
+          grep -E "^[[:space:]]*not ok" test-output.tap || echo "no TAP failure lines found"
           echo "::endgroup::"
           node scripts/tap-annotate.mjs < test-output.tap
           node scripts/tap-annotate.mjs --summary < test-output.tap
