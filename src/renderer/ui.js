@@ -400,11 +400,12 @@ let toastHost = null;
 const TOAST_LIMIT = 4;
 
 /**
- * The stack inside the application column takes layout space, so it gets a smaller cap: four
- * notifications at full size would take half of a 700px window away from the page being
- * reported on. A floating stack covers nothing but itself and keeps the larger limit.
+ * The stack inside the application column takes layout space, so it shows one notification at a
+ * time: at 700px tall, four full-size toasts took half of the window away from the page they were
+ * reporting on. The newest replaces the previous one, and a floating stack (no shell) keeps the
+ * larger limit because it covers nothing but itself.
  */
-const COLUMN_TOAST_LIMIT = 2;
+const COLUMN_TOAST_LIMIT = 1;
 
 /**
  * The toast container, created once and appended to the document body.

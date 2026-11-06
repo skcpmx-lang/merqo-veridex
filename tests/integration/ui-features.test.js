@@ -239,18 +239,18 @@ test('a toast appears, is dismissable, and is capped in number', { skip }, async
     assert.ok(host, 'the toast region must exist');
     // Inside the application column the stack holds two, because it takes layout space from the
     // page; a floating stack (no shell) still allows four.
-    assert.equal(host.children.length, 2, 'the in-column stack caps at two');
+    assert.equal(host.children.length, 1, 'the in-column stack shows one at a time');
     assert.match(host.textContent, /Event 5/, 'the newest toast must survive the cap');
-    assert.match(host.textContent, /Event 4/, 'the second newest must survive too');
+    assert.ok(!/Event 4/.test(host.textContent), 'the superseded toast must be gone');
 
     // The page reserves room for the stack while it is on screen, so the last card is never
     // permanently underneath a notification.
-    assert.equal(window.document.body.dataset.toasts, '2', 'the page must know toasts are on screen');
+    assert.equal(window.document.body.dataset.toasts, '1', 'the page must know a toast is on screen');
 
     const close = host.querySelector('.vx-toast__close');
     close.click();
-    await waitFor(() => host.children.length === 1, { label: 'the dismissed toast to leave' });
-    assert.equal(window.document.body.dataset.toasts, '1', 'the marker must follow the stack');
+    await waitFor(() => host.children.length === 0, { label: 'the dismissed toast to leave' });
+    assert.equal(window.document.body.dataset.toasts, undefined, 'the marker must be released');
 
     for (const node of [...host.children]) host.removeChild(node);
     await waitFor(() => window.document.body.dataset.toasts === undefined, { label: 'the reserve to be released' });
