@@ -212,12 +212,9 @@ body { overflow: hidden; }
 
 .vx-content {
   padding: var(--vx-space-xl);
-  /* The toast stack is fixed over the bottom-right corner. Without this the last row of a page
-     sat underneath it: the settings screenshot ended with a control half-hidden behind "Ready".
-     A constant reserve could only fit one toast, so the reserve grows while toasts are on screen
-     (body[data-toasts], set by ui.js) and the reader can always scroll the last card clear. */
-  padding-bottom: calc(var(--vx-space-xl) + 56px);
-  transition: padding-bottom var(--vx-motion) ease-out;
+  /* The toast stack sits below this region inside the application column, so no permanent
+     reserve is needed. The small extra bottom gap keeps the last card's border off the edge. */
+  padding-bottom: calc(var(--vx-space-xl) + 8px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -225,10 +222,6 @@ body { overflow: hidden; }
   scrollbar-width: thin;
   scrollbar-color: var(--vx-line) transparent;
 }
-
-/* While notifications are on screen, the page reserves their height as well: one toast is about
-   88px, and four (the cap) is about 320px. */
-body[data-toasts] .vx-content { padding-bottom: calc(var(--vx-space-xl) + 152px); }
 
 /* A thin, theme-coloured scrollbar instead of the operating system's default ridge, which is
    the one element on screen that ignores every token in this file. */
@@ -871,15 +864,28 @@ select.vx-row__value:hover,
 */
 
 .vx-toasts {
-  position: fixed;
-  right: var(--vx-space-lg);
-  bottom: var(--vx-space-lg);
   z-index: 60;
   display: flex;
   flex-direction: column;
   gap: var(--vx-space-sm);
+  align-items: flex-end;
   width: min(360px, calc(100vw - 2 * var(--vx-space-lg)));
   pointer-events: none;
+}
+
+/* Inside the application column the stack takes part in the layout: it sits at the bottom right
+   of the window, above nothing, and the content region shrinks by its height while it is there.
+   Outside the column (a page with no shell) it falls back to a floating stack. */
+.vx-main > .vx-toasts {
+  align-self: flex-end;
+  flex: 0 0 auto;
+  padding: var(--vx-space-md) var(--vx-space-xl) var(--vx-space-lg);
+}
+
+body > .vx-toasts {
+  position: fixed;
+  right: var(--vx-space-lg);
+  bottom: var(--vx-space-lg);
 }
 
 .vx-toast {

@@ -407,7 +407,11 @@ function ensureToastHost() {
   if (typeof document === 'undefined' || !document.body) return null;
   if (toastHost && toastHost.isConnected) return toastHost;
   toastHost = el('div', { class: 'vx-toasts', attrs: { role: 'region', 'aria-live': 'polite', 'aria-label': 'Notifications' } });
-  document.body.append(toastHost);
+  // Inside the application column when there is one, so the stack takes layout space at the
+  // bottom of the window instead of floating over a card. A notification that covers the value
+  // it is reporting on is worse than the seconds it saves.
+  const column = document.getElementById('vx-main');
+  (column ?? document.body).append(toastHost);
   // The stack floats over the content, so the content needs to know it is there: with the
   // attribute set, the scroll container reserves room for the toast instead of the last card
   // sitting underneath it. A marker rather than a measurement, because the number of toasts is

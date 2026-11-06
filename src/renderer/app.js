@@ -2583,7 +2583,7 @@ async function boot() {
   topbar = buildTopbar();
   contentHost = el('main', { class: 'vx-content', attrs: { id: 'vx-content' } });
 
-  const main = el('div', { class: 'vx-main', children: [topbar, contentHost] });
+  const main = el('div', { class: 'vx-main', attrs: { id: 'vx-main' }, children: [topbar, contentHost] });
   app.append(buildSidebar(), main);
 
   subscribe();
