@@ -32,7 +32,7 @@ Recorded runs:
 | [`42172738818`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738818) | push | ✅ Linux and Windows: 725 tests, static checks clean |
 | [`42172738822`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738822) | push (design evidence) | ✅ 21 steps, 32 screenshots, 0 problems, including the populated pages |
 | [`42179901603`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42179901603) | push | ❌ Linux and Windows: Windows failed, and the annotation said "no failing tests" — the annotation script only matched `not ok` at column zero, and the real failure was the new formatting rule meeting a checkout that had converted 145 files to CRLF |
-| [`42182778326`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42182778326) | push | ✅ Linux and Windows: 881 tests, static checks 0/0, licence audit clean, live platform smoke on real WMI (1,094 fields, 19 modules, score 84, 75 % coverage) |
+| [`42182778326`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42182778326) | push | ✅ Linux and Windows: 899 tests, static checks 0/0, licence audit clean, live platform smoke on real WMI (1,094 fields, 19 modules, score 84, 75 % coverage) |
 | [`42184099160`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184099160) | push (design evidence) | ❌ new step threw "Script failed to execute": a backslash-n inside a template literal arrived at the renderer as a real newline in a regex |
 | [`42184459268`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184459268) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems — includes the memory, GPU and responsiveness cards and the arrangement editor |
 | [`42185390234`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42185390234) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems, and the memory card's consent row now reads correctly |
@@ -43,6 +43,49 @@ Recorded runs:
 
 
 ---
+
+## The four failed release runs, and what was actually wrong
+
+Four dispatches of `release.yml` failed in about ninety seconds each, every one of them at step 4,
+"Check that the tag does not already exist" — on a repository with **zero tags**, local or remote,
+and no releases of any kind. Two different messages appeared:
+
+| Run | Message | Reason the message was wrong |
+| --- | --- | --- |
+| `42208714920` | `Tag v1.0.0 already exists.` | no `v1.0.0` existed; the guard could not tell absence from presence |
+| `42210187021` | `Tag vv1.0.0 already exists.` | the same, plus the input was `v1.0.0` and the workflow prefixed another `v` |
+
+**Cause one — the guard was always true.** It read:
+
+```pwsh
+if (git rev-parse "v${{ inputs.version }}" 2>$null) { throw "Tag ... already exists." }
+```
+
+`git rev-parse v1.0.0` prints `v1.0.0` to **stdout** even when it cannot resolve it — that
+echo-back is documented git behaviour, and this repository reproduces it: exit code 128, and a
+line on stdout. The `2>$null` removed the fatal message and left the echo. PowerShell's `if` then
+tested a non-empty string, which is true, so the step threw on every run, before the build, the
+tests or anything else could start. The correct check is `git rev-parse --verify --quiet
+"refs/tags/$TAG^{commit}"`, which is silent on stdout and exits non-zero when the ref is absent.
+
+**Cause two — no normalisation.** Nothing stopped `v1.0.0` from being pasted after a `v`, so the
+tag name depended on which of two spellings a person typed. That is how `vv1.0.0` appeared.
+
+### The fix
+
+`scripts/release-version.mjs` is now the single authority, called twice by the workflow:
+
+| Call | Input | Output |
+| --- | --- | --- |
+| `node scripts/release-version.mjs "$INPUT_VERSION" --github-env` | `1.0.0`, `v1.0.0`, `V1.0.0`, `vv1.0.0`, `1.2.3-rc.1` | `VERSION`, `TAG=v…`, `PRERELEASE` in `$GITHUB_ENV`; `1.0` and junk are refused by name |
+| `node scripts/release-version.mjs --decide --tag … --target … --existing … --release-exists …` | what the repository actually contains | `TAG_ACTION=create` (no tag), `reuse` (tag on this commit), or a refusal (tag on another commit, or a release that already exists) |
+
+Every later step reads `$TAG` and `$VERSION`; no step builds a tag name by hand. The tag is
+created annotated on `$GITHUB_SHA`, `gh release create` gets `--verify-tag`, and nothing in the
+workflow can force, move or delete a tag. Eighteen tests pin the arithmetic and the workflow text,
+and each of the three original defects was reintroduced deliberately to confirm the suite fails:
+the guard, the hand-built tag, and a single-quoted `$env:` reference that would have published
+the literal text "VERIDEX $env:VERSION" to the release page.
 
 ## State after the merge
 

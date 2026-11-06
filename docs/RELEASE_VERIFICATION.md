@@ -147,7 +147,7 @@ can be completed without a physical machine — see §2 and §7.
 - these hashes belong to the build from that run. Any later commit produces a different binary:
   when publishing, take the SHA-256 from the run that produced the artifact you are publishing,
   not from this table;
-- the full test suite passes on Windows as well as Linux (881 tests at the time of writing);
+- the full test suite passes on Windows as well as Linux (899 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
@@ -211,10 +211,29 @@ machine, and nothing in this document becomes **L4** evidence until that happens
 
 ---
 
+## 0. Versioning — one tag name, decided by one file
+
+The canonical tag for version `X.Y.Z` is `vX.Y.Z`, and `scripts/release-version.mjs` is the only
+thing that decides it. `1.0.0`, `v1.0.0`, `V1.0.0` and `vv1.0.0` all produce `v1.0.0`; `1.0`,
+`1.0.0 beta` and an empty field are refused with a message that says what to type instead.
+
+Before publishing, the workflow asks the repository what it contains and acts on the answer:
+
+| Observed | Action |
+| --- | --- |
+| no tag | create `vX.Y.Z` annotated on the dispatched commit, then publish |
+| tag already on that commit | reuse the tag, never move it |
+| tag on a different commit | **refuse**, print both commit ids, and change nothing |
+| a GitHub Release for the tag already exists | **refuse**; a duplicate release is never created |
+
+This replaced a guard that could not tell a missing tag from an existing one — it threw on four
+consecutive dispatches while the repository held no tags at all, which is recorded with the exact
+cause in `GITHUB_ACTIONS.md`.
+
 ## 1. Build — performed by CI on windows-latest
 
 - [x] `npm ci` completes from a clean checkout
-- [x] `npm test` passes with zero failures (881 tests, both platforms)
+- [x] `npm test` passes with zero failures (899 tests, both platforms)
 - [x] `npm run check` reports 0 errors
 - [x] `npm run audit:requirements -- --check` reports no inconsistency
 - [x] `npm run build:win` produces an NSIS installer and a portable executable
