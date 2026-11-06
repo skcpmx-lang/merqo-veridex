@@ -411,6 +411,13 @@ export function defaultSettings() {
 export function coerce(spec, raw) {
   const reject = (reason) => ({ value: structuredClone(spec.default), ok: false, reason: `${spec.key}: ${reason}` });
 
+  // A setting whose default is null must be able to hold null. Two of them could not: the tour
+  // writes `firstRunStep: null` when it finishes and `firstRunCompletedAt: null` when it is
+  // reset, both were rejected as "expected a string", and the rejection was only visible in the
+  // runner's portable-smoke log ("setting rejected ... privacy.firstRunStep"). Every setting can
+  // now store its own default, which is the minimum a default implies.
+  if (raw === null && spec.default === null) return { value: null, ok: true };
+
   switch (spec.type) {
     case 'boolean':
       if (typeof raw === 'boolean') return { value: raw, ok: true };

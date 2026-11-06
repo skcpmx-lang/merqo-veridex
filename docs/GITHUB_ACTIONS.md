@@ -23,6 +23,9 @@ Recorded runs:
 | [`42013425380`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42013425380) | push | ✅ first green run on Windows and Linux |
 | [`42014598911`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42014598911) | pull request | ✅ including a real Windows installer build |
 | [`42030263971`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42030263971) | pull request | ✅ build + artifact verification + build manifest |
+| [`42154677493`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42154677493) | push | ✅ GUI 13 steps, install 17 checks, portable 10 checks, 0 problems |
+| [`42157700654`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42157700654) | pull request | ❌ package job: two gui-smoke problems (tour missing, report label) — both real, both fixed |
+| [`42158921882`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42158921882) | pull request | ✅ both fixes confirmed on Windows: GUI 19 steps, install 18 checks, portable 10 checks, 0 problems |
 
 Before run 42013425380 the workflow had been **failing on every push since it was added**,
 and this document incorrectly said it had not run at all. That was wrong in a way worth
@@ -30,6 +33,38 @@ recording: the workflow existed, executed, and failed, while the documentation a
 silence. The failures were real and only visible on Windows — see the commit history for
 `ci: replace fixed sleeps with condition polling` and `fix(test): remove two host-dependent
 assumptions`.
+
+### 1.1 Reading a run's evidence when the log cannot be downloaded
+
+A CI log and an artifact are not the only things a run publishes. Every `::notice`,
+`::warning` and `::error` the harnesses print becomes an annotation on the commit's check
+run, and the annotations API answers when `gh run view --log-failed`, `gh run download` and
+blob storage do not:
+
+```bash
+# every check run for a commit, with its id
+gh api repos/skcpmx-lang/merqo-veridex/commits/<sha>/check-runs \
+  --jq '.check_runs[] | "\(.id) \(.name) \(.conclusion)"'
+
+# what that run said, in its own words
+gh api repos/skcpmx-lang/merqo-veridex/check-runs/<id>/annotations \
+  --jq '.[] | "[\(.annotation_level)] \(.title): \(.message)"'
+```
+
+This is not a workaround for a broken workflow; it is the intended reading path for a build
+nobody can attach to. `scripts/tap-annotate.mjs` turns test failures into annotations, and
+the GUI, portable and install harnesses emit one per finding, precisely so that the answer
+is available without the log. Two failures in this repository were found this way and
+nowhere else — neither reproduces under jsdom:
+
+- the first-run tour never appearing, because `createWindow()` ran before
+  `registerHandlers()` and a fast renderer invoked a channel with no handler;
+- the report preview "missing" its `Evidence fields` label, because `innerText` returns text
+  as rendered and `text-transform: uppercase` changed it.
+
+Artifacts (`veridex-gui-evidence`, the installers) may still be unreachable from a machine
+whose network policy stops at the storage host. That is a limitation of where the reader is
+sitting, not of the run; say so, rather than claiming the screenshots were reviewed.
 
 ---
 
@@ -86,7 +121,7 @@ installs". Each writes a JSON verdict, uploads it as the `veridex-gui-evidence` 
 emits one annotation per problem, because the job log is not always reachable and a failure
 that cannot be read is a failure that cannot be fixed.
 
-Measured on `windows-latest`: **117.4 MiB installer, 106.5 MiB portable**. The GUI sweep takes
+Measured on `windows-latest`: **117.5 MiB installer, 106.5 MiB portable**. The GUI sweep takes
 about thirty seconds with a three-task scan, the portable check fifteen, the install lifecycle
 twenty-three; packaging itself is around two and a half minutes. The build also writes `dist/BUILD-MANIFEST.txt` (version,
 commit, runner, per-artifact sizes and digests) and emits the same facts as `::notice`

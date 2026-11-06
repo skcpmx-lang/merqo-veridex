@@ -16,7 +16,7 @@ listed here as **NOT VERIFIED**.
 | | |
 | --- | --- |
 | Release candidate | `1.0.0`, built by CI — installed, launched and removed on a Windows runner |
-| Build produced | **Yes** — Windows x64 installer and portable; CI run 42154677493 built, installed, launched and removed it |
+| Build produced | **Yes** — Windows x64 installer and portable; CI run 42158921882 built, installed, launched and removed it |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
 | Result | **Installed, launched, uninstalled on a VM. Still never run on physical hardware.** |
@@ -29,14 +29,18 @@ an SSD and a discrete GPU in it.
 
 ## What has been established, and what has not
 
-**Established** (Windows Server 2025 runner, `windows-latest`, CI run 42154677493):
+**Established** (Windows Server 2025 runner, `windows-latest`, CI run 42158921882):
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `90a5602b6f4a5c72b68ed7838ea9308cd85d0303cbd3439c03ca9da76fd511c0` |
-| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `3627a41d3e3ce6e7c73c5ac6afad19099fa61766699da23c8aafb378e9d7ff0a` |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.5 MiB | `8aa98c2ee76087d3a954a0328168f5f51a0dcd284e3f0df0b06a6cdec428f426` |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `63e8a3468f5f1e7019ee78725b54a2a866c697330a59e7a32d1b2ea4c8ad97ed` |
 
-- the full test suite passes on Windows as well as Linux (711 tests at the time of writing);
+- the GUI harness drove the real window through 19 steps with 0 warnings and 0 problems;
+- these hashes belong to the build from that run. Any later commit produces a different binary:
+  when publishing, take the SHA-256 from the run that produced the artifact you are publishing,
+  not from this table;
+- the full test suite passes on Windows as well as Linux (712 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
@@ -51,7 +55,7 @@ an SSD and a discrete GPU in it.
 - **the installer installed**: silently, per-user, into `%LOCALAPPDATA%\Programs\VERIDEX`,
   with an uninstaller and both shortcuts; **the installed application then launched and
   worked** — title, preload bridge with 32 invoke channels, a real `app:info` call, and all
-  18 pages rendered from inside the installed build — and **the uninstaller removed it**; 17 checks,
+  18 pages rendered from inside the installed build — and **the uninstaller removed it**; 18 checks,
   no problems.
 
 **Not established — and these are the reasons no release is published:**
@@ -89,7 +93,7 @@ machine, and nothing in this document becomes **L4** evidence until that happens
 ## 1. Build — performed by CI on windows-latest
 
 - [x] `npm ci` completes from a clean checkout
-- [x] `npm test` passes with zero failures (711 tests, both platforms)
+- [x] `npm test` passes with zero failures (712 tests, both platforms)
 - [x] `npm run check` reports 0 errors
 - [x] `npm run audit:requirements -- --check` reports no inconsistency
 - [x] `npm run build:win` produces an NSIS installer and a portable executable

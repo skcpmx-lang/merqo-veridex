@@ -77,7 +77,7 @@ about a real PC.
 | UAC elevation | `detectPermissionState` | **L3** | The elevation probe ran for real on the runner and correctly detected an elevated session. **The UAC prompt itself has still never appeared.** |
 | Read-only guard | `FORBIDDEN_COMMANDS` | **L2** | 16 destructive lines refused, 11 read-only permitted, tested. |
 | Keyboard, mouse, touchpad, audio, microphone, camera, ports | — | **L1** | Requirement R-16-01 (vendor-agnostic detection) and the input-device modules are **not started**. The manual checklist covers some of this by asking the user to look. |
-| Packaged application | Electron + NSIS | **L3** | Built, installed, launched and uninstalled on the Windows runner (CI run 42154677493): 13 GUI steps, 17 install-lifecycle checks, 10 portable checks, no problems. **Never installed on physical hardware and never seen by a person.** |
+| Packaged application | Electron + NSIS | **L3** | Built, installed, launched and uninstalled on the Windows runner (CI run 42158921882): 19 GUI steps, 18 install-lifecycle checks, 10 portable checks, no problems. **Never installed on physical hardware and never seen by a person.** |
 
 ---
 
@@ -178,7 +178,7 @@ touching it may be marked VER.
 
 | Fact | Value |
 | --- | --- |
-| Installer | `VERIDEX-Setup-1.0.0-x64.exe`, 117.4 MiB |
+| Installer | `VERIDEX-Setup-1.0.0-x64.exe`, 117.5 MiB |
 | Installer SHA-256 | `8650933234b3f4e22b3a8e2aabd2e48b2d2311d08cb8fd9573bfc528a848a0e9` |
 | Portable | `VERIDEX-1.0.0-portable-x64.exe`, 106.5 MiB |
 | Portable SHA-256 | `6da0e220dfec25651e5c9e143ef7fbddb8c744fade85965683a0a7e641a9ffa7` |

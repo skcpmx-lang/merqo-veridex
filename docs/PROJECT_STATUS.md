@@ -19,9 +19,9 @@ is the narrative summary of it.
 | Implemented, untested | 18 |
 | In progress | 10 |
 | Not started | 3 |
-| Automated tests | 711, all passing |
+| Automated tests | 712, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
-| Build | **produced** on Windows: installer 117.4 MiB + portable 106.5 MiB, unsigned |
+| Build | **produced** on Windows: installer 117.5 MiB + portable 106.5 MiB, unsigned |
 
 The headline: **the application now builds on Windows, its full test suite passes there, and
 the packaged build has been installed, launched and uninstalled on a Windows virtual

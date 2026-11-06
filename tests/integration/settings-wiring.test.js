@@ -187,3 +187,15 @@ test('an invalid value stored on disk is rejected and the default kept', async (
   assert.equal(withinRange.ok, true);
   assert.equal(monitorOptions(store).intervalMs, 2000, 'a valid change must reach the consumer');
 });
+
+test('every setting can store its own default, null included', async () => {
+  // Found in the Windows portable-smoke log, not here: "setting rejected ... privacy.firstRunStep:
+  // expected a string up to 400 characters". The tour writes null when it finishes and when it
+  // is reset, and the validator refused null for every string setting - so a completed tour
+  // could not clear the step it had reached. The general rule is the one asserted: a default
+  // that the validator rejects is not a usable default.
+  const { SETTINGS_SPEC, coerce } = await import('../../src/core/settings.js');
+  const unusable = SETTINGS_SPEC.filter((spec) => !coerce(spec, spec.default).ok)
+    .map((spec) => `${spec.key} (${coerce(spec, spec.default).reason})`);
+  assert.deepEqual(unusable, [], `these settings reject their own default: ${unusable.join(', ')}`);
+});

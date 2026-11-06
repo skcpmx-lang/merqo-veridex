@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 711 · pass 711 · fail 0
+tests 712 · pass 712 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -95,10 +95,10 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/report-consistency.test.js` | 14 | one scan, four formats, compared field by field |
 | `tests/integration/scan-path.test.js` | 12 | the twelve scan:last data-flow checks from engine to report |
 | `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
-| `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults, engine-side coverage |
+| `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **711** | |
+| **Total** | **712** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is
@@ -153,7 +153,7 @@ Stated plainly, because this is the section that matters:
 4. ~~That the installer installs.~~ **Done.** `npm run smoke:install` runs the real installer
    silently on the Windows runner, launches the installed application, checks its window,
    title, preload bridge, one IPC round trip and all 18 pages, then runs the uninstaller and
-   confirms the files, directory and shortcuts are gone. 17 checks, no problems.
+   confirms the files, directory and shortcuts are gone. 18 checks, no problems.
 5. **That performance is acceptable on real hardware.** The ~800 ms cold / ~200 ms warm figure comes from
    this container running providers that mostly return `UNSUPPORTED` immediately. It says
    nothing about a Windows machine running 28 real queries.
