@@ -1,0 +1,333 @@
+name: Build and test
+
+# Runs on every push and pull request. Three jobs, in increasing cost:
+#   verify   — fast, portable, no Windows needed (lint/static checks + unit tests)
+#   test     — unit + integration tests on Linux and Windows
+#   package  — a real Windows build of the installer and portable zip, as an artifact
+#
+# The packaging job only runs on `main` or when manually dispatched, because a full
+# Electron build is slow and produces a large artifact.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      # The only evidence that cannot be read through the checks API is a screenshot.
+      # Dispatching with this on publishes the GUI shots to a throwaway branch, so a
+      # reviewer whose network stops at the artifact host can still look at them.
+      capture_evidence:
+        description: 'Publish GUI screenshots to a ci/evidence-<run> branch for review'
+        type: boolean
+        default: false
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  verify:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Static checks
+        run: npm run check
+
+      - name: Formatting policy
+        run: node scripts/check.mjs --only formatting
+
+      - name: Dependency cycles
+        run: node scripts/check.mjs --only cycles
+
+      - name: Dependency licences
+        run: npm run audit:licences
+
+      - name: Requirement status is consistent with the repository
+        run: npm run audit:requirements -- --check
+
+  test:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the application icon
+        run: npm run icon
+
+      # The test output is written to a file as well as the console. When a test fails on
+      # a runner nobody can attach to, the log is the only evidence - and GitHub's log
+      # download endpoint is not always reachable from every environment. Writing the raw
+      # TAP output to a file, then surfacing each failure as an annotation, keeps the
+      # failure visible in the checks API where it can always be read.
+      - name: Unit and integration tests
+        run: |
+          npm test > test-output.tap 2>&1 || TEST_FAILED=1
+          cat test-output.tap
+          exit ${TEST_FAILED:-0}
+        shell: bash
+
+      - name: Surface failing tests as annotations
+        if: failure()
+        shell: bash
+        run: |
+          echo "::group::Failing tests"
+          grep -E "^[[:space:]]*not ok" test-output.tap || echo "no TAP failure lines found"
+          echo "::endgroup::"
+          node scripts/tap-annotate.mjs < test-output.tap
+          node scripts/tap-annotate.mjs --summary < test-output.tap
+
+      # On Windows the diagnostic layer is additionally exercised against the *real*
+      # interfaces: real WMI, real PowerShell, the real registry, and a real 15-task sweep.
+      # This is the only place in the project where a provider issues an actual command,
+      # and it runs on the real Electron build's target OS. It does not prove real hardware
+      # behaviour (a runner is a VM with synthetic devices), but it does prove that the
+      # command paths execute and that every field they produce is well formed.
+      - name: Live platform smoke test (real WMI, PowerShell, registry)
+        if: runner.os == 'Windows'
+        run: node scripts/live-smoke.mjs --json live-smoke.json
+        shell: bash
+        continue-on-error: false
+
+      - name: Upload test output on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            test-output.tap
+            live-smoke.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package:
+    name: Windows package
+    needs: [verify, test]
+    # A real installer is built for `main`, for a manual dispatch, and for every pull
+    # request. The pull-request case exists so a reviewer can inspect the artifact a
+    # change actually produces instead of trusting that it would build: "the packaging
+    # config is valid" and "an installer came out of it" are different claims. These
+    # builds are never published - only the release workflow publishes, and only when a
+    # person dispatches it.
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[evidence]'))
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate the application icon
+        run: npm run icon
+
+      - name: Build installer and portable zip
+        run: npm run build:win
+        env:
+          # An empty CSC_LINK keeps electron-builder from looking for a certificate.
+          # VERIDEX ships unsigned and the release notes say so.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify the artifacts
+        run: npm run verify:artifacts
+
+      # Inspecting the unpacked application is the last check that needs no execution.
+      # It answers a different question from verify-artifacts: not "did a build come out",
+      # but "is the application inside it". A window with no renderer, a package with no
+      # preload, or an executable with no version metadata all pass a size check and all
+      # break for the user.
+      - name: Validate the packaged application
+        run: node scripts/verify-package.mjs --dir dist/win-unpacked --json package-validation.json
+
+      # The first time in this project's history that the application is actually launched.
+      # windows-latest has a desktop session, so this is a real BrowserWindow with a real
+      # renderer, and the harness drives it through every page, a sweep, history, live
+      # monitoring, settings, report generation, cancellation and shutdown.
+      #
+      # It runs the unpacked build rather than the installed copy, because installing needs
+      # an interactive desktop that a runner does not fully provide. The installer test
+      # below covers installation separately.
+      - name: GUI smoke test — unpacked application
+        run: node scripts/gui-smoke.mjs --dist dist/win-unpacked --json gui-smoke-unpacked.json
+        # The sweep alone can take ten minutes on a cold virtual machine, and this step is
+        # the only place the product is executed at all, so it gets room rather than a
+        # timeout that reports "did not report" while the app is still working.
+        timeout-minutes: 20
+
+      # The portable build is a self-extracting wrapper: the executable the user double-clicks
+      # is not the one that runs. It is therefore checked separately, and against the real
+      # release artifact rather than the unpacked directory.
+      - name: Portable executable — launch check
+        run: node scripts/portable-smoke.mjs --json portable-smoke.json
+        timeout-minutes: 12
+
+      # The installer has never been installed until this step runs. Everything above tests the
+      # unpacked build, which says nothing about whether the installer installs, the installed
+      # application starts from where it was installed, or the uninstaller removes it.
+      # `if: always()` so this runs even when the portable check above has failed: the two
+      # artifacts are independent, and a job that stops at the first failure hides the second
+      # answer for another ten-minute round trip.
+      - name: Installer — silent install, launch, uninstall
+        if: always()
+        run: node scripts/install-smoke.mjs --json install-smoke.json
+        timeout-minutes: 20
+
+      - name: Upload GUI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veridex-gui-evidence
+          path: |
+            gui-smoke-unpacked.json
+            package-validation.json
+            portable-smoke.json
+            install-smoke.json
+            gui-shots/**
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # The manifest is the evidence. Anyone reviewing this run can read the exact
+      # artifacts and their digests without downloading 200 MB, and the file is uploaded
+      # beside them so the two can be compared later. The `::notice` lines put the same
+      # facts in the checks API, where they remain readable even when the log download
+      # endpoint is unreachable.
+      - name: Write and publish the build manifest
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $lines = @()
+          $lines += "VERIDEX build manifest"
+          $lines += "version: $version"
+          $lines += "commit: $env:GITHUB_SHA"
+          $lines += "built on: $env:RUNNER_OS $env:RUNNER_ARCH, Node $(node --version)"
+          $lines += "signed: no"
+          $lines += ""
+          $lines += "artifacts:"
+          Get-ChildItem dist -File | Where-Object { $_.Name -match '\.(exe|zip)$' } | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            $lines += "  $($_.Name)  $($_.Length) bytes  sha256=$hash"
+            Write-Host "::notice title=Artifact::$($_.Name) - $([math]::Round($_.Length/1MB,1)) MiB - sha256 $hash"
+          }
+          $lines += ""
+          $lines += "SHA256SUMS.txt:"
+          $lines += (Get-Content dist/SHA256SUMS.txt | ForEach-Object { "  $_" })
+          $lines += ""
+          $lines += "VERIFIED on this machine: the installer installs silently and per-user, the"
+          $lines += "installed application launches and works, and the uninstaller removes it. The"
+          $lines += "portable executable was launched and worked from its extraction directory."
+          $lines += "NOT VERIFIED: anything on physical hardware, code signing, or the findings of a"
+          $lines += "physical-machine diagnostic. See docs/RELEASE_VERIFICATION.md."
+          $lines | Set-Content dist/BUILD-MANIFEST.txt -Encoding utf8
+          Get-Content dist/BUILD-MANIFEST.txt
+          Get-Content dist/BUILD-MANIFEST.txt >> $env:GITHUB_STEP_SUMMARY
+        shell: pwsh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veridex-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            dist/BUILD-MANIFEST.txt
+          retention-days: 30
+
+  # The screenshots are the one piece of evidence a run produces that cannot be read
+  # through the checks API: artifacts are served from a storage host that some networks
+  # cannot reach, and a screenshot cannot be described in an annotation. This job exists
+  # so the images can be *looked at* rather than assumed, by publishing them to a
+  # throwaway branch that anyone with repository read access can fetch.
+  #
+  # It runs only when asked: either a dispatch with `capture_evidence`, or a commit whose
+  # message contains the marker below (which is how a maintainer without Actions API access
+  # can request it). Ordinary pushes never write to the repository. The branch is
+  # `ci/evidence-<run id>`: it is a snapshot, it is never merged, and it is safe to delete.
+  publish-evidence:
+    name: Publish GUI evidence
+    needs: package
+    if: >-
+      always() && (
+        inputs.capture_evidence ||
+        (github.event_name == 'push' && contains(github.event.head_commit.message, '[evidence]'))
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the evidence artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: veridex-gui-evidence
+          path: evidence
+
+      - name: Publish it to a branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          shots=$(find evidence/gui-shots -type f | wc -l)
+          if [ "$shots" -eq 0 ]; then
+            echo "::warning title=evidence::the run produced no screenshots to publish"
+            exit 0
+          fi
+          branch="ci/evidence-${GITHUB_RUN_ID}"
+          git config user.name 'VERIDEX evidence'
+          git config user.email 'actions@users.noreply.github.com'
+          git checkout -q --orphan "$branch"
+          git rm -rq --cached . >/dev/null 2>&1 || true
+          rm -rf src tests scripts docs assets dist package.json package-lock.json
+          mv evidence/* .
+          rmdir evidence 2>/dev/null || true
+          {
+            echo "# GUI evidence from run ${GITHUB_RUN_ID}"
+            echo
+            echo "Commit: ${GITHUB_SHA}  ·  branch: ${GITHUB_REF_NAME}"
+            echo
+            echo "Produced by \`gui-smoke\` on windows-latest. This branch is a snapshot for review;"
+            echo "it is not part of the application and is safe to delete."
+            echo
+            echo "\`\`\`"
+            echo "$shots screenshot(s)"
+            echo "\`\`\`"
+          } > README.md
+          git add -A
+          git commit -q -m "GUI evidence from run ${GITHUB_RUN_ID}"
+          git push -q origin "$branch"
+          echo "::notice title=evidence::published ${shots} screenshot(s) to ${branch}"

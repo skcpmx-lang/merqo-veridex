@@ -1,0 +1,132 @@
+name: Release
+
+# Publishing is manual by design. A diagnostic tool that ships straight from a green
+# pipeline encourages unverified releases; VERIDEX releases are cut by a person who has
+# read docs/RELEASE_VERIFICATION.md and filled it in.
+#
+# Trigger either from the Actions tab or with:
+#   gh workflow run release.yml -f version=1.0.0
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (e.g. 1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as a pre-release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Check that the tag does not already exist
+        run: |
+          if (git rev-parse "v${{ inputs.version }}" 2>$null) { throw "Tag v${{ inputs.version }} already exists." }
+        shell: pwsh
+
+      - name: Set the version in package.json
+        run: |
+          $json = Get-Content package.json -Raw | ConvertFrom-Json
+          $json.version = '${{ inputs.version }}'
+          $json | ConvertTo-Json -Depth 20 | Set-Content package.json
+        shell: pwsh
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tests must pass before anything is published
+        run: npm test
+        shell: bash
+
+      - name: Static checks
+        run: npm run check
+
+      - name: Build
+        run: npm run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify artifacts and write checksums
+        run: npm run verify:artifacts
+
+      - name: Create the tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag "v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
+          $notes = @'
+          ## VERIDEX ${{ inputs.version }}
+
+          ### This build is unsigned
+
+          No code-signing certificate is available for this project, so the installer and
+          executables are **unsigned**. Windows SmartScreen will show a warning on first
+          run: choose *More info* then *Run anyway* only if you downloaded the file from
+          this release page.
+
+          Verify what you downloaded before running it:
+
+          ```
+          Get-FileHash .\VERIDEX-Setup-${{ inputs.version }}-x64.exe -Algorithm SHA256
+          ```
+
+          and compare the result with `SHA256SUMS.txt` below.
+
+          ### What has been verified, and what has not
+
+          This build is tested, not field-verified. Before publishing, CI runs the whole
+          suite on Linux and Windows, drives the packaged application through its interface,
+          installs it silently, launches the installed copy and uninstalls it again — all on a
+          **virtual machine**. No requirement is marked VERIFIED, because that requires a
+          person at a physical PC with a battery, an SSD exposing SMART and a discrete GPU.
+
+          Known limitations, in full: `docs/KNOWN_LIMITATIONS.md` in the repository. The short
+          version — battery wear, SMART detail and GPU behaviour may be unavailable or
+          reported as unsupported; the GPU benchmark and the stress runner have never been run
+          on real hardware; there is no remembered window position between runs; and a
+          two-monitor or 125 % setup is covered by unit tests rather than by observation.
+
+          ### What a scan does and does not do
+
+          A scan reads hardware and operating-system state from this machine using
+          documented Windows interfaces. It does not upload anything: the network layer
+          is absent from the build, not merely disabled. The score is withheld when too
+          little of the machine could be measured, and the report says how much of the
+          machine it covers.
+
+          Every report carries the redaction setting that was in force when it was
+          generated, so a report can always be traced back to what it exposed.
+          '@
+
+          $prerelease = if ('${{ inputs.prerelease }}' -eq 'true') { '--prerelease' } else { '' }
+
+          gh release create "v${{ inputs.version }}" `
+            dist/VERIDEX-Setup-*.exe `
+            dist/VERIDEX-*-portable-*.exe `
+            dist/SHA256SUMS.txt `
+            --title "VERIDEX ${{ inputs.version }}" `
+            --notes $notes `
+            $prerelease
+        shell: pwsh

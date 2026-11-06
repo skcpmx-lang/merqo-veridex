@@ -1,0 +1,99 @@
+name: Design evidence
+
+# Screenshots of the interface, for review.
+#
+# This is not a test job - `build.yml` already runs the full GUI harness against the packaged
+# application. This job exists because reviewing a design needs *pictures*, and the pictures from
+# a packaging run are only available after an Electron build, an installer build and three smoke
+# harnesses have finished. That is fifteen minutes per look at a button.
+#
+# It runs the same harness against the repository itself (no packaging), so it answers "what does
+# the interface look like" in about four minutes. It proves nothing about the installer, and it
+# is not a substitute for `build.yml` - which is why it is a separate workflow with its own name.
+#
+# Dispatch it, then fetch the branch it publishes:
+#
+#   gh workflow run ui-evidence.yml --ref <branch>
+#   git fetch origin ci/ui-<run id>:refs/evidence/ui && git checkout refs/evidence/ui -- gui-shots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths:
+      - 'src/renderer/**'
+      - 'src/app/gui-smoke.js'
+      - 'src/app/gui-pages.js'
+      - 'scripts/gui-smoke.mjs'
+      - '.github/workflows/ui-evidence.yml'
+
+concurrency:
+  group: ui-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  screenshots:
+    name: Capture and publish
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The harness prints one `::notice` per finding, so the run is readable through the checks
+      # API even when the log and the artifact store are both unreachable.
+      - name: Drive the interface and capture every page
+        run: node scripts/gui-smoke.mjs --json gui-smoke.json
+        timeout-minutes: 15
+
+      - name: Publish the screenshots to a branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d gui-shots ]; then
+            echo "::warning title=ui-evidence::the harness produced no screenshots"
+            exit 0
+          fi
+          shots=$(find gui-shots -type f | wc -l)
+          branch="ci/ui-${GITHUB_RUN_ID}"
+          git config user.name 'VERIDEX evidence'
+          git config user.email 'actions@users.noreply.github.com'
+          git checkout -q --orphan "$branch"
+          git rm -rq --cached . >/dev/null 2>&1 || true
+          rm -rf src tests scripts docs assets dist .github package.json package-lock.json
+          {
+            echo "# Interface screenshots from run ${GITHUB_RUN_ID}"
+            echo
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Produced by \\`scripts/gui-smoke.mjs\\` against the repository (not the packaged build)."
+            echo
+            echo "${shots} image(s). This branch is a snapshot for review and is safe to delete."
+          } > README.md
+          git add -A
+          git commit -q -m "Interface screenshots from run ${GITHUB_RUN_ID}"
+          git push -q origin "$branch"
+          echo "::notice title=ui-evidence::published ${shots} screenshot(s) to ${branch}"
+
+      - name: Keep the verdict beside the images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veridex-ui-evidence
+          path: |
+            gui-smoke.json
+            gui-shots/**
+          if-no-files-found: ignore
+          retention-days: 14

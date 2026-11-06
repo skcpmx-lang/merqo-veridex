@@ -1,0 +1,1185 @@
+/*
+ * VERIDEX — interface styles.
+ *
+ * Every colour, radius and spacing value comes from a custom property written by
+ * src/renderer/theme.js, so the accent and density settings change the whole
+ * interface and no rule hardcodes a hex value. The token block below is the
+ * dark/cyan default used before the theme is applied; theme.js overwrites it at
+ * runtime from the user's settings.
+ *
+ * No web fonts, no remote assets: the interface must render identically offline.
+ */
+
+:root {
+  --vx-bg: #0A1220;
+  --vx-bg-raised: #0F1B2E;
+  --vx-bg-card: #122032;
+  --vx-bg-input: #0C1728;
+  --vx-line: #1E2E45;
+  --vx-line-soft: #182739;
+  --vx-ink: #E8F1FA;
+  --vx-ink-soft: #9FB2C8;
+  --vx-ink-muted: #7A8EA6;
+  --vx-shadow: rgba(3, 8, 16, 0.55);
+  --vx-accent: #22D3EE;
+  --vx-accent-strong: #0EA5C6;
+  --vx-accent-soft: #7DE8F5;
+  --vx-accent-ink: #04222B;
+  --vx-ok: #4ADE80;
+  --vx-warn: #FBBF24;
+  --vx-bad: #F87171;
+  --vx-info: #7DD3FC;
+  --vx-muted: #8CA0B8;
+  --vx-radius-sm: 6px;
+  --vx-radius-md: 10px;
+  --vx-radius-lg: 14px;
+  --vx-space-xs: 4px;
+  --vx-space-sm: 8px;
+  --vx-space-md: 12px;
+  --vx-space-lg: 18px;
+  --vx-space-xl: 26px;
+  --vx-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --vx-font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  --vx-font-sm: 12px;
+  --vx-font-md: 13px;
+  --vx-font-lg: 16px;
+  --vx-font-display: 34px;
+  --vx-motion: 160ms;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--vx-bg);
+  color: var(--vx-ink);
+  font-family: var(--vx-font-ui);
+  font-size: var(--vx-font-md);
+  -webkit-font-smoothing: antialiased;
+}
+
+body { overflow: hidden; }
+
+/* Focus must always be visible: this is a tool used on unfamiliar machines, often
+   with a keyboard only. */
+:focus-visible {
+  outline: 2px solid var(--vx-accent);
+  outline-offset: 2px;
+  border-radius: var(--vx-radius-sm);
+}
+
+.vx-app {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+
+.vx-sidebar {
+  background: var(--vx-bg-raised);
+  border-right: 1px solid var(--vx-line);
+  display: flex;
+  flex-direction: column;
+  padding: var(--vx-space-lg) var(--vx-space-md);
+  gap: var(--vx-space-lg);
+  overflow-y: auto;
+}
+
+.vx-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-md);
+  padding: 0 var(--vx-space-sm);
+}
+
+.vx-brand__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background:
+    radial-gradient(circle at 50% 50%, var(--vx-accent-soft) 0 18%, transparent 19%),
+    linear-gradient(150deg, var(--vx-accent) 0%, var(--vx-accent-strong) 100%);
+  box-shadow: 0 0 0 1px var(--vx-line) inset;
+  flex: 0 0 auto;
+}
+
+.vx-brand__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.vx-brand__name {
+  font-size: var(--vx-font-lg);
+  font-weight: 650;
+  letter-spacing: 0.14em;
+}
+.vx-brand__sub {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+}
+
+.vx-nav { display: flex; flex-direction: column; gap: 2px; }
+.vx-nav__group {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+  padding: var(--vx-space-md) var(--vx-space-sm) var(--vx-space-xs);
+}
+
+.vx-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  width: 100%;
+  padding: 8px var(--vx-space-sm);
+  border: 0;
+  border-radius: var(--vx-radius-sm);
+  background: transparent;
+  color: var(--vx-ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--vx-motion), color var(--vx-motion);
+}
+
+.vx-nav__item:hover { background: var(--vx-bg-card); color: var(--vx-ink); }
+.vx-nav__item.is-active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--vx-accent) 20%, transparent), color-mix(in srgb, var(--vx-accent) 4%, transparent));
+  color: var(--vx-ink);
+  box-shadow: inset 2px 0 0 var(--vx-accent), 0 0 24px -12px var(--vx-accent);
+}
+.vx-nav__glyph { width: 16px; text-align: center; color: var(--vx-accent); flex: 0 0 auto; }
+/* The rail's icons take the accent on the active row and muted ink elsewhere, which a font
+   glyph or an emoji cannot do. The stroke is fixed at 1.6 in the SVG; only colour changes. */
+.vx-nav__icon { flex: 0 0 auto; color: var(--vx-ink-muted); transition: color var(--vx-motion) ease; }
+.vx-nav__item:hover .vx-nav__icon { color: var(--vx-ink-soft); }
+.vx-nav__item.is-active .vx-nav__icon { color: var(--vx-accent); }
+.vx-nav__badge {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--vx-bg-input);
+  color: var(--vx-ink-muted);
+  border: 1px solid var(--vx-line);
+}
+
+.vx-sidebar__foot {
+  margin-top: auto;
+  font-size: 11px;
+  color: var(--vx-ink-muted);
+  line-height: 1.5;
+  padding: 0 var(--vx-space-sm);
+}
+
+/* ── Main region ─────────────────────────────────────────────────────────── */
+
+.vx-main { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
+.vx-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-md);
+  padding: var(--vx-space-md) var(--vx-space-xl);
+  border-bottom: 1px solid var(--vx-line);
+  /* Translucent so the content scrolling underneath is faintly visible: it costs nothing and
+     it makes the bar feel like glass over a workspace rather than a stripe cut out of it. */
+  background: color-mix(in srgb, var(--vx-bg) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  flex: 0 0 auto;
+  z-index: 5;
+}
+
+.vx-arrange__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+  padding: var(--vx-space-sm) var(--vx-space-md);
+  border: 1px dashed var(--vx-line);
+  border-radius: var(--vx-radius-md);
+  background: var(--vx-bg-raised);
+}
+.vx-arrange__bar .vx-dim { margin: 0; flex: 1 1 320px; }
+.vx-arrange__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--vx-space-xs);
+  padding: var(--vx-space-xs);
+  border: 1px dashed var(--vx-line-soft);
+  border-radius: var(--vx-radius-md);
+}
+.vx-arrange__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-xs);
+  flex-wrap: wrap;
+}
+.vx-arrange__name {
+  font-size: var(--vx-font-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vx-ink-muted);
+  margin-right: auto;
+}
+.vx-arrange__controls .vx-button { min-width: 32px; padding: 4px 8px; }
+.vx-arrange__controls .vx-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.vx-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-xs);
+  font-size: var(--vx-font-xs);
+  color: var(--vx-ink-muted);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.vx-breadcrumb__link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--vx-ink-muted);
+  cursor: pointer;
+  border-radius: var(--vx-radius-sm);
+}
+.vx-breadcrumb__link:hover { color: var(--vx-ink); }
+.vx-breadcrumb__link:focus-visible { outline: 2px solid var(--vx-accent); outline-offset: 2px; }
+.vx-breadcrumb__sep { opacity: 0.7; }
+.vx-breadcrumb__current { color: var(--vx-ink); font-weight: 500; }
+.vx-quickaccess { display: flex; flex-direction: column; gap: 2px; }
+.vx-quickaccess__row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--vx-radius-sm);
+  font: inherit;
+  color: var(--vx-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.vx-quickaccess__row:hover { border-color: var(--vx-line); background: var(--vx-bg-raised); }
+.vx-quickaccess__row:focus-visible { outline: 2px solid var(--vx-accent); outline-offset: 2px; }
+.vx-quickaccess__group { color: var(--vx-ink-muted); font-size: var(--vx-font-xs); }
+
+.vx-topbar__title { font-size: var(--vx-font-lg); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+/* One line, always. Wrapped onto two lines it pushed the buttons off their baseline and made
+   the bar 12px taller on every page, for a sentence that is the same on all of them. */
+.vx-topbar__sub {
+  display: block;
+  color: var(--vx-ink-muted);
+  font-size: var(--vx-font-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 34ch;
+}
+.vx-topbar__spacer { flex: 1; }
+/* Buttons in the bar are one line and one height, whatever their label. "Run full scan" used to
+   wrap onto two lines and stand 8px taller than "Shortcuts" beside it. */
+.vx-topbar .vx-button { white-space: nowrap; flex: 0 0 auto; }
+.vx-topbar > div:first-child { min-width: 0; }
+
+.vx-content {
+  padding: var(--vx-space-xl);
+  /* The toast stack sits below this region inside the application column, so no permanent
+     reserve is needed. The small extra bottom gap keeps the last card's border off the edge. */
+  padding-bottom: calc(var(--vx-space-xl) + 8px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vx-space-lg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--vx-line) transparent;
+}
+
+/* A thin, theme-coloured scrollbar instead of the operating system's default ridge, which is
+   the one element on screen that ignores every token in this file. */
+.vx-content::-webkit-scrollbar, .vx-sidebar::-webkit-scrollbar, .vx-dialog__body::-webkit-scrollbar { width: 10px; height: 10px; }
+.vx-content::-webkit-scrollbar-track, .vx-sidebar::-webkit-scrollbar-track, .vx-dialog__body::-webkit-scrollbar-track { background: transparent; }
+.vx-content::-webkit-scrollbar-thumb, .vx-sidebar::-webkit-scrollbar-thumb, .vx-dialog__body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--vx-line) 80%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.vx-content::-webkit-scrollbar-thumb:hover, .vx-sidebar::-webkit-scrollbar-thumb:hover { background: var(--vx-line); background-clip: content-box; }
+
+/* ── Cards & grid ────────────────────────────────────────────────────────── */
+
+.vx-grid { display: grid; gap: var(--vx-space-lg); align-items: start; }
+/* Two cards side by side are as tall as the taller one. When one is a dial and the other is two
+   lines of text, that leaves a large empty panel - which reads as a rendering fault rather than
+   as breathing room. Rows align to the top of their content instead, and the empty space is the
+   page's, not a box drawn around it. */
+.vx-grid--3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.vx-grid--2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+.vx-card {
+  /* Three stacked layers rather than one fill: a faint vertical gradient, a hairline of light
+     along the top edge, and a shadow below. That combination is what separates a panel from a
+     rectangle — a flat fill at one value reads as a table cell no matter how it is bordered. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--vx-ink) 3.5%, transparent) 0%, transparent 42%),
+    var(--vx-bg-card);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius-lg);
+  padding: var(--vx-space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--vx-space-sm);
+  min-width: 0;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--vx-ink) 6%, transparent),
+    0 1px 2px var(--vx-shadow);
+  transition: border-color var(--vx-motion), box-shadow var(--vx-motion), transform var(--vx-motion);
+}
+
+/* Only cards that respond to the pointer lift; a static card that moves under the cursor is a
+   lie about what is clickable. */
+.vx-card--interactive:hover {
+  border-color: color-mix(in srgb, var(--vx-accent) 45%, var(--vx-line));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--vx-ink) 8%, transparent),
+    0 10px 28px var(--vx-shadow);
+  transform: translateY(-1px);
+}
+
+.vx-card--flush { padding: 0; overflow: hidden; }
+.vx-card__title {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+}
+/* A short accent rule before each card title: the only ornament in the interface, repeated
+   once per card so it reads as a system rather than decoration. */
+.vx-card__title::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--vx-accent), transparent);
+  flex: 0 0 auto;
+}
+.vx-card__title:first-child { margin-top: calc(var(--vx-space-xs) * -1); }
+.vx-card__head { display: flex; align-items: center; gap: var(--vx-space-sm); }
+.vx-card__head .vx-card__title { flex: 1; }
+
+/* ── Score ───────────────────────────────────────────────────────────────── */
+
+.vx-score { display: flex; align-items: baseline; gap: var(--vx-space-sm); }
+.vx-score__value {
+  font-size: var(--vx-font-display);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.vx-score__max { color: var(--vx-ink-muted); font-size: var(--vx-font-lg); }
+.vx-score__rating { color: var(--vx-ink-soft); }
+
+.vx-score--unrated .vx-score__value { color: var(--vx-ink-muted); font-size: var(--vx-font-lg); }
+
+.vx-meter {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--vx-bg-input);
+  overflow: hidden;
+  border: 1px solid var(--vx-line-soft);
+}
+.vx-meter__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--vx-accent-strong), var(--vx-accent));
+  transition: width var(--vx-motion) ease-out;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+
+.vx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--vx-font-sm);
+  font-weight: 600;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.vx-badge--sm { font-size: 11px; padding: 1px 7px 1px 5px; }
+.vx-badge__glyph { font-size: 0.95em; line-height: 1; }
+
+/* Status colours come from the tone tokens, and the word is always present, so a
+   monochrome print or a colour-blind reader still gets the meaning. */
+.vx-badge--ok { color: var(--vx-ok); border-color: color-mix(in srgb, var(--vx-ok) 40%, transparent); background: color-mix(in srgb, var(--vx-ok) 12%, transparent); }
+.vx-badge--warn { color: var(--vx-warn); border-color: color-mix(in srgb, var(--vx-warn) 40%, transparent); background: color-mix(in srgb, var(--vx-warn) 12%, transparent); }
+.vx-badge--bad { color: var(--vx-bad); border-color: color-mix(in srgb, var(--vx-bad) 40%, transparent); background: color-mix(in srgb, var(--vx-bad) 12%, transparent); }
+.vx-badge--info { color: var(--vx-info); border-color: color-mix(in srgb, var(--vx-info) 40%, transparent); background: color-mix(in srgb, var(--vx-info) 12%, transparent); }
+.vx-badge--muted { color: var(--vx-muted); border-color: var(--vx-line); background: var(--vx-bg-input); }
+
+/* ── Rows / tables ───────────────────────────────────────────────────────── */
+
+.vx-rows { display: flex; flex-direction: column; }
+.vx-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 38%) 1fr;
+  gap: var(--vx-space-md);
+  padding: 9px 0;
+  border-bottom: 1px solid var(--vx-line-soft);
+  align-items: baseline;
+}
+.vx-row:last-child { border-bottom: 0; }
+.vx-row__label { color: var(--vx-ink-soft); font-size: var(--vx-font-sm); }
+.vx-row__value { display: flex; align-items: baseline; gap: var(--vx-space-sm); flex-wrap: wrap; justify-content: flex-end; text-align: right; }
+/* Controls in the settings column share one width, so the right edge is a line rather than a
+   ragged edge - in the settings screenshot the four selects were 95, 95, 136 and 95 pixels wide
+   and the toggles sat at yet another offset. */
+.vx-row__value select,
+.vx-row__value input[type="text"],
+.vx-row__value input[type="number"] { min-width: 152px; }
+.vx-row__value .vx-switch { margin-left: auto; }
+.vx-row__text { font-variant-numeric: tabular-nums; }
+.vx-row__source {
+  font-family: var(--vx-font-mono);
+  font-size: 10px;
+  color: var(--vx-ink-muted);
+}
+.vx-row__note {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--vx-ink-muted);
+  margin-top: -4px;
+}
+
+/* ── Coverage strip ──────────────────────────────────────────────────────── */
+
+.vx-card__subtitle {
+  margin: var(--vx-space-lg) 0 var(--vx-space-sm);
+  font-size: var(--vx-font-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+}
+
+.vx-coverage {
+  display: grid;
+  /* 84px so the seven-cell Manual strip (answered, passed, failed, warnings, N/A, not run,
+     complete) fits on one row at the minimum window width instead of orphaning its last cell. */
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: var(--vx-space-sm);
+}
+.vx-coverage__cell {
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line-soft);
+  border-radius: var(--vx-radius-sm);
+  padding: var(--vx-space-sm) var(--vx-space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vx-coverage__value {
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.vx-coverage__label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+.vx-button {
+  font: inherit;
+  font-weight: 600;
+  border-radius: var(--vx-radius-sm);
+  padding: 8px 15px;
+  cursor: pointer;
+  border: 1px solid var(--vx-line);
+  background: var(--vx-bg-input);
+  color: var(--vx-ink);
+  transition: background var(--vx-motion), border-color var(--vx-motion), color var(--vx-motion);
+}
+.vx-button:hover:not(:disabled) { border-color: var(--vx-accent); color: var(--vx-accent-soft); }
+.vx-button--primary {
+  background: linear-gradient(180deg, var(--vx-accent-soft), var(--vx-accent) 62%, var(--vx-accent-strong));
+  border-color: var(--vx-accent-strong);
+  color: var(--vx-accent-ink);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 35%, transparent) inset, 0 4px 14px color-mix(in srgb, var(--vx-accent) 22%, transparent);
+}
+.vx-button:active:not(:disabled) { transform: translateY(1px); }
+.vx-button--primary:hover:not(:disabled) { background: var(--vx-accent-soft); color: var(--vx-accent-ink); }
+.vx-button--danger { border-color: color-mix(in srgb, var(--vx-bad) 50%, transparent); color: var(--vx-bad); }
+.vx-button--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--vx-bad) 14%, transparent); color: var(--vx-bad); border-color: var(--vx-bad); }
+.vx-button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Progress ────────────────────────────────────────────────────────────── */
+
+.vx-progress { display: flex; flex-direction: column; gap: 6px; }
+.vx-progress__track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line-soft);
+  overflow: hidden;
+}
+.vx-progress__fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--vx-accent-strong), var(--vx-accent));
+  transition: width var(--vx-motion) ease-out;
+}
+.vx-progress__label { font-size: 11px; color: var(--vx-ink-muted); font-variant-numeric: tabular-nums; }
+
+/* An indeterminate bar must look explicitly indeterminate — a moving stripe, not a
+   bar that pretends to be 100%. */
+.vx-progress__track--indeterminate .vx-progress__fill {
+  width: 40%;
+  animation: vx-slide calc(var(--vx-motion) * 8) ease-in-out infinite alternate;
+}
+@keyframes vx-slide { from { transform: translateX(-10%); } to { transform: translateX(160%); } }
+
+/* ── Callout ─────────────────────────────────────────────────────────────── */
+
+.vx-callout {
+  border-radius: var(--vx-radius-md);
+  border: 1px solid var(--vx-line);
+  border-left-width: 3px;
+  padding: var(--vx-space-md) var(--vx-space-lg);
+  background: var(--vx-bg-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vx-callout__title { margin: 0; font-weight: 650; font-size: var(--vx-font-sm); }
+.vx-callout__body { margin: 0; color: var(--vx-ink-soft); font-size: var(--vx-font-sm); line-height: 1.55; }
+.vx-callout__actions { display: flex; gap: var(--vx-space-sm); margin-top: var(--vx-space-sm); }
+.vx-callout--info { border-left-color: var(--vx-info); }
+.vx-callout--warn { border-left-color: var(--vx-warn); }
+.vx-callout--bad { border-left-color: var(--vx-bad); }
+.vx-callout--ok { border-left-color: var(--vx-ok); }
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+
+.vx-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--vx-line);
+  overflow-x: auto;
+}
+.vx-tab {
+  font: inherit;
+  font-size: var(--vx-font-sm);
+  border: 0;
+  background: transparent;
+  color: var(--vx-ink-muted);
+  padding: 9px var(--vx-space-md);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.vx-tab:hover { color: var(--vx-ink); }
+.vx-tab.is-active { color: var(--vx-ink); border-bottom-color: var(--vx-accent); }
+.vx-tab__badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  color: var(--vx-ink-muted);
+}
+
+/* ── Empty / loading ─────────────────────────────────────────────────────── */
+
+.vx-empty {
+  /* A dashed panel around two lines of text was the largest object on the dashboard and the
+     battery page. It is a note, not a container: less padding, tighter line, and the border is
+     kept only because it marks where content will appear. */
+  padding: var(--vx-space-lg) var(--vx-space-xl);
+  text-align: center;
+  border: 1px dashed var(--vx-line);
+  border-radius: var(--vx-radius-md);
+  color: var(--vx-ink-muted);
+}
+.vx-empty__title { margin: 0 0 2px; color: var(--vx-ink-soft); font-weight: 600; font-size: var(--vx-font-md); }
+.vx-empty__detail { margin: 0; font-size: var(--vx-font-sm); max-width: 520px; margin-inline: auto; line-height: 1.55; }
+
+.vx-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--vx-space-md);
+  background: var(--vx-bg);
+  color: var(--vx-ink-muted);
+}
+.vx-loading__mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 2px solid var(--vx-line);
+  border-top-color: var(--vx-accent);
+  animation: vx-spin 900ms linear infinite;
+}
+@keyframes vx-spin { to { transform: rotate(360deg); } }
+
+/* ── Key/value detail block ──────────────────────────────────────────────── */
+
+.vx-mono { font-family: var(--vx-font-mono); font-size: 11px; }
+.vx-dim { color: var(--vx-ink-muted); }
+.vx-strong { font-weight: 650; }
+.vx-scroll { overflow: auto; max-height: 420px; }
+
+/* ── Health dial and page hero ───────────────────────────────────────────── */
+/*
+   The dashboard's one number deserves the one piece of visual emphasis in the interface.
+   A conic gradient ring reads at a glance and — unlike a needle or a gradient bar — shows both
+   the value and its remaining headroom without a second element to compare against.
+   The ring is decorative: the number, the rating word and the meter beneath it all carry the
+   same information in text, so nothing depends on the ring's colour.
+*/
+
+.vx-dial {
+  --dial-value: 0;
+  --dial-tone: var(--vx-accent);
+  position: relative;
+  width: 132px;
+  height: 132px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+/* The ring is its own element because a CSS mask on an ancestor masks the text inside it too;
+   the readout has to be a sibling, not a child, of the masked surface. */
+.vx-dial__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--dial-tone) calc(var(--dial-value) * 1%), color-mix(in srgb, var(--vx-ink) 9%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+}
+.vx-dial::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--dial-tone) 26%, transparent), transparent 68%);
+  opacity: 0.5;
+  z-index: -1;
+}
+.vx-dial__readout { text-align: center; display: grid; gap: 2px; }
+.vx-dial__value {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--vx-ink);
+}
+.vx-dial__unit { font-size: 10px; color: var(--vx-ink-muted); letter-spacing: 0.14em; text-transform: uppercase; }
+.vx-dial--unrated .vx-dial__value { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+
+.vx-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--vx-space-lg);
+  align-items: center;
+}
+@media (max-width: 720px) { .vx-hero { grid-template-columns: 1fr; justify-items: start; } }
+
+.vx-hero__headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+}
+.vx-hero__rating {
+  font-size: var(--vx-font-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.vx-hero__meta { font-size: var(--vx-font-sm); color: var(--vx-ink-muted); margin: 0; line-height: 1.55; }
+
+/* ── Section heading ─────────────────────────────────────────────────────── */
+
+.vx-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--vx-space-md);
+  padding-bottom: var(--vx-space-xs);
+  border-bottom: 1px solid var(--vx-line-soft);
+}
+.vx-section-head__eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vx-accent);
+  margin: 0 0 2px;
+}
+.vx-section-head__title { margin: 0; font-size: var(--vx-font-lg); font-weight: 650; letter-spacing: -0.01em; }
+
+/* ── Page transition ─────────────────────────────────────────────────────── */
+/* One short fade and a 4 px rise. Long enough to signal a change of place, short enough that a
+   user flipping through pages with Ctrl+1..9 is never waiting for the interface. */
+
+.vx-content > * { animation: vx-page-in 220ms ease-out backwards; }
+.vx-content > *:nth-child(2) { animation-delay: 24ms; }
+.vx-content > *:nth-child(3) { animation-delay: 48ms; }
+.vx-content > *:nth-child(n+4) { animation-delay: 64ms; }
+@keyframes vx-page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────── */
+/* A default scrollbar in a dark interface is a bright strip that reads as a bug. */
+
+* { scrollbar-width: thin; scrollbar-color: var(--vx-line) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--vx-ink) 14%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--vx-ink) 26%, transparent); background-clip: content-box; }
+
+/* ── Form controls ───────────────────────────────────────────────────────── */
+/*
+   The settings page is the one screen built from native controls, and unstyled natives are the
+   fastest way to make a dark interface look unfinished: a white checkbox and a system-blue
+   select against #122032 look like a rendering failure. Every control also keeps a visible
+   label association and a focus ring, because these are switches that change real behaviour.
+*/
+
+.vx-input,
+select.vx-row__value,
+.vx-row__value select,
+.vx-row__value input[type="number"],
+.vx-row__value input[type="text"] {
+  font: inherit;
+  font-size: var(--vx-font-sm);
+  color: var(--vx-ink);
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius-sm);
+  padding: 6px 10px;
+  min-width: 120px;
+  transition: border-color var(--vx-motion), box-shadow var(--vx-motion);
+}
+select.vx-row__value:hover,
+.vx-row__value select:hover,
+.vx-row__value input:hover { border-color: color-mix(in srgb, var(--vx-accent) 45%, var(--vx-line)); }
+.vx-row__value select:focus-visible,
+.vx-row__value input:focus-visible {
+  outline: none;
+  border-color: var(--vx-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vx-accent) 22%, transparent);
+}
+.vx-row__value select {
+  appearance: none;
+  padding-right: 28px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--vx-ink-soft) 50%),
+    linear-gradient(135deg, var(--vx-ink-soft) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* A checkbox drawn as a switch. The native input stays in the accessibility tree; only its
+   appearance is replaced, so it is still operable by keyboard and still announced as a switch. */
+.vx-row__value input[type="checkbox"] {
+  appearance: none;
+  width: 38px;
+  height: 21px;
+  border-radius: 999px;
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--vx-motion), border-color var(--vx-motion);
+  flex: 0 0 auto;
+}
+.vx-row__value input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--vx-ink-muted);
+  transition: transform var(--vx-motion), background var(--vx-motion);
+}
+.vx-row__value input[type="checkbox"]:checked {
+  background: color-mix(in srgb, var(--vx-accent) 30%, var(--vx-bg-input));
+  border-color: var(--vx-accent);
+}
+.vx-row__value input[type="checkbox"]:checked::after {
+  transform: translateX(17px);
+  background: var(--vx-accent);
+}
+.vx-row__value input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--vx-accent);
+  outline-offset: 2px;
+}
+
+/* ── First-run tour ──────────────────────────────────────────────────────── */
+
+.vx-onboarding { display: flex; flex-direction: column; gap: var(--vx-space-sm); }
+.vx-onboarding__progress { display: flex; gap: 6px; margin-bottom: var(--vx-space-xs); }
+.vx-onboarding__pip {
+  height: 3px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--vx-line);
+  transition: background var(--vx-motion);
+}
+.vx-onboarding__pip.is-done { background: var(--vx-accent); }
+.vx-onboarding__step {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+}
+.vx-onboarding__title { margin: 0 0 var(--vx-space-xs); font-size: 20px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
+.vx-onboarding__body { margin: 0; color: var(--vx-ink-soft); line-height: 1.6; font-size: var(--vx-font-md); }
+.vx-onboarding__actions { display: flex; gap: var(--vx-space-sm); margin-top: var(--vx-space-md); flex-wrap: wrap; }
+
+/* ── Driver export ───────────────────────────────────────────────────────── */
+
+.vx-export {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+  padding: var(--vx-space-sm) var(--vx-space-md);
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line-soft);
+  border-radius: var(--vx-radius-md);
+}
+.vx-export__path {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-family: var(--vx-font-mono);
+  font-size: 11px;
+  color: var(--vx-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Activity log ────────────────────────────────────────────────────────── */
+
+.vx-log-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+  padding-bottom: var(--vx-space-sm);
+  border-bottom: 1px solid var(--vx-line-soft);
+}
+.vx-log-controls select,
+.vx-log-controls input {
+  font: inherit;
+  font-size: var(--vx-font-sm);
+  color: var(--vx-ink);
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius-sm);
+  padding: 6px 10px;
+}
+.vx-log-controls input { flex: 1 1 240px; min-width: 160px; }
+
+.vx-row--log { grid-template-columns: minmax(170px, 26%) 1fr; align-items: start; }
+.vx-rows--log { font-family: var(--vx-font-mono); }
+.vx-log__time { font-size: 11px; color: var(--vx-ink-muted); display: block; }
+.vx-log__level {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px solid var(--vx-line);
+  color: var(--vx-ink-muted);
+}
+.vx-log__level--warn { color: var(--vx-warn); border-color: color-mix(in srgb, var(--vx-warn) 50%, transparent); }
+.vx-log__level--error,
+.vx-log__level--fatal { color: var(--vx-bad); border-color: color-mix(in srgb, var(--vx-bad) 50%, transparent); }
+.vx-log__level--debug,
+.vx-log__level--trace { color: var(--vx-ink-muted); }
+.vx-log__ctx {
+  display: block;
+  width: 100%;
+  font-size: 10px;
+  color: var(--vx-ink-muted);
+  word-break: break-all;
+  margin-top: 2px;
+}
+
+/* ── Toasts ──────────────────────────────────────────────────────────────── */
+/*
+   Bottom-right, above everything, never wider than a comfortable reading measure. The
+   left border carries the tone so the information survives a greyscale screenshot, and
+   the close button is a real button rather than a decorative glyph.
+*/
+
+.vx-toasts {
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: var(--vx-space-sm);
+  align-items: flex-end;
+  width: min(360px, calc(100vw - 2 * var(--vx-space-lg)));
+  pointer-events: none;
+}
+
+/* Inside the application column the stack takes part in the layout: it sits at the bottom right
+   of the window, above nothing, and the content region shrinks by its height while it is there.
+   Outside the column (a page with no shell) it falls back to a floating stack. */
+.vx-main > .vx-toasts {
+  align-self: flex-end;
+  flex: 0 0 auto;
+  padding: var(--vx-space-sm) var(--vx-space-xl) var(--vx-space-md);
+  max-width: calc(100% - 2 * var(--vx-space-xl));
+}
+
+/* Compact inside the column: it shares the window with the page, so the body is clamped instead
+   of pushing the content region up by another line. */
+.vx-main > .vx-toasts .vx-toast { padding: var(--vx-space-sm) var(--vx-space-xl) var(--vx-space-sm) var(--vx-space-md); }
+.vx-main > .vx-toasts .vx-toast__body {
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+body > .vx-toasts {
+  position: fixed;
+  right: var(--vx-space-lg);
+  bottom: var(--vx-space-lg);
+}
+
+.vx-toast {
+  pointer-events: auto;
+  position: relative;
+  padding: var(--vx-space-md) var(--vx-space-xl) var(--vx-space-md) var(--vx-space-md);
+  background: var(--vx-bg-raised);
+  border: 1px solid var(--vx-line);
+  border-left: 3px solid var(--vx-info);
+  border-radius: var(--vx-radius-md);
+  box-shadow: 0 12px 32px var(--vx-shadow);
+  animation: vx-toast-in var(--vx-motion) ease-out;
+}
+.vx-toast--good { border-left-color: var(--vx-ok); }
+.vx-toast--warn { border-left-color: var(--vx-warn); }
+.vx-toast--bad { border-left-color: var(--vx-bad); }
+.vx-toast.is-leaving { opacity: 0; transform: translateY(4px); transition: opacity var(--vx-motion), transform var(--vx-motion); }
+
+.vx-toast__title { margin: 0; font-size: var(--vx-font-md); font-weight: 650; color: var(--vx-ink); }
+.vx-toast__body { margin: 4px 0 0; font-size: var(--vx-font-sm); color: var(--vx-ink-soft); line-height: 1.45; }
+.vx-toast__close {
+  position: absolute;
+  top: 6px; right: 8px;
+  background: none; border: 0;
+  color: var(--vx-ink-muted);
+  font-size: 16px; line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--vx-radius-sm);
+}
+.vx-toast__close:hover, .vx-toast__close:focus-visible { color: var(--vx-ink); background: var(--vx-bg-input); }
+
+@keyframes vx-toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Modal dialog ────────────────────────────────────────────────────────── */
+
+.vx-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(4, 9, 17, 0.68);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--vx-space-lg) var(--vx-space-lg);
+  animation: vx-fade-in var(--vx-motion) ease-out;
+}
+
+.vx-dialog {
+  width: min(640px, 100%);
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--vx-bg-card);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius-lg);
+  box-shadow: 0 24px 64px var(--vx-shadow);
+  padding: var(--vx-space-lg);
+  outline: none;
+}
+.vx-dialog__title { margin: 0 0 var(--vx-space-md); font-size: var(--vx-font-lg); color: var(--vx-ink); }
+.vx-dialog__body { display: flex; flex-direction: column; gap: var(--vx-space-md); }
+.vx-dialog__actions { display: flex; justify-content: flex-end; margin-top: var(--vx-space-md); }
+
+@keyframes vx-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Search palette ──────────────────────────────────────────────────────── */
+
+.vx-search { display: flex; flex-direction: column; gap: var(--vx-space-sm); }
+.vx-search__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--vx-space-sm) var(--vx-space-md);
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius-md);
+  color: var(--vx-ink);
+  font-family: var(--vx-font-ui);
+  font-size: var(--vx-font-md);
+}
+.vx-search__input:focus-visible { outline: 2px solid var(--vx-accent); outline-offset: 1px; border-color: var(--vx-accent); }
+
+.vx-search__results { display: flex; flex-direction: column; gap: 2px; max-height: 44vh; overflow: auto; }
+.vx-search__result {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "label kind" "detail detail";
+  gap: 2px var(--vx-space-md);
+  width: 100%;
+  text-align: left;
+  padding: var(--vx-space-sm) var(--vx-space-md);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--vx-radius-sm);
+  color: var(--vx-ink);
+  font-family: var(--vx-font-ui);
+  cursor: pointer;
+}
+.vx-search__result:hover, .vx-search__result.is-selected { background: var(--vx-bg-input); border-color: var(--vx-line); }
+.vx-search__result.is-selected { border-color: var(--vx-accent); }
+.vx-search__label { grid-area: label; font-size: var(--vx-font-md); font-weight: 600; }
+.vx-search__detail { grid-area: detail; font-size: var(--vx-font-sm); color: var(--vx-ink-muted); font-family: var(--vx-font-mono); }
+.vx-search__kind {
+  grid-area: kind;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vx-ink-muted);
+  align-self: center;
+}
+.vx-search__empty { margin: 0; padding: var(--vx-space-md); font-size: var(--vx-font-sm); color: var(--vx-ink-muted); }
+
+/* ── Shortcut reference ──────────────────────────────────────────────────── */
+
+.vx-keys { display: flex; flex-direction: column; gap: var(--vx-space-sm); }
+.vx-keys__row {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: var(--vx-space-md);
+  align-items: center;
+  padding: var(--vx-space-sm) 0;
+  border-bottom: 1px solid var(--vx-line-soft);
+}
+.vx-keys__row:last-child { border-bottom: 0; }
+.vx-keys__combo {
+  justify-self: start;
+  font-family: var(--vx-font-mono);
+  font-size: 11px;
+  padding: 3px 7px;
+  border: 1px solid var(--vx-line);
+  border-bottom-width: 2px;
+  border-radius: var(--vx-radius-sm);
+  background: var(--vx-bg-input);
+  color: var(--vx-ink-soft);
+}
+.vx-keys__label { font-size: var(--vx-font-md); color: var(--vx-ink); }
+
+/* ── Topbar search affordance ────────────────────────────────────────────── */
+
+.vx-topbar__search { display: inline-flex; align-items: center; gap: var(--vx-space-sm); }
+.vx-topbar__kbd {
+  font-family: var(--vx-font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--vx-line);
+  border-radius: 4px;
+  color: var(--vx-ink-muted);
+}
+
+/* ── History comparison ──────────────────────────────────────────────────── */
+
+.vx-compare-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vx-space-md);
+  padding: var(--vx-space-sm) 0 var(--vx-space-md);
+  border-bottom: 1px solid var(--vx-line-soft);
+  margin-bottom: var(--vx-space-sm);
+}
+.vx-compare-bar p { margin: 0; }
+
+.vx-row__mark { align-self: center; }
+.vx-compare { margin-top: var(--vx-space-lg); }
+.vx-row--diff { align-items: flex-start; }
+.vx-diff__verdict {
+  margin-left: var(--vx-space-sm);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--vx-line);
+  color: var(--vx-ink-muted);
+}
+.vx-diff__verdict--degraded { color: var(--vx-bad); border-color: var(--vx-bad); }
+.vx-diff__verdict--improved { color: var(--vx-ok); border-color: var(--vx-ok); }
+
+/* Reduced motion is honoured from both the OS and the setting. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+.reduce-motion * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+
+/* Screen-reader-only text for table headers and the skip link. */
+.vx-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

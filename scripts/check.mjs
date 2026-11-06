@@ -1,0 +1,411 @@
+#!/usr/bin/env node
+/**
+ * VERIDEX — static checks.
+ *
+ * Runs everything that can be checked without a Windows machine or a GUI:
+ *   1. every source file parses and every module graph resolves;
+ *   2. every `export` a file consumes actually exists (catches the class of bug
+ *      where a JSDoc typedef is imported as a runtime binding);
+ *   3. no source file imports a network transport outside the guard;
+ *   4. the manual registry is structurally valid;
+ *   5. every settings key names a module that references it;
+ *   6. requirement ids in docs/requirements.json are unique and well formed;
+ *   7. the module graph is acyclic — every dependency chain terminates;
+ *   8. the source files obey the formatting policy (tabs, trailing space, line endings).
+ *
+ * Checks 7 and 8 are exported as pure functions so the tests can put a cycle and a badly
+ * formatted line in front of them and watch them fail. A gate that has never refused
+ * anything is a gate nobody has measured.
+ *
+ * Exit code is non-zero on any finding, so CI can gate on it.
+ */
+
+import { readdir, readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const ROOT = path.resolve(import.meta.dirname, '..');
+const findings = [];
+const notes = [];
+
+/**
+ * Depth-first search for dependency cycles.
+ *
+ * Returns one entry per cycle, each the shortest path that closes it, so the message names a
+ * chain a person can follow (`a.js -> b.js -> a.js`) instead of a set of files.
+ *
+ * @param {Map<string, string[]>} graph  file -> files it imports
+ * @returns {string[][]} cycles, each a path whose last element imports its first
+ */
+export function findCycles(graph) {
+  /** @type {string[][]} */
+  const cycles = [];
+  const seen = new Set();      // fully explored
+  const onPath = new Set();
+  /** @type {string[]} */
+  const stack = [];
+
+  /** @param {string} node */
+  function visit(node) {
+    if (onPath.has(node)) {
+      const start = stack.indexOf(node);
+      if (start !== -1) cycles.push([...stack.slice(start), node]);
+      return;
+    }
+    if (seen.has(node)) return;
+    onPath.add(node);
+    stack.push(node);
+    for (const next of graph.get(node) ?? []) visit(next);
+    stack.pop();
+    onPath.delete(node);
+    seen.add(node);
+  }
+
+  for (const node of graph.keys()) visit(node);
+  return cycles;
+}
+
+/**
+ * Formatting policy for source files.
+ *
+ * Deliberately small and mechanical: the point is that a reviewer never has to think about
+ * tabs, carriage returns, trailing whitespace or a missing final newline again. Anything
+ * requiring taste (line length, alignment) is out of scope and stays a review question.
+ *
+ * @param {string} relative  file name for the message
+ * @param {string} source
+ * @returns {string[]} problems, empty when the file is clean
+ */
+export function formatProblems(relative, source) {
+  const problems = [];
+  const lines = source.split('\n');
+
+  // A file checked out with CRLF fails on every line, which buries the one thing the reader needs
+  // to know. When *every* line break is CRLF the finding is made once, for the file, and the
+  // per-line CR check is skipped. This actually happened: a Windows checkout without
+  // .gitattributes produced 39,641 findings and turned a real rule into a wall of noise.
+  const crlfLines = lines.filter((line) => line.endsWith('\r')).length;
+  const uniformCrlf = crlfLines > 0 && crlfLines === lines.length - 1;
+  if (uniformCrlf) {
+    problems.push(`${relative}: carriage returns throughout — this file was checked out with CRLF endings; the repository pins LF in .gitattributes`);
+  }
+
+  lines.forEach((line, index) => {
+    const where = `${relative}:${index + 1}`;
+    if (line.includes('\r') && !uniformCrlf) problems.push(`${where}: carriage return (this repository uses LF endings)`);
+    if (/\t/.test(line)) problems.push(`${where}: tab character (this repository indents with two spaces)`);
+    if (/[ ]+$/.test(line)) problems.push(`${where}: trailing whitespace`);
+  });
+  if (!source.endsWith('\n')) problems.push(`${relative}: no final newline`);
+  if (/\n\n\n/.test(source)) problems.push(`${relative}: three or more consecutive blank lines`);
+  return problems;
+}
+
+/** @param {'error'|'warn'} level @param {string} area @param {string} message */
+function report(level, area, message) {
+  findings.push({ level, area, message });
+}
+
+async function walk(dir, filter) {
+  /** @type {string[]} */
+  const out = [];
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      out.push(...(await walk(full, filter)));
+    } else if (entry.isFile() && filter(entry.name)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+// ── 1. Parse + resolve ───────────────────────────────────────────────────────
+async function checkModules() {
+  const files = await walk(path.join(ROOT, 'src'), (name) => name.endsWith('.js'));
+
+  // Electron entry points cannot be imported outside Electron: the runtime modules
+  // are CommonJS and only resolve inside the packaged app. They are still parsed
+  // (so a syntax error fails the check) but their imports are verified statically
+  // by checkNamedImports instead.
+  // Files that cannot be imported outside their runtime: the Electron main process
+  // (CommonJS electron modules) and the renderer controller (needs a DOM). Both are
+  // still syntax-checked, and their imports are verified statically below.
+  // Harnesses that import `electron` cannot be imported by these checks — there is no Electron
+// runtime here — so they are parsed and linted but not executed.
+  const ENTRY_POINTS = new Set([
+    'src/app/main.js',
+    'src/app/gui-smoke.js',
+    'src/app/install-smoke.js',
+    'src/renderer/app.js'
+  ]);
+
+  for (const file of files) {
+    const relative = path.relative(ROOT, file).split(path.sep).join('/');
+    if (ENTRY_POINTS.has(relative)) {
+      // Electron entry points cannot be executed here, but they can still be parsed.
+      // `node --check` understands ESM and needs no child-process gymnastics.
+      const { spawnSync } = await import('node:child_process');
+      const parsed = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+      if (parsed.status !== 0) {
+        const message = (parsed.stderr || '').split('\n').filter(Boolean).slice(0, 2).join(' ');
+        report('error', 'modules', `${relative}: syntax error — ${message}`);
+      }
+      notes.push(`parsed (not imported): ${relative}`);
+      continue;
+    }
+    try {
+      // Importing executes module top-level code. That is intentional here: a
+      // module that cannot be imported is a module that cannot ship.
+      await import(pathToFileURL(file).href);
+    } catch (error) {
+      report('error', 'modules', `${relative}: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+    }
+  }
+  notes.push(`imported ${files.length} source modules`);
+  return files;
+}
+
+// ── 2. Named-import consistency ──────────────────────────────────────────────
+async function checkNamedImports(files) {
+  /** @type {Map<string, Set<string>>} */
+  const exportsByFile = new Map();
+
+  for (const file of files) {
+    const source = await readFile(file, 'utf8');
+    const names = new Set();
+    for (const match of source.matchAll(/^export\s+(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z0-9_$]+)/gm)) {
+      names.add(match[1]);
+    }
+    // `export { a, b as c }`
+    for (const match of source.matchAll(/^export\s*\{([^}]+)\}/gm)) {
+      for (const part of match[1].split(',')) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        const alias = trimmed.split(/\s+as\s+/);
+        names.add((alias[1] ?? alias[0]).trim());
+      }
+    }
+    // `export * from './x.js'` re-exports are resolved by import-time checking.
+    if (/^export\s+\*\s+from/m.test(source)) names.add('*');
+    exportsByFile.set(file, names);
+  }
+
+  for (const file of files) {
+    const source = await readFile(file, 'utf8');
+    const relative = path.relative(ROOT, file);
+    for (const match of source.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+      const specifiers = match[1]
+        .split(',')
+        .map((part) => part.trim().split(/\s+as\s+/)[0].trim())
+        .filter(Boolean);
+      const target = match[2];
+      if (!target.startsWith('.')) continue;
+      const resolved = path.resolve(path.dirname(file), target);
+      const available = exportsByFile.get(resolved);
+      if (!available) continue; // import-time check covers unresolvable files
+      if (available.has('*')) continue;
+      for (const specifier of specifiers) {
+        if (specifier === 'default') continue;
+        if (!available.has(specifier)) {
+          report('error', 'imports', `${relative} imports "${specifier}" from ${target}, which does not export it`);
+        }
+      }
+    }
+  }
+}
+
+// ── 3. Offline guarantee ─────────────────────────────────────────────────────
+async function checkOffline(files) {
+  const allowed = new Set(['src/security/guard.js']);
+  const transports = ['node:http', 'node:https', 'node:net', 'node:tls', 'node:dgram', 'node:dns', 'node:http2'];
+
+  for (const file of files) {
+    const relative = path.relative(ROOT, file).split(path.sep).join('/');
+    if (allowed.has(relative)) continue;
+    const source = (await readFile(file, 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    for (const transport of transports) {
+      if (new RegExp(`(from|import|require)\\s*\\(?\\s*['"]${transport}['"]`).test(source)) {
+        report('error', 'offline', `${relative} imports ${transport}; only the guard may do that`);
+      }
+    }
+    if (/(^|[^a-zA-Z0-9_$.])fetch\s*\(/.test(source)) {
+      report('error', 'offline', `${relative} calls fetch(); VERIDEX makes no outbound requests`);
+    }
+  }
+}
+
+// ── 4. Manual registry ───────────────────────────────────────────────────────
+async function checkManualRegistry() {
+  const { validateRegistry } = await import(pathToFileURL(path.join(ROOT, 'src/manual/registry.js')).href);
+  const result = validateRegistry();
+  for (const problem of result.problems) report('error', 'manual-registry', problem);
+}
+
+// ── 5. Settings wiring ───────────────────────────────────────────────────────
+async function checkSettings() {
+  const { SETTINGS_SPEC } = await import(pathToFileURL(path.join(ROOT, 'src/core/settings.js')).href);
+  /** @type {Map<string, string>} */
+  const cache = new Map();
+
+  for (const spec of SETTINGS_SPEC) {
+    const target = path.join(ROOT, spec.appliesTo);
+    let source = cache.get(spec.appliesTo);
+    if (source === undefined) {
+      try {
+        source = await readFile(target, 'utf8');
+      } catch {
+        report('error', 'settings', `setting "${spec.key}" points at ${spec.appliesTo}, which does not exist`);
+        continue;
+      }
+      cache.set(spec.appliesTo, source);
+    }
+    if (!source.includes(spec.key)) {
+      report('error', 'settings', `setting "${spec.key}" is applied by ${spec.appliesTo}, which never references the key`);
+    }
+  }
+  notes.push(`checked ${SETTINGS_SPEC.length} settings against their consumer modules`);
+}
+
+// ── 6. Requirements document ─────────────────────────────────────────────────
+async function checkRequirements() {
+  const file = path.join(ROOT, 'docs/requirements.json');
+  try {
+    await stat(file);
+  } catch {
+    report('warn', 'requirements', 'docs/requirements.json is missing');
+    return;
+  }
+  const parsed = JSON.parse(await readFile(file, 'utf8'));
+  const requirements = Array.isArray(parsed) ? parsed : (parsed.requirements ?? []);
+  const ids = new Set();
+  for (const requirement of requirements) {
+    if (!requirement.id) {
+      report('error', 'requirements', 'a requirement has no id');
+      continue;
+    }
+    if (ids.has(requirement.id)) report('error', 'requirements', `duplicate requirement id ${requirement.id}`);
+    ids.add(requirement.id);
+    if (!requirement.st || requirement.st === 'NS') {
+      report('warn', 'requirements', `${requirement.id} is still marked NS (not started)`);
+    }
+  }
+  notes.push(`${requirements.length} requirements parsed`);
+}
+
+// ── 7. Dependency cycles ─────────────────────────────────────────────────────
+async function checkCycles(files) {
+  /** @type {Map<string, string[]>} */
+  const graph = new Map();
+  const byPath = new Set(files.map((file) => path.resolve(file)));
+
+  for (const file of files) {
+    const source = await readFile(file, 'utf8');
+    const imports = [];
+    for (const match of source.matchAll(/^\s*(?:import|export)\s[^;]*?from\s*['"]([^'"]+)['"]/gms)) {
+      if (!match[1].startsWith('.')) continue;
+      const resolved = path.resolve(path.dirname(file), match[1]);
+      if (byPath.has(resolved)) imports.push(resolved);
+    }
+    for (const match of source.matchAll(/^\s*import\s*['"]([^'"]+)['"]/gm)) {
+      if (!match[1].startsWith('.')) continue;
+      const resolved = path.resolve(path.dirname(file), match[1]);
+      if (byPath.has(resolved)) imports.push(resolved);
+    }
+    graph.set(path.resolve(file), imports);
+  }
+
+  for (const cycle of findCycles(graph)) {
+    const chain = cycle.map((file) => path.relative(ROOT, file).split(path.sep).join('/')).join(' -> ');
+    report('error', 'cycles', `dependency cycle: ${chain}`);
+  }
+  notes.push(`scanned ${graph.size} modules for dependency cycles`);
+}
+
+// ── 8. Formatting policy ─────────────────────────────────────────────────────
+async function checkFormatting() {
+  const roots = ['src', 'tests', 'scripts'].map((dir) => path.join(ROOT, dir));
+  let count = 0;
+  for (const root of roots) {
+    const files = await walk(root, (name) => /\.(js|mjs|cjs)$/.test(name));
+    for (const file of files) {
+      const relative = path.relative(ROOT, file).split(path.sep).join('/');
+      const source = await readFile(file, 'utf8');
+      for (const problem of formatProblems(relative, source)) report('error', 'formatting', problem);
+      count += 1;
+    }
+  }
+  notes.push(`checked formatting of ${count} source files`);
+}
+
+// ── Run ──────────────────────────────────────────────────────────────────────
+/**
+ * Run every check and return what was found.
+ *
+ * Exported so a test can call the gate directly; the printer below is the CLI's job. Importing
+ * this module has no side effects, which is what lets `findCycles` and `formatProblems` be
+ * exercised on synthetic input.
+ *
+ * @returns {Promise<{findings: {level: string, area: string, message: string}[], notes: string[]}>}
+ */
+export async function runChecks({ only = null } = {}) {
+  findings.length = 0;
+  notes.length = 0;
+  const modules = await checkModules();
+  await checkNamedImports(modules);
+  await checkOffline(modules);
+  await checkManualRegistry();
+  await checkSettings();
+  await checkRequirements();
+  await checkCycles(modules);
+  await checkFormatting();
+  const selected = only ? findings.filter((finding) => only.includes(finding.area)) : [...findings];
+  return { findings: selected, notes: [...notes] };
+}
+
+/**
+ * Is this file the one node was asked to run?
+ *
+ * The comparison is case-insensitive on Windows: `C:\repo\scripts\check.mjs` from argv and
+ * `c:\repo\scripts\check.mjs` from import.meta describe one file, and a case mismatch would make
+ * the CLI silently do nothing while exiting zero — a gate that reports success by not running.
+ */
+const isDirectRun = (() => {
+  if (!process.argv[1]) return false;
+  const invoked = path.resolve(process.argv[1]);
+  const self = path.resolve(import.meta.filename ?? '');
+  return process.platform === 'win32' ? invoked.toLowerCase() === self.toLowerCase() : invoked === self;
+})();
+
+if (isDirectRun) {
+  // `--only formatting` runs the whole gate but only reports one area. CI uses it for the
+  // formatting step so the log says which rule failed instead of repeating every check.
+  const onlyIndex = process.argv.indexOf('--only');
+  const only = onlyIndex === -1 ? null : (process.argv[onlyIndex + 1] ?? '').split(',').filter(Boolean);
+  const result = await runChecks({ only });
+  const errors = result.findings.filter((finding) => finding.level === 'error');
+  const warnings = result.findings.filter((finding) => finding.level === 'warn');
+
+  console.log('VERIDEX static checks');
+  for (const note of result.notes) console.log(`  · ${note}`);
+  console.log('');
+
+  if (result.findings.length === 0) {
+    console.log('No findings.');
+  } else {
+    for (const finding of result.findings) {
+      console.log(`${finding.level === 'error' ? 'FAIL' : 'WARN'}  [${finding.area}] ${finding.message}`);
+    }
+  }
+
+  console.log('');
+  console.log(`${errors.length} error(s), ${warnings.length} warning(s)`);
+  if (errors.length > 0) process.exitCode = 1;
+}
