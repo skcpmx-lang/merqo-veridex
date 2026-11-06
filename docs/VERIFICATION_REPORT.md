@@ -33,7 +33,7 @@ These ran, in this environment or in CI, and the output was read.
 | Licence audit | `npm run audit:licences` | 339 packages, 0 errors, 1 recorded exception (`png-js`, undeclared licence, upstream states MIT) |
 | Requirement audit | `npm run audit:requirements -- --check` | "Every claimed status matches the repository contents." |
 | Memory stability worker | `tests/unit/memory-stability.test.js` | a real 64 MB buffer written and read back through a worker; 0 mismatches |
-| Real window (Electron 45.2.3, Chromium 156, Windows) | run [42184459268](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184459268) | 23 steps, 34 screenshots, 0 problems, 0 renderer console messages |
+| Real window (Electron 45.2.3, Chromium 156, Windows) | run [42185390234](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42185390234) | 23 steps, 34 screenshots, 0 problems, 0 renderer console messages |
 | Real WMI / PowerShell / registry sweep | `windows-latest`, same run family | 1,094 fields across 19 modules, 32 provider attempts, score 84 at 75 % coverage, 10 info + 45 ok |
 | Dependency graph + formatting policy | CI step on every push | both clean; both proven to refuse bad input by test |
 
@@ -64,13 +64,13 @@ machine somebody owns.**
 
 ## 3. Inspected
 
-I opened these images and looked at them; nothing else in the evidence set is claimed as reviewed.
+I opened these images from run [42185390234](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42185390234) and looked at them; nothing else in the evidence set is claimed as reviewed.
 
 | Image | What I saw | What it settles |
 | --- | --- | --- |
-| `shots12/gui-shots/23-performance-cards.png` | GPU card, **Memory stability** card with an unticked consent box and a disabled *Run stability check*, **System responsiveness** card printing the 35/20/25/20 weights | the three cards render on Windows, and the consent gate is closed before consent |
-| `shots12/gui-shots/24-dashboard-arranging.png` | dashed widget shells labelled SCAN PROGRESS / COMPONENTS, each with ↑ ↓ × controls | the arrangement editor renders and is operable in the real window |
-| `shots12/gui-shots/15-page-performance.png` | breadcrumb `VERIDEX › Inspection › Performance`, a **Recent** button in the toolbar | the breadcrumb and quick-access entry are on screen |
+| `shots13/gui-shots/23-performance-cards.png` | GPU card, **Memory stability** card with the consent sentence on its own line, an unticked box, a disabled *Run stability check* and Buffer (MB) / Passes beneath it, then **System responsiveness** printing the 35/20/25/20 weights | the three cards render on Windows, the consent gate is closed before consent, and the controls read in the order they are meant |
+| `shots13/gui-shots/24-dashboard-arranging.png` | dashed widget shells labelled SCAN PROGRESS / COMPONENTS, each with ↑ ↓ × controls | the arrangement editor renders and is operable in the real window |
+| `shots13/gui-shots/15-page-performance.png` | breadcrumb `VERIDEX › Inspection › Performance`, a **Recent** button in the toolbar | the breadcrumb and quick-access entry are on screen |
 | `shots10/gui-shots/15-page-performance.png` | the same page before the cards were photographed | the earlier evidence did not show the new cards, which is why the step was added |
 
 Everything else in `gui-shots/` is *present* and was *not* opened. A run that captures nothing
@@ -106,9 +106,12 @@ Recorded because a report that only lists successes is not a verification report
 2. **The first new evidence step threw "Script failed to execute".** A backslash-n inside a
    template literal arrived at the renderer as a real newline inside a regex literal. The message
    says nothing about the cause; the fix keeps the newline out of the source entirely.
-3. **The first screenshot of the new cards showed the wrong cards.** The step scrolled to the
-   bottom of the page and photographed the stress card. It now scrolls the memory card to the
-   centre and fails if it cannot — "something rendered" is not the claim being made.
+3. **The first screenshot of the new cards showed the wrong cards**, and the second showed the
+   right cards with the wrong wording: the step scrolled to the bottom of the page and
+   photographed the stress card, then, once aimed correctly, the memory card read "… held for
+   several seconds Buffer (MB) 256" as one sentence. The step now scrolls the memory card to the
+   centre and fails if it cannot; the consent sentence now takes its own row. Both were seen by
+   opening the image, which is why §3 exists.
 4. **`formatNumber` was used in a new code path without importing it.** Caught by
    `history-rows.test.js` on its first run, which is the point of writing the test before the
    screenshot.
