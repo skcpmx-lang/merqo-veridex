@@ -6,6 +6,11 @@ name: Release
 #
 # Trigger either from the Actions tab or with:
 #   gh workflow run release.yml -f version=1.0.0
+#
+# The workflow is resumable. If a previous attempt created the tag and then died — which is
+# exactly what happened on 2026-11-06, when the publish step passed an empty string to
+# `gh release create` and it was treated as an asset pattern — running it again reuses the
+# existing tag, checks out the commit the tag names, and publishes from there.
 
 on:
   workflow_dispatch:
@@ -40,44 +45,91 @@ jobs:
       # ── Version, once ─────────────────────────────────────────────────────
       # Every later step reads $VERSION and $TAG from here. Nothing else in this file may
       # build a tag name by hand: doing that is how `vv1.0.0` happened, when a person typed
-      # `v1.0.0` into a field whose description said not to, and how the old guard threw on
-      # every run, because `git rev-parse v1.0.0` prints `v1.0.0` to stdout even when it
-      # cannot resolve it — a truthy string, to PowerShell, for a tag that never existed.
+      # `v1.0.0` into a field whose description said not to.
       - name: Normalize and validate the version
+        id: version
         env:
           # Passed through the environment, never interpolated into the command line: a version
           # input is user text, and `${{ }}` inside `run:` is pasted into a shell.
           INPUT_VERSION: ${{ inputs.version }}
-        run: node scripts/release-version.mjs "$INPUT_VERSION" --github-env
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          node scripts/release-version.mjs "$INPUT_VERSION" --github-env
+          if [ "${INPUT_PRERELEASE:-false}" = "true" ]; then
+            # A later line for the same key wins in $GITHUB_ENV, so this overrides the value
+            # the script derived from a `-rc` suffix.
+            printf 'PRERELEASE=true\n' >> "$GITHUB_ENV"
+            echo "::warning::publishing a pre-release because the prerelease input was set"
+          fi
         shell: bash
 
-      - name: Check the existing tag and release state
+      # ── What the repository already contains ──────────────────────────────
+      # Observations only. The decisions are made by the tested script, not by this shell.
+      - name: Read the tag and the release state
+        id: state
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          git fetch --tags --quiet origin || true
+
           # `git rev-parse --verify` says nothing on stdout and exits non-zero when the ref is
           # absent, so the empty string below means "no tag" rather than "could not say".
           existing="$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" || true)"
           if [ -n "$existing" ]; then
             echo "existing tag ${TAG} → ${existing}"
           else
-            echo "no ${TAG} tag exists"
+            echo "no ${TAG} tag exists yet"
           fi
 
-          release_exists=false
-          if gh release view "$TAG" --json tagName >/dev/null 2>&1; then
-            release_exists=true
+          # A tag from another line of work must never be published under this branch's name.
+          in_history=false
+          if [ -n "$existing" ] && git merge-base --is-ancestor "$existing" "$TARGET_SHA"; then
+            in_history=true
+          fi
+          echo "tag commit is in the history of ${TARGET_SHA}: ${in_history}"
+
+          release_json="$RUNNER_TEMP/veridex-release.json"
+          if gh release view "$TAG" --json tagName,isDraft,isPrerelease,url,assets,body > "$release_json" 2>/dev/null; then
             echo "a GitHub Release for ${TAG} already exists"
+          else
+            printf '{"absent":true}\n' > "$release_json"
+            echo "no GitHub Release for ${TAG} yet"
           fi
 
           node scripts/release-version.mjs --decide \
             --tag "$TAG" --target "$TARGET_SHA" \
-            --existing "${existing:-none}" --release-exists "$release_exists" \
-            --github-env
+            --existing "${existing:-none}" --in-history "$in_history" \
+            --release-json "$release_json" \
+            --github-env --github-output
         shell: bash
 
+      # ── Release the files the tag names, not whatever is at the head ──────
+      # If v1.0.0 already exists, its commit is authoritative: the tag was pushed by an earlier
+      # attempt and must never be moved to include a later CI fix. Checking out the tagged
+      # commit means the binaries published under v1.0.0 are built from the v1.0.0 tree.
+      - name: Check out the commit the tag names
+        if: steps.state.outputs.release_ref != '' && steps.state.outputs.release_ref != github.sha
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.state.outputs.release_ref }}
+          fetch-depth: 0
+
+      - name: Confirm what is about to be released
+        run: |
+          set -euo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          echo "releasing ${TAG} from commit ${head_sha}"
+          git log -1 --format='%H %s'
+          if [ "$TAG_ACTION" != "create" ] && [ "$head_sha" != "$TAG_EXISTING" ]; then
+            echo "::error::checked out ${head_sha}, but ${TAG} points at ${TAG_EXISTING}. The published files must be the files the tag names."
+            exit 1
+          fi
+        shell: bash
+
+      # ── Gates ─────────────────────────────────────────────────────────────
       - name: Set the version in package.json
         run: |
           $json = Get-Content package.json -Raw | ConvertFrom-Json
@@ -103,24 +155,103 @@ jobs:
       - name: Verify artifacts and write checksums
         run: npm run verify:artifacts
 
-      - name: Create the tag and release
+      # ── Tag ───────────────────────────────────────────────────────────────
+      - name: Create the tag if it does not exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if ($env:TAG_ACTION -eq 'reuse') {
-            Write-Host "reusing ${env:TAG} at ${env:TAG_EXISTING}: it already points at this commit"
-          } else {
-            # An annotated tag on the commit this run checked out. Created here and nowhere else.
-            git tag -a "$env:TAG" -m "VERIDEX $env:VERSION" "$env:GITHUB_SHA"
-            git push origin "$env:TAG"
-          }
+          head_sha="$(git rev-parse HEAD)"
+          if [ "$TAG_ACTION" = "create" ]; then
+            # An annotated tag on the commit this run built. Created here and nowhere else.
+            git tag -a "$TAG" -m "VERIDEX $VERSION" "$head_sha"
+            git push origin "refs/tags/$TAG"
+          else
+            echo "reusing ${TAG} at ${TAG_EXISTING}; it is not moved, rewritten or pushed again"
+          fi
 
-          # A double-quoted here-string, because the notes interpolate $env:VERSION. A literal
-          # `@'…'@` would publish the text "VERIDEX $env:VERSION" to the release page.
-          $notes = @"
-          ## VERIDEX $env:VERSION
+          # Whatever the tag pointed at before this step, it must now name the commit whose
+          # files are about to be uploaded.
+          git fetch --tags --quiet origin
+          tagged="$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}")"
+          if [ "$tagged" != "$head_sha" ]; then
+            echo "::error::${TAG} names ${tagged}, but this run built ${head_sha}"
+            exit 1
+          fi
+          echo "${TAG} names ${head_sha}"
+        shell: bash
+
+      # ── Publish ───────────────────────────────────────────────────────────
+      # The failure this step replaces: `$prerelease` was `''` for a stable release, PowerShell
+      # forwards an empty string to a native command as `""`, and every positional argument
+      # after the tag is an asset path to `gh release create` — so it tried to glob an empty
+      # name and stopped with `no matches found for ''`, after the tag had been pushed.
+      #
+      # Now: three named files, each checked to exist and to be non-empty, each checked against
+      # SHA256SUMS.txt, an explicit argument array with no empty elements, and the notes in a
+      # file rather than an argument. Bash, not PowerShell, so nothing re-parses the arguments.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          installer="dist/VERIDEX-Setup-${VERSION}-x64.exe"
+          portable="dist/VERIDEX-${VERSION}-portable-x64.exe"
+          sums="dist/SHA256SUMS.txt"
+
+          assets=("$installer" "$portable" "$sums")
+
+          # 1. Exactly three, never fewer, never empty.
+          if [ "${#assets[@]}" -ne 3 ]; then
+            echo "::error::expected 3 assets, built an array of ${#assets[@]}"
+            exit 1
+          fi
+          for asset in "${assets[@]}"; do
+            if [ -z "$asset" ]; then
+              echo "::error::an asset path is empty; refusing to pass it to gh"
+              exit 1
+            fi
+            if [ ! -f "$asset" ]; then
+              echo "::error::missing asset $asset"
+              echo "dist/ contains:"
+              ls -la dist || true
+              exit 1
+            fi
+            if [ ! -s "$asset" ]; then
+              echo "::error::asset $asset is zero bytes"
+              exit 1
+            fi
+          done
+
+          # 2. The checksum file must describe the exact files about to be uploaded.
+          for name in "$(basename "$installer")" "$(basename "$portable")"; do
+            line="$(grep -E "^[0-9a-f]{64}  ${name//./\\.}\$" "$sums" || true)"
+            if [ -z "$line" ]; then
+              echo "::error::SHA256SUMS.txt has no entry for ${name}"
+              echo "SHA256SUMS.txt contains:"
+              cat "$sums" || true
+              exit 1
+            fi
+            if ! ( cd dist && printf '%s\n' "$line" | sha256sum --check --strict - >/dev/null ); then
+              echo "::error::${name} does not match its SHA256SUMS.txt entry"
+              exit 1
+            fi
+            echo "checksum ok: ${line}"
+          done
+
+          # 3. Log exactly what is going out, before it goes out.
+          echo "publishing ${TAG} (release action: ${RELEASE_ACTION})"
+          for asset in "${assets[@]}"; do
+            printf 'asset: %s (%s bytes)\n' "$asset" "$(wc -c < "$asset" | tr -d ' ')"
+          done
+
+          # 4. Notes to a file. An argument this long is where quoting goes wrong.
+          notes="$RUNNER_TEMP/VERIDEX-RELEASE-NOTES.md"
+          cat > "$notes" <<'VERIDEX_NOTES'
+          ## VERIDEX @VERSION@
 
           ### This build is unsigned
 
@@ -132,10 +263,22 @@ jobs:
           Verify what you downloaded before running it:
 
           ```
-          Get-FileHash .\VERIDEX-Setup-$env:VERSION-x64.exe -Algorithm SHA256
+          Get-FileHash .\VERIDEX-Setup-@VERSION@-x64.exe -Algorithm SHA256
           ```
 
           and compare the result with `SHA256SUMS.txt` below.
+
+          ### Installing
+
+          1. Download `VERIDEX-Setup-@VERSION@-x64.exe` and `SHA256SUMS.txt`.
+          2. Compare the hash from `Get-FileHash` with the matching line in `SHA256SUMS.txt`.
+          3. Run the installer. Windows will warn that the publisher is unknown; that is the
+             absence of a signing certificate, not a damaged download.
+          4. VERIDEX starts from the Start menu. Nothing is written outside `%LOCALAPPDATA%`
+             except the shortcut and the uninstall entry.
+
+          `VERIDEX-@VERSION@-portable-x64.exe` is the same program without an installer: run
+          it directly, and delete it to remove it.
 
           ### What has been verified, and what has not
 
@@ -161,16 +304,134 @@ jobs:
 
           Every report carries the redaction setting that was in force when it was
           generated, so a report can always be traced back to what it exposed.
-          "@
+          VERIDEX_NOTES
 
-          $prerelease = if ('${{ inputs.prerelease }}' -eq 'true') { '--prerelease' } else { '' }
+          # The heredoc is quoted so nothing in the notes is expanded as shell; the version is
+          # substituted afterwards, which is the only interpolation the notes need.
+          sed -i "s/@VERSION@/${VERSION}/g" "$notes"
+          if [ ! -s "$notes" ]; then
+            echo "::error::the release notes file is empty"
+            exit 1
+          fi
+          if grep -q '@VERSION@' "$notes"; then
+            echo "::error::the release notes still contain an unsubstituted placeholder"
+            exit 1
+          fi
+          if ! grep -q "^## VERIDEX ${VERSION}\$" "$notes"; then
+            echo "::error::the release notes do not start with the expected heading"
+            exit 1
+          fi
+          echo "notes: $(wc -c < "$notes" | tr -d ' ') bytes in $notes"
 
-          gh release create "$env:TAG" `
-            dist/VERIDEX-Setup-*.exe `
-            dist/VERIDEX-*-portable-*.exe `
-            dist/SHA256SUMS.txt `
-            --title "VERIDEX $env:VERSION" `
-            --notes $notes `
-            --verify-tag `
-            $prerelease
-        shell: pwsh
+          # 5. An argument array with no empty elements, and no empty-positional surprises:
+          #    `${extra[@]+…}` keeps `set -u` happy when the array is empty.
+          extra=()
+          if [ "${PRERELEASE:-false}" = "true" ]; then
+            extra+=(--prerelease)
+          fi
+
+          case "$RELEASE_ACTION" in
+            create)
+              gh release create "$TAG" "${assets[@]}" \
+                --title "VERIDEX ${VERSION}" \
+                --notes-file "$notes" \
+                --verify-tag \
+                ${extra[@]+"${extra[@]}"}
+              ;;
+            complete-draft)
+              # Not public yet, so replacing the asset files of an interrupted attempt is safe.
+              gh release upload "$TAG" "${assets[@]}" --clobber
+              gh release edit "$TAG" \
+                --draft=false \
+                --title "VERIDEX ${VERSION}" \
+                --notes-file "$notes" \
+                ${extra[@]+"${extra[@]}"}
+              ;;
+            verify)
+              echo "a published release already exists; it will be verified, not replaced"
+              ;;
+            *)
+              echo "::error::unknown release action ${RELEASE_ACTION}"
+              exit 1
+              ;;
+          esac
+        shell: bash
+
+      # ── Verify what is actually on the release page ───────────────────────
+      - name: Verify the published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          installer_name="VERIDEX-Setup-${VERSION}-x64.exe"
+          portable_name="VERIDEX-${VERSION}-portable-x64.exe"
+
+          meta="$RUNNER_TEMP/veridex-published.json"
+          gh release view "$TAG" --json tagName,isDraft,isPrerelease,url,assets,body > "$meta"
+
+          download="$RUNNER_TEMP/veridex-downloaded"
+          rm -rf "$download"
+          mkdir -p "$download"
+          gh release download "$TAG" --dir "$download" \
+            --pattern "$installer_name" \
+            --pattern "$portable_name" \
+            --pattern 'SHA256SUMS.txt'
+
+          # The published checksum file must describe the published executables.
+          for name in "$installer_name" "$portable_name"; do
+            line="$(grep -E "^[0-9a-f]{64}  ${name//./\\.}\$" "$download/SHA256SUMS.txt" || true)"
+            if [ -z "$line" ]; then
+              echo "::error::the published SHA256SUMS.txt has no entry for ${name}"
+              exit 1
+            fi
+            if ! ( cd "$download" && printf '%s\n' "$line" | sha256sum --check --strict - ); then
+              echo "::error::the published ${name} does not match the published SHA256SUMS.txt"
+              exit 1
+            fi
+            # What came back must be the bytes that were uploaded (unless this run only verified).
+            if [ "$RELEASE_ACTION" != "verify" ]; then
+              if ! cmp -s "dist/$name" "$download/$name"; then
+                echo "::error::the uploaded ${name} is not the file this run built"
+                exit 1
+              fi
+            fi
+          done
+
+          TAG="$TAG" VERSION="$VERSION" PRERELEASE="${PRERELEASE:-false}" \
+          ASSET_INSTALLER="$installer_name" ASSET_PORTABLE="$portable_name" \
+          META="$meta" DOWNLOAD="$download" node - <<'VERIDEX_VERIFY'
+          const { readFileSync, statSync } = require('node:fs');
+          const { join } = require('node:path');
+          const meta = JSON.parse(readFileSync(process.env.META, 'utf8'));
+          const fail = (message) => { console.error(`::error::${message}`); process.exit(1); };
+
+          if (meta.tagName !== process.env.TAG) fail(`the release is for ${meta.tagName}, not ${process.env.TAG}`);
+          if (meta.isDraft !== false) fail('the release is still a draft');
+          const wantPre = process.env.PRERELEASE === 'true';
+          if (meta.isPrerelease !== wantPre) fail(`isPrerelease is ${meta.isPrerelease}, expected ${wantPre}`);
+
+          const expected = [process.env.ASSET_INSTALLER, process.env.ASSET_PORTABLE, 'SHA256SUMS.txt'];
+          const assets = Array.isArray(meta.assets) ? meta.assets : [];
+          const names = assets.map((asset) => asset.name);
+          const missing = expected.filter((name) => !names.includes(name));
+          if (missing.length) fail(`the release is missing ${missing.join(', ')}; it has ${names.join(', ') || 'nothing'}`);
+          if (names.length !== expected.length) fail(`the release has ${names.length} assets, expected ${expected.length}: ${names.join(', ')}`);
+          for (const asset of assets) {
+            if (!(asset.size > 0)) fail(`${asset.name} is ${asset.size} bytes`);
+          }
+          if (typeof meta.body !== 'string' || !meta.body.includes(`## VERIDEX ${process.env.VERSION}`)) {
+            fail('the release body does not carry the notes for this version');
+          }
+          if (!meta.body.includes('unsigned')) fail('the release body does not say the build is unsigned');
+
+          const { createHash } = require('node:crypto');
+          for (const name of [process.env.ASSET_INSTALLER, process.env.ASSET_PORTABLE]) {
+            const path = join(process.env.DOWNLOAD, name);
+            const digest = createHash('sha256').update(readFileSync(path)).digest('hex');
+            console.log(`${digest}  ${name}  ${statSync(path).size} bytes`);
+          }
+          console.log(`release: ${meta.url}`);
+          console.log('VERIFIED: published, assets attached, checksums match the bytes on the release.');
+          VERIDEX_VERIFY
+        shell: bash

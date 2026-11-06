@@ -61,8 +61,10 @@ test('every file a workflow uploads is produced by the build it runs', () => {
 
 test('the release workflow will not publish without passing tests', () => {
   const release = read('release.yml');
-  const testStep = release.indexOf('npm test');
-  const publishStep = release.indexOf('gh release create');
+  const testStep = release.search(/^\s*run: npm test$/m);
+  // The *command*, not a mention of it: the workflow's comments name the publish step they
+  // explain, and a mention near the top of the file is not a step.
+  const publishStep = release.search(/^\s*gh release create /m);
   assert.ok(testStep > -1, 'the release workflow must run the tests');
   assert.ok(publishStep > -1, 'the release workflow must create a release');
   assert.ok(testStep < publishStep, 'tests must run before anything is published');

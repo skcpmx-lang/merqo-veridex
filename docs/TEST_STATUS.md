@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 899 · pass 899 · fail 0
+tests 923 · pass 923 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -76,7 +76,8 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/stress-run.test.js` | 11 | consent, duration ceiling, thermal stop, cancellation, refusals, no PASS verdict |
 | `tests/unit/stress.test.js` | 16 | stress guard, elapsed time, transitions |
 | `tests/unit/windows-extended.test.js` | 22 | Windows inventory parsing beyond the core modules |
-| `tests/unit/release-version.test.js` | 18 | version normalisation, tag reuse/refusal, and the workflow text that has to use it |
+| `tests/unit/release-publish.test.js` | 17 | the publish, verify and tag steps, extracted from the workflow and executed with stub binaries |
+| `tests/unit/release-version.test.js` | 25 | version normalisation, tag reuse/refusal, and the workflow text that has to use it |
 | `tests/unit/scheduled-tasks.test.js` | 15 | R-12-02: scheduled tasks, the `schtasks` fallback, and the Startup folders the provider claimed to read |
 | `tests/unit/window-placement.test.js` | 20 | R-18-02: window placement across displays, work-area fit, DPI scaling and stranded windows |
 | `tests/unit/windows-modules-depth.test.js` | 31 | the four new modules against their per-module checklists |
@@ -114,7 +115,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 13 | CI configuration, permissions and release gating |
-| **Total** | **899** | |
+| **Total** | **923** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

@@ -5,7 +5,7 @@ Local. Read-only. Offline by construction. Honest about what it could not measur
 
 > **Status: installs, launches and uninstalls on a Windows virtual machine — never on
 > physical hardware.**
-> 899 tests pass on Linux **and** Windows; the static gate reports 0 errors and 0 warnings.
+> 923 tests pass on Linux **and** Windows; the static gate reports 0 errors and 0 warnings.
 > CI builds the installer and the portable executable, then *uses* them: it installs silently
 > and per-user, launches the installed application, drives its whole interface, and uninstalls
 > it — plus the portable build, launched from its extraction directory. All 130 requirements
@@ -87,7 +87,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 899 tests
+npm test            # 923 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```
