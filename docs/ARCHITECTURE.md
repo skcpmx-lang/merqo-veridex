@@ -190,6 +190,13 @@ time. The direction of failure is tested: invalid or missing settings always pro
 `includeSensitive: false` and `allowNetwork: false`. Every report records the policy that
 produced it, so an old report can never be mistaken for a less redacted one.
 
+The identifier list itself lives in `src/core/sensitive.js`, which imports nothing. The
+renderer prints the Privacy page's guarantees and the Reports page's withheld count from the
+same module the main process uses, and a sandboxed renderer cannot load anything that reaches
+`node:*`: one such import two levels deep kept the whole window on its "Starting VERIDEX…"
+text while every jsdom test passed. `tests/integration/renderer-graph.test.js` walks the
+renderer's real import graph and fails on a Node builtin anywhere in it.
+
 ---
 
 ## 5. The renderer

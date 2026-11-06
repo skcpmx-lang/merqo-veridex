@@ -17,7 +17,7 @@
  */
 
 import { Status } from '../core/status.js';
-import { SENSITIVE_KEYS } from '../core/logger.js';
+import { SENSITIVE_KEYS } from '../core/sensitive.js';
 
 /**
  * Field-name fragments that identify a person or a specific device.

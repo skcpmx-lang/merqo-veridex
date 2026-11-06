@@ -15,52 +15,14 @@ import { appendFile, mkdir, rename, stat, readdir, unlink } from 'node:fs/promis
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
+export { SENSITIVE_KEYS } from './sensitive.js';
+import { SENSITIVE_KEYS } from './sensitive.js';
+
 export const Level = Object.freeze({ TRACE: 'trace', DEBUG: 'debug', INFO: 'info', WARN: 'warn', ERROR: 'error', FATAL: 'fatal' });
 
 const LEVEL_WEIGHT = Object.freeze({ trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60 });
 
-/** Keys whose values are redacted wherever they appear in a log record. */
-export const SENSITIVE_KEYS = Object.freeze([
-  'serial',
-  'serialnumber',
-  'serial_number',
-  'serialnumberid',
-  'mac',
-  'macaddress',
-  'ip',
-  'ipv4',
-  'ipv6',
-  'ipaddress',
-  'hostname',
-  'host',
-  'username',
-  'user',
-  'account',
-  'accountname',
-  'ssid',
-  'wifi',
-  'computername',
-  'deviceid',
-  'machineguid',
-  'windowsproductid',
-  'productid',
-  'productkey',
-  'licensekey',
-  'token',
-  'password',
-  'secret',
-  'bitlockerkey',
-  'recoverykey',
-  // Command lines are never logged, and these keys are what a caller would use if it tried.
-  // Refusing the key is weaker than refusing to pass one, but it is the last line: the
-  // runner's logging path already records only the exit code.
-  'commandline',
-  'cmdline',
-  'command',
-  'args',
-  'argv',
-  'arguments'
-]);
+
 
 /**
  * @param {string} key
