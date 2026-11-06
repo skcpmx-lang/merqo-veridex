@@ -1,0 +1,384 @@
+{
+  "generatedAt": "2026-11-06T05:30:20.397Z",
+  "finishedAt": "2026-11-06T05:31:31.067Z",
+  "complete": true,
+  "electron": "45.2.3",
+  "chromium": "156.0.8078.80",
+  "node": "24.22.2",
+  "platform": "win32",
+  "arch": "x64",
+  "packaged": false,
+  "screenshots": [
+    {
+      "name": "failure-the-first-run-tour-appears-on-a-clean-profile-an",
+      "file": "01-failure-the-first-run-tour-appears-on-a-clean-profile-an.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-navigation-lists-every-documented-page-and-e",
+      "file": "02-failure-the-navigation-lists-every-documented-page-and-e.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-dashboard-renders-before-any-scan",
+      "file": "03-failure-the-dashboard-renders-before-any-scan.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-navigation-lists-every-documented-page",
+      "file": "04-failure-the-navigation-lists-every-documented-page.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-interface-reflects-the-scan-that-just-ran",
+      "file": "05-failure-the-interface-reflects-the-scan-that-just-ran.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-populated-pages-are-captured-not-only-their-",
+      "file": "06-failure-the-populated-pages-are-captured-not-only-their-.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-activity-log-lists-what-the-run-just-wrote-a",
+      "file": "07-failure-the-activity-log-lists-what-the-run-just-wrote-a.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-reports-page-previews-what-the-file-will-con",
+      "file": "08-failure-the-reports-page-previews-what-the-file-will-con.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "failure-the-privacy-page-states-what-is-stored-and-offer",
+      "file": "09-failure-the-privacy-page-states-what-is-stored-and-offer.png",
+      "width": 1008,
+      "height": 681
+    },
+    {
+      "name": "dashboard-1024x700",
+      "file": "10-dashboard-1024x700.png",
+      "width": 1024,
+      "height": 700
+    },
+    {
+      "name": "dashboard-zoom-125",
+      "file": "11-dashboard-zoom-125.png",
+      "width": 1280,
+      "height": 860
+    },
+    {
+      "name": "failure-a-1-25x-zoom-factor-does-not-break-the-layout",
+      "file": "12-failure-a-1-25x-zoom-factor-does-not-break-the-layout.png",
+      "width": 1280,
+      "height": 860
+    }
+  ],
+  "findings": [
+    {
+      "level": "info",
+      "message": "a window was created (1 total)"
+    },
+    {
+      "level": "info",
+      "message": "windows open at startup: 1"
+    },
+    {
+      "level": "info",
+      "message": "→ a window exists and has loaded the dashboard"
+    },
+    {
+      "level": "ok",
+      "message": "a window exists and has loaded the dashboard (8ms)"
+    },
+    {
+      "level": "ok",
+      "message": "window: \"VERIDEX — Advanced All-in-One Windows PC & Laptop Diagnostics\" 1024×720, visible"
+    },
+    {
+      "level": "info",
+      "message": "→ the first-run tour appears on a clean profile and can be completed"
+    },
+    {
+      "level": "info",
+      "message": "onboarding: needed=true step=welcome skipped=false"
+    },
+    {
+      "level": "fail",
+      "message": "the first-run tour appears on a clean profile and can be completed threw: timed out waiting for the first-run tour (last value: false)"
+    },
+    {
+      "level": "info",
+      "message": "→ the navigation lists every documented page, and each one renders"
+    },
+    {
+      "level": "info",
+      "message": "navigation entries (0): "
+    },
+    {
+      "level": "fail",
+      "message": "the navigation lists every documented page, and each one renders threw: navigation is missing: dashboard, hardware, battery, storage, network, windows, reliability, drivers, processes, manual, performance, monitor, reports, history, settings, privacy, logs, about"
+    },
+    {
+      "level": "info",
+      "message": "→ the window is hardened at runtime, not only in source"
+    },
+    {
+      "level": "info",
+      "message": "renderer sees node globals: false; bridge keys: invoke, on, channels"
+    },
+    {
+      "level": "info",
+      "message": "webPreferences: sandbox=true contextIsolation=true nodeIntegration=false"
+    },
+    {
+      "level": "ok",
+      "message": "the window is hardened at runtime, not only in source (1ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the dashboard renders before any scan"
+    },
+    {
+      "level": "fail",
+      "message": "the dashboard renders before any scan threw: the body has almost no text: \"Starting VERIDEX…\""
+    },
+    {
+      "level": "info",
+      "message": "→ the navigation lists every documented page"
+    },
+    {
+      "level": "info",
+      "message": "navigation entries: "
+    },
+    {
+      "level": "fail",
+      "message": "the navigation lists every documented page threw: expected the full navigation, found 0 entries"
+    },
+    {
+      "level": "info",
+      "message": "→ app:info answers from the real main process"
+    },
+    {
+      "level": "info",
+      "message": "app:info → version=1.0.0"
+    },
+    {
+      "level": "ok",
+      "message": "app:info answers from the real main process (1ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ an unlisted channel is refused by the contract"
+    },
+    {
+      "level": "info",
+      "message": "unknown channel → absent-from-bridge"
+    },
+    {
+      "level": "ok",
+      "message": "an unlisted channel is refused by the contract (1ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ cancelling a sweep returns the app to idle"
+    },
+    {
+      "level": "info",
+      "message": "cancel reply: {\"cancelled\":false,\"reason\":\"No scan is running.\"}"
+    },
+    {
+      "level": "info",
+      "message": "after cancel: running=false lastScanAt=2026-11-06T05:30:50.832Z"
+    },
+    {
+      "level": "ok",
+      "message": "cancelling a sweep returns the app to idle (20196ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ a scan runs through the UI and finishes"
+    },
+    {
+      "level": "info",
+      "message": "scan:start reply: {\"ok\":true,\"data\":{\"startedAt\":\"2026-11-06T05:30:50.842Z\",\"tasks\":3,\"cancelled\":false}}"
+    },
+    {
+      "level": "info",
+      "message": "sweep finished; 3 progress events"
+    },
+    {
+      "level": "info",
+      "message": "slowest tasks: system.identity=1793943052323ms, cpu.info=2753ms, memory.info=834ms"
+    },
+    {
+      "level": "ok",
+      "message": "a scan runs through the UI and finishes (5072ms)"
+    },
+    {
+      "level": "info",
+      "message": "sweep: [{\"taskId\":\"system.identity\",\"ms\":1793943052323},{\"taskId\":\"cpu.info\",\"ms\":2753},{\"taskId\":\"memory.info\",\"ms\":834}]"
+    },
+    {
+      "level": "info",
+      "message": "→ the interface reflects the scan that just ran"
+    },
+    {
+      "level": "info",
+      "message": "dashboard signals: {\"score\":false,\"coverage\":false,\"scannedSomething\":false}"
+    },
+    {
+      "level": "fail",
+      "message": "the interface reflects the scan that just ran threw: the dashboard shows nothing that came from the scan"
+    },
+    {
+      "level": "info",
+      "message": "→ the dashboard shows a coverage-aware score, never a bare one"
+    },
+    {
+      "level": "info",
+      "message": "score-related lines: []"
+    },
+    {
+      "level": "ok",
+      "message": "the dashboard shows a coverage-aware score, never a bare one (4ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the populated pages are captured, not only their empty states"
+    },
+    {
+      "level": "warn",
+      "message": "no navigation entry for \"dashboard\""
+    },
+    {
+      "level": "warn",
+      "message": "no navigation entry for \"hardware\""
+    },
+    {
+      "level": "warn",
+      "message": "no navigation entry for \"storage\""
+    },
+    {
+      "level": "warn",
+      "message": "no navigation entry for \"reports\""
+    },
+    {
+      "level": "warn",
+      "message": "no navigation entry for \"logs\""
+    },
+    {
+      "level": "info",
+      "message": "populated screenshots: none"
+    },
+    {
+      "level": "fail",
+      "message": "the populated pages are captured, not only their empty states threw: only 0 populated page(s) could be captured"
+    },
+    {
+      "level": "info",
+      "message": "→ the activity log lists what the run just wrote, and filters it"
+    },
+    {
+      "level": "info",
+      "message": "log entries: 5 at trace+, 0 at error+; unparseable=0"
+    },
+    {
+      "level": "fail",
+      "message": "the activity log lists what the run just wrote, and filters it threw: the activity log page did not render its heading"
+    },
+    {
+      "level": "info",
+      "message": "→ the reports page previews what the file will contain"
+    },
+    {
+      "level": "fail",
+      "message": "the reports page previews what the file will contain threw: timed out waiting for the report preview (last value: false)"
+    },
+    {
+      "level": "info",
+      "message": "→ the privacy page states what is stored and offers the controls"
+    },
+    {
+      "level": "fail",
+      "message": "the privacy page states what is stored and offers the controls threw: timed out waiting for the storage card (last value: false)"
+    },
+    {
+      "level": "info",
+      "message": "→ no page overflows horizontally at the minimum window size"
+    },
+    {
+      "level": "info",
+      "message": "1024x700: no horizontal overflow"
+    },
+    {
+      "level": "ok",
+      "message": "no page overflows horizontally at the minimum window size (3768ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ a 1.25x zoom factor does not break the layout"
+    },
+    {
+      "level": "info",
+      "message": "zoom 125%: content 0 chars, scrollWidth 1024 / client 1024"
+    },
+    {
+      "level": "fail",
+      "message": "a 1.25x zoom factor does not break the layout threw: the dashboard went blank at 125% zoom"
+    },
+    {
+      "level": "info",
+      "message": "→ report:build renders JSON, HTML and PDF to real bytes"
+    },
+    {
+      "level": "info",
+      "message": "report sizes: {\"json\":41406,\"html\":45901,\"pdf\":24023}"
+    },
+    {
+      "level": "ok",
+      "message": "report:build renders JSON, HTML and PDF to real bytes (50ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the renderer logged no uncaught errors"
+    },
+    {
+      "level": "info",
+      "message": "renderer console: 0 error(s), 0 warning(s)"
+    },
+    {
+      "level": "ok",
+      "message": "the renderer logged no uncaught errors (1ms)"
+    },
+    {
+      "level": "info",
+      "message": "→ the app closes its window without crashing"
+    },
+    {
+      "level": "info",
+      "message": "windows before close: 1"
+    }
+  ],
+  "problems": [
+    "the first-run tour appears on a clean profile and can be completed threw: timed out waiting for the first-run tour (last value: false)",
+    "the navigation lists every documented page, and each one renders threw: navigation is missing: dashboard, hardware, battery, storage, network, windows, reliability, drivers, processes, manual, performance, monitor, reports, history, settings, privacy, logs, about",
+    "the dashboard renders before any scan threw: the body has almost no text: \"Starting VERIDEX…\"",
+    "the navigation lists every documented page threw: expected the full navigation, found 0 entries",
+    "the interface reflects the scan that just ran threw: the dashboard shows nothing that came from the scan",
+    "the populated pages are captured, not only their empty states threw: only 0 populated page(s) could be captured",
+    "the activity log lists what the run just wrote, and filters it threw: the activity log page did not render its heading",
+    "the reports page previews what the file will contain threw: timed out waiting for the report preview (last value: false)",
+    "the privacy page states what is stored and offers the controls threw: timed out waiting for the storage card (last value: false)",
+    "a 1.25x zoom factor does not break the layout threw: the dashboard went blank at 125% zoom"
+  ],
+  "rendererConsole": []
+}
