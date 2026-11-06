@@ -35,6 +35,8 @@ Recorded runs:
 | [`42182778326`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42182778326) | push | ✅ Linux and Windows: 843 tests, static checks 0/0, licence audit clean, live platform smoke on real WMI (1,094 fields, 19 modules, score 84, 75 % coverage) |
 | [`42184099160`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184099160) | push (design evidence) | ❌ new step threw "Script failed to execute": a backslash-n inside a template literal arrived at the renderer as a real newline in a regex |
 | [`42184459268`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184459268) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems — includes the memory, GPU and responsiveness cards and the arrangement editor |
+| [`42185390234`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42185390234) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems, and the memory card's consent row now reads correctly |
+| [`42186269187`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42186269187) | pull request | ✅ Linux and Windows tests, static checks, and **the Windows package job**: installer and portable built, artifact verification, package validation and the unpacked GUI smoke test all passed. The artifacts themselves could not be downloaded here — `gh run download` needs `*.blob.core.windows.net`, outside this environment's egress (`EOF`) — so this tree has a build but no hash |
 
 Before run 42013425380 the workflow had been **failing on every push since it was added**,
 and this document incorrectly said it had not run at all. That was wrong in a way worth

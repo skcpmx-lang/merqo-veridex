@@ -16,9 +16,11 @@ listed here as **NOT VERIFIED**.
 | | |
 | --- | --- |
 | Release candidate | `1.0.0`, built by CI — installed, launched and removed on a Windows runner |
-| Build produced | **Yes** — Windows x64 installer and portable; CI run 42160034210 built, installed, launched and removed it |
+| Build produced | **Yes, twice.** Run 42160034210 built, installed, launched and removed the build whose hashes are quoted below. Run **42186269187** built the same two targets from the current tree and passed artifact verification, package validation and the unpacked GUI smoke test |
+| Hashes quoted below belong to | **the 42160034210 build, not the current tree.** The current tree's bytes could not be fetched into the environment that wrote this document: `gh run download` reaches `*.blob.core.windows.net`, which is outside its network egress (`EOF`), so no hash is claimed for them. A hash nobody computed is not a hash |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
+| Published | **No.** `.github/workflows/release.yml` cannot be dispatched from this environment (`403 Resource not accessible by integration`) and no tag has been cut, so nothing here is a published release |
 | Result | **Installed, launched, uninstalled on a VM. Still never run on physical hardware.** |
 
 Every item below is unchecked except the build checks in §1 and the machine checks that
