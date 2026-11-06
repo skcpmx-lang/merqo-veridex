@@ -1083,9 +1083,9 @@ pages.reports = () => {
       {
         label: 'Coverage',
         value: Number.isFinite(coverage?.coveragePercent)
-          ? `${coverage.coveragePercent}% of fields`
+          ? `${coverage.coveragePercent}%`
           : Number.isFinite(assessment?.coveragePercent)
-            ? `${assessment.coveragePercent}% of components`
+            ? `${assessment.coveragePercent}%`
             : 'not measured'
       }
     ])
