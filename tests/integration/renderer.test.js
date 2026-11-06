@@ -127,8 +127,10 @@ test('every page builds without throwing', { skip: JSDOM === null && 'jsdom not 
       assert.ok(content, `${page}: content region must exist`);
       assert.ok(content.children.length > 0, `${page}: page must render something`);
       assert.ok(content.textContent.trim().length > 60, `${page}: page must say something meaningful`);
-      // Nothing may show the string "undefined" or "NaN" to a user.
-      assert.ok(!/undefined|NaN|\[object Object\]/.test(content.textContent), `${page}: leaked a raw value`);
+      // Nothing may show the string "undefined", "NaN", "null" or "[object Object]" to a user.
+      // `null` is in the list because a withheld score is null, and one page printed
+      // "Unrated · null/100" for months while every other assertion here passed.
+      assert.ok(!/undefined|NaN|\[object Object\]|\bnull\b/.test(content.textContent), `${page}: leaked a raw value`);
     }
   } finally {
     restore();

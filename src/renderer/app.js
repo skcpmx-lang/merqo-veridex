@@ -1078,7 +1078,16 @@ pages.reports = () => {
       { label: 'Evidence fields', value: facts.fields },
       { label: 'Warnings', value: facts.warnings },
       { label: 'Errors', value: facts.errors },
-      { label: 'Coverage', value: coverage?.percent !== undefined ? `${coverage.percent}%` : '—' }
+      // The projection carries `coveragePercent`, not `percent`; the strip printed an em dash on
+      // a scan that had a real figure on the dashboard one page away.
+      {
+        label: 'Coverage',
+        value: Number.isFinite(coverage?.coveragePercent)
+          ? `${coverage.coveragePercent}% of fields`
+          : Number.isFinite(assessment?.coveragePercent)
+            ? `${assessment.coveragePercent}% of components`
+            : 'not measured'
+      }
     ])
   );
 
@@ -1094,7 +1103,14 @@ pages.reports = () => {
 
   const contents = el('div', { class: 'vx-rows' });
   contents.append(
-    fieldRow('Device health', assessment ? `${assessment.rating ?? assessment.status}${assessment.score !== undefined ? ` · ${assessment.score}/100` : ''}` : 'not assessed'),
+    // `undefined` was the wrong test: a withheld score is `null`, so the row read
+    // "Unrated · null/100" on every gated scan.
+    fieldRow(
+      'Device health',
+      assessment
+        ? `${assessment.rating ?? assessment.status}${Number.isFinite(assessment.score) ? ` · ${assessment.score}/100` : ' · score withheld'}`
+        : 'not assessed'
+    ),
     fieldRow('Modules with evidence', `${facts.modules}${assessment?.modules ? ` of ${assessment.modules}` : ''}`),
     fieldRow('Open issues', issues ? String(issues.warnings.length + issues.errors.length + (issues.messages?.length ?? 0)) : 'none recorded'),
     fieldRow('Manual checks', state.manual?.coverage ? `${state.manual.coverage.answered ?? 0} answered, ${state.manual.coverage.untested ?? 0} untested` : 'not started'),

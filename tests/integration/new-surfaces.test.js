@@ -422,6 +422,31 @@ test('a log entry never renders an object as "[object Object]"', { skip }, async
 
 // ── Reports and Privacy at dashboard quality ───────────────────────────────
 
+/**
+ * The fixture has to be the shape the main process projects, or these tests pass on data that
+ * cannot occur. `coverage.percent` was exactly that: a key nothing emits, read by a page that
+ * therefore showed an em dash on every real scan while this file stayed green.
+ */
+test('the renderer fixture matches the real scan projection', async () => {
+  const { projectScan } = await import('../../src/app/scan-projection.js');
+  const projected = projectScan({
+    startedAt: '2026-03-04T09:13:58.000Z',
+    finishedAt: '2026-03-04T09:14:22.000Z',
+    durationMs: 24_000,
+    taskCount: 4,
+    assessment: { status: 'WARNING', rating: 'Good', score: 84, coveragePercent: 78.4 },
+    issues: { warnings: [], errors: [], conflicts: [] },
+    modules: { cpu: { model: { value: 'Demo CPU', status: 'PASS' } } }
+  });
+  const fixture = scanFixture();
+  const extra = Object.keys(fixture.coverage).filter((key) => !(key in projected.coverage));
+  assert.deepEqual(extra, [], `the fixture invents coverage keys the projection never produces: ${extra.join(', ')}`);
+  for (const key of Object.keys(projected.coverage)) {
+    assert.ok(key in fixture.coverage, `the fixture is missing coverage.${key}, which the projection always produces`);
+  }
+  assert.ok('coveragePercent' in fixture.assessment, 'the assessment carries the coverage figure the pages read');
+});
+
 function scanFixture() {
   const F = (value, status = 'PASS', unit = null) => ({ value, status, unit, source: 'fixture', notes: [] });
   return {
@@ -429,8 +454,23 @@ function scanFixture() {
     finishedAt: '2026-03-04T09:14:22.000Z',
     durationMs: 24000,
     cancelled: false,
-    assessment: { status: 'WARNING', rating: 'Good', score: 84, modules: 4 },
-    coverage: { percent: 78.4, attempted: 33, total: 34 },
+    assessment: { status: 'WARNING', rating: 'Good', score: 84, modules: 4, coveragePercent: 78.4 },
+    // The shape `projectScan` really produces: `coverage: computeCoverage(...)`. The fixture used
+    // to carry `{ percent }`, which no code emits — so a page that read `coverage.percent` passed
+    // its test and printed an em dash on a real scan.
+    coverage: {
+      assessed: 26,
+      passed: 24,
+      warned: 2,
+      failed: 0,
+      untested: 0,
+      blocked: 0,
+      unsupported: 7,
+      totalFields: 33,
+      coveragePercent: 78.4,
+      manual: { answered: 0, untested: 31 },
+      note: 'Untested and unavailable items are excluded from the coverage percentage.'
+    },
     issues: [{ id: 'storage.temperatureC', title: 'Storage temperature above 40 °C' }],
     modules: {
       cpu: { title: 'Processor', fields: { model: F('Demo CPU'), cores: F(12) } },
