@@ -36,7 +36,7 @@ export const WORKLOAD = Object.freeze({
  * @param {number} timeoutMs
  * @returns {Promise<{ok:boolean, checksum:number, durationMs:number, error?:string}>}
  */
-export function runInWorker(task, timeoutMs = 60_000) {
+export function runInWorker(task, timeoutMs = 60_000, signal = null) {
   return new Promise((resolve) => {
     const started = Date.now();
     let settled = false;
@@ -46,9 +46,23 @@ export function runInWorker(task, timeoutMs = 60_000) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (signal && typeof signal.removeEventListener === 'function') signal.removeEventListener('abort', onAbort);
       worker.terminate().catch(() => {});
       resolve({ ...result, wallMs: Date.now() - started });
     };
+
+    // A benchmark the user has cancelled must stop *now*: the worker holding a core at full
+    // load is the whole cost of the measurement, and there is nothing left to measure once the
+    // request is withdrawn.
+    const onAbort = () => finish({ ok: false, checksum: 0, durationMs: Date.now() - started, error: 'cancelled', cancelled: true });
+    if (signal) {
+      if (signal.aborted) {
+        worker.terminate().catch(() => {});
+        resolve({ ok: false, checksum: 0, durationMs: 0, error: 'cancelled', cancelled: true, wallMs: 0 });
+        return;
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
 
     const timer = setTimeout(() => finish({ ok: false, checksum: 0, durationMs: Date.now() - started, error: `worker exceeded ${timeoutMs}ms` }), timeoutMs);
     if (typeof timer.unref === 'function') timer.unref();
@@ -96,8 +110,20 @@ export async function benchmarkSingleCore(options = {}) {
   const results = [];
 
   for (let index = 0; index < repeats; index += 1) {
-    const result = await runInWorker({ kind: 'integer', payload: { iterations: WORKLOAD.integerIterations } });
-    if (!result.ok) return { opsPerSecond: null, samples: [], spreadPercent: null, checksumStable: false, error: result.error ?? 'worker failed' };
+    if (options.signal?.aborted) {
+      return { opsPerSecond: null, samples: [], spreadPercent: null, checksumStable: false, error: 'cancelled', cancelled: true };
+    }
+    const result = await runInWorker({ kind: 'integer', payload: { iterations: WORKLOAD.integerIterations } }, 60_000, options.signal);
+    if (!result.ok) {
+      return {
+        opsPerSecond: null,
+        samples: [],
+        spreadPercent: null,
+        checksumStable: false,
+        error: result.error ?? 'worker failed',
+        cancelled: result.cancelled === true
+      };
+    }
     results.push({ durationMs: result.durationMs, checksum: result.checksum });
     options.onProgress?.({ done: index + 1, total: repeats });
   }
@@ -128,8 +154,13 @@ export async function benchmarkMultiCore(options = {}) {
   const threads = Math.min(options.threads ?? logical, 64);
 
   const results = await Promise.all(
-    Array.from({ length: threads }, () => runInWorker({ kind: 'integer', payload: { iterations: WORKLOAD.integerIterations } }, 120_000))
+    Array.from({ length: threads }, () =>
+      runInWorker({ kind: 'integer', payload: { iterations: WORKLOAD.integerIterations } }, 120_000, options.signal)
+    )
   );
+  if (results.some((result) => result.cancelled)) {
+    return { threads: 0, opsPerSecond: null, perThread: [], scaling: null, error: 'cancelled', cancelled: true };
+  }
 
   const healthy = results.filter((result) => result.ok);
   if (healthy.length === 0) {
@@ -152,9 +183,16 @@ export async function benchmarkMultiCore(options = {}) {
  * Memory bandwidth measurement: sequential versus strided traversal.
  * @returns {Promise<{sequentialGbps:number|null, stridedGbps:number|null, error:string|null}>}
  */
-export async function benchmarkMemoryBandwidth() {
-  const result = await runInWorker({ kind: 'memory', payload: { elements: WORKLOAD.memoryElements } }, 120_000);
-  if (!result.ok) return { sequentialGbps: null, stridedGbps: null, error: result.error ?? 'worker failed' };
+export async function benchmarkMemoryBandwidth(options = {}) {
+  const result = await runInWorker({ kind: 'memory', payload: { elements: WORKLOAD.memoryElements } }, 120_000, options.signal);
+  if (!result.ok) {
+    return {
+      sequentialGbps: null,
+      stridedGbps: null,
+      error: result.error ?? 'worker failed',
+      cancelled: result.cancelled === true
+    };
+  }
 
   const bytes = WORKLOAD.memoryElements * 8;
   const gbps = (fraction) => (result.durationMs > 0 ? Math.round(((bytes * fraction) / (result.durationMs / 1000) / 1e9) * 100) / 100 : null);

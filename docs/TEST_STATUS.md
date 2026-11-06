@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 725 · pass 725 · fail 0
+tests 741 · pass 741 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -44,8 +44,8 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | File | Tests | What it covers |
 | --- | --- | --- |
 | `tests/unit/battery.test.js` | 17 | powercfg and systeminformation battery mapping, wear maths |
-| `tests/unit/bench-cpu.test.js` | 14 | CPU benchmark scoring, stress guard limits |
-| `tests/unit/bench-disk.test.js` | 6 | disk benchmark, consent for the write half |
+| `tests/unit/bench-cpu.test.js` | 18 | CPU benchmark scoring, cancellation, aborted-signal handling |
+| `tests/unit/bench-disk.test.js` | 7 | disk benchmark, write consent, cancellation with cleanup |
 | `tests/unit/cpu-model.test.js` | 9 | model-number decoding, unknown-name handling |
 | `tests/unit/cpu.test.js` | 13 | CIM processor parsing, fallbacks |
 | `tests/unit/driver-export.test.js` | 11 | export planning, destination refusal, describe/verify outcomes |
@@ -60,7 +60,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/health.test.js` | 24 | component scoring, coverage gating, rating |
 | `tests/unit/history-store.test.js` | 7 | persistence, id generation, retention, quarantine, comparison |
 | `tests/unit/ipc-arity.test.js` | 7 | every channel accepts exactly the arguments it declares |
-| `tests/unit/ipc-contract.test.js` | 19 | the preload surface, forbidden exposure, handler coverage, benchmark modes |
+| `tests/unit/ipc-contract.test.js` | 19 | the preload surface, forbidden exposure, handler coverage, benchmark and stress argument bounds |
 | `tests/unit/logs-surface.test.js` | 13 | log parsing, filtering, summary, export redaction and retention |
 | `tests/unit/manual.test.js` | 48 | manual checklist, session, coverage separation |
 | `tests/unit/monitor.test.js` | 10 | sampling, series |
@@ -73,6 +73,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/security.test.js` | 15 | forbidden commands, consent, network guard |
 | `tests/unit/smart.test.js` | 18 | ATA SMART and NVMe health log parsing |
 | `tests/unit/smoke-regressions.test.js` | 9 | the packaging smoke tests catch the failures they were written for |
+| `tests/unit/stress-run.test.js` | 11 | consent, duration ceiling, thermal stop, cancellation, refusals, no PASS verdict |
 | `tests/unit/stress.test.js` | 16 | stress guard, elapsed time, transitions |
 | `tests/unit/windows-extended.test.js` | 22 | Windows inventory parsing beyond the core modules |
 | `tests/unit/windows-modules-depth.test.js` | 31 | the four new modules against their per-module checklists |
@@ -99,7 +100,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **725** | |
+| **Total** | **741** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

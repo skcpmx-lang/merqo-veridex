@@ -66,6 +66,40 @@ export function memoryWorkload(buffer) {
 }
 
 /**
+ * Sustained CPU load for a stress run.
+ *
+ * The loop burns for 25 ms, then yields so a `stop` message can be delivered: a synchronous
+ * busy loop would ignore the stop button for its whole duration, which is the opposite of what a
+ * stress test with an emergency stop has to do. It also stops itself on its own deadline, so a
+ * parent that dies takes the load with it instead of leaving every core pinned.
+ *
+ * @param {number} budgetMs
+ * @param {{onChunk?:(iterations:number)=>void, shouldStop?:()=>boolean}} [options]
+ */
+export async function stressWorkload(budgetMs, options = {}) {
+  const deadline = Date.now() + Math.max(0, budgetMs);
+  let iterations = 0;
+  let acc = 0x2545f491;
+
+  while (Date.now() < deadline && options.shouldStop?.() !== true) {
+    const chunkEnd = Date.now() + 25;
+    while (Date.now() < chunkEnd) {
+      for (let index = 0; index < 20_000; index += 1) {
+        acc = (acc * 1664525 + 1013904223) | 0;
+        acc ^= acc >>> 13;
+      }
+      iterations += 1;
+      if (iterations % 8 === 0 && options.shouldStop?.() === true) break;
+    }
+    options.onChunk?.(iterations);
+    // Yield so a message from the parent can be delivered.
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  return { iterations, checksum: acc >>> 0 };
+}
+
+/**
  * Dispatcher used by the worker entry point.
  * @param {{kind:string, payload:Record<string, unknown>}} task
  */
@@ -95,6 +129,10 @@ export function runTask(task) {
       checksum = Math.round((result.sum + result.stridedSum) % 1_000_000);
       break;
     }
+    case 'stress': {
+      // Handled asynchronously below; a synchronous case here would block the message port.
+      throw new Error('stress tasks are dispatched asynchronously');
+    }
     case 'noise': {
       // Generates unpredictable bytes so a hash/entropy measurement is not
       // measuring a cache-resident constant.
@@ -111,10 +149,30 @@ export function runTask(task) {
 
 // Only wire up the message port when actually loaded as a worker.
 if (parentPort) {
-  try {
-    const result = runTask(workerData);
-    parentPort.postMessage({ ok: true, ...result });
-  } catch (error) {
-    parentPort.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  if (workerData?.kind === 'stress') {
+    let stopRequested = false;
+    parentPort.on('message', (message) => {
+      if (message?.type === 'stop') stopRequested = true;
+    });
+    const started = process.hrtime.bigint();
+    stressWorkload(Number(workerData?.payload?.budgetMs ?? 0), { shouldStop: () => stopRequested })
+      .then((result) => {
+        parentPort.postMessage({
+          ok: true,
+          ...result,
+          durationMs: Number(process.hrtime.bigint() - started) / 1e6,
+          kind: 'stress'
+        });
+      })
+      .catch((error) => {
+        parentPort.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
+      });
+  } else {
+    try {
+      const result = runTask(workerData);
+      parentPort.postMessage({ ok: true, ...result });
+    } catch (error) {
+      parentPort.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
   }
 }

@@ -52,6 +52,10 @@ const INVOKE = [
   'bench:cpu',
   'bench:disk',
   'bench:state',
+  'bench:cancel',
+  'stress:start',
+  'stress:stop',
+  'stress:state',
   'monitor:start',
   'monitor:stop',
   'shell:openDataFolder'
@@ -63,6 +67,8 @@ const EVENTS = [
   'scan:finished',
   'monitor:sample',
   'bench:progress',
+  'stress:sample',
+  'stress:finished',
   'monitor:stopped',
   'settings:changed',
   'app:error'

@@ -388,6 +388,15 @@ body { overflow: hidden; }
 
 /* ── Coverage strip ──────────────────────────────────────────────────────── */
 
+.vx-card__subtitle {
+  margin: var(--vx-space-lg) 0 var(--vx-space-sm);
+  font-size: var(--vx-font-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+}
+
 .vx-coverage {
   display: grid;
   /* 84px so the seven-cell Manual strip (answered, passed, failed, warnings, N/A, not run,

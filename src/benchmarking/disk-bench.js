@@ -200,6 +200,15 @@ export async function measureRandomReadIops(file, options = {}) {
  * @param {(progress:{stage:string, done:number, total:number}) => void} [options.onProgress]
  * @returns {Promise<{fields: Record<string, import('../core/field.js').FieldValue>, cleanup: {removed:boolean, path:string|null}}>}
  */
+/** The field a cancelled run reports: nothing measured, and it says why. */
+function abortedField() {
+  return field(null, {
+    status: Status.UNTESTED,
+    source: 'disk-benchmark',
+    notes: ['The run was cancelled before it finished. No figure from a partial run is reported as a result.']
+  });
+}
+
 export async function runDiskBenchmark(options = {}) {
   const sizeMb = Math.min(Math.max(options.sizeMb ?? 256, 32), 2048);
   const allowWrite = options.allowWrite !== false;
@@ -211,6 +220,9 @@ export async function runDiskBenchmark(options = {}) {
   let workDir = null;
   let testFile = null;
   let cleanup = { removed: false, path: null };
+  // The signal is checked at every stage boundary. A benchmark that keeps writing a 256 MB file
+  // after the user has cancelled is not "finishing the measurement", it is ignoring them.
+  const cancelled = () => options.signal?.aborted === true;
 
   try {
     workDir = await mkdtemp(path.join(options.directory ?? os.tmpdir(), 'veridex-bench-'));
@@ -222,6 +234,11 @@ export async function runDiskBenchmark(options = {}) {
         fields: { writeTest: failed(space.reason ?? 'Insufficient free space', 'disk-benchmark') },
         cleanup
       };
+    }
+
+    // Cancelled before the test file existed: nothing was created, so nothing is left behind.
+    if (cancelled()) {
+      return { fields: { aborted: abortedField() }, cleanup: { removed: true, path: null, note: 'cancelled before any file was created' }, cancelled: true };
     }
 
     fields.target = available(workDir, 'disk-benchmark', {
@@ -246,6 +263,8 @@ export async function runDiskBenchmark(options = {}) {
         notes: ['The write test is disabled in Performance settings, so only read tests were run.']
       });
     }
+
+    if (cancelled()) return { fields: { aborted: abortedField() }, cleanup: { removed: false, path: null }, cancelled: true };
 
     const readSource = testFile;
     const readInfo = await stat(readSource).catch(() => null);
@@ -289,6 +308,14 @@ export async function runDiskBenchmark(options = {}) {
       const removed = await rm(workDir, { recursive: true, force: true }).then(() => true).catch(() => false);
       cleanup = { removed, path: workDir };
     }
+  }
+
+  if (cancelled()) {
+    fields.aborted = abortedField();
+    fields.cleanup = cleanup.removed
+      ? available('The temporary benchmark file was removed after the cancellation', 'disk-benchmark')
+      : failed('The temporary benchmark directory could not be removed; delete it manually', 'disk-benchmark', { notes: [cleanup.path].filter(Boolean) });
+    return { fields, cleanup, cancelled: true };
   }
 
   fields.cleanup = cleanup.removed

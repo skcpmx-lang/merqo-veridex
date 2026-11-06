@@ -43,6 +43,8 @@ import { runElevatedTask } from './elevated-runner.js';
 import { onboardingState, advanceOnboarding, skipOnboarding, resetOnboarding } from './onboarding.js';
 import { benchmarkSingleCore, benchmarkMultiCore, benchmarkMemoryBandwidth, mapCpuBenchmarkResults } from '../benchmarking/cpu-bench.js';
 import { runDiskBenchmark } from '../benchmarking/disk-bench.js';
+import { runCpuStress, stressCapabilities, UNSUPPORTED_STRESS_KINDS } from '../benchmarking/stress-run.js';
+import { readSensors } from '../monitoring/monitor.js';
 import { parseLogText, filterRecords, summariseLog, buildExport, describeRetention, DEFAULT_LEVEL } from './logs.js';
 import { spawn as spawnChild } from 'node:child_process';
 import { readdir, readFile as readTextFile, rm, statfs, mkdir, writeFile } from 'node:fs/promises';
@@ -351,21 +353,49 @@ function registerHandlers() {
     return { saved: true, path: filePath };
   });
 
+  /**
+   * Run a benchmark under a single controller, with a deadline and a cancel path.
+   * @param {'cpu'|'disk'} kind
+   * @param {(signal: AbortSignal) => Promise<any>} body
+   */
+  async function runBenchmark(kind, body) {
+    if (benchmarkRunning) throw new Error('A benchmark is already running.');
+    benchmarkRunning = true;
+    benchmarkAbort = new AbortController();
+    const controller = benchmarkAbort;
+    const startedAt = new Date().toISOString();
+    const deadline = setTimeout(() => {
+      controller.abort();
+      controller.deadlineReached = true;
+    }, BENCHMARK_DEADLINE_MS[kind]);
+    try {
+      const value = await body(controller.signal);
+      return { ...value, startedAt, cancelled: value?.cancelled === true, timedOut: controller.deadlineReached === true };
+    } finally {
+      clearTimeout(deadline);
+      benchmarkRunning = false;
+      benchmarkAbort = null;
+    }
+  }
+
   // ── Benchmarks ────────────────────────────────────────────────────────────
   // The CPU and disk benchmark engines have existed since the first phase and were reachable
   // only from tests: the Performance page said so in as many words. A tested engine behind no
   // button is not a feature, it is a library.
-  handle('bench:cpu', async ({ mode }) => {
-    if (benchmarkRunning) throw new Error('A benchmark is already running.');
-    benchmarkRunning = true;
+  handle('bench:cpu', async ({ mode }) => runBenchmark('cpu', async (signal) => {
     const startedAt = new Date().toISOString();
     const started = Date.now();
-    try {
+    {
       emit('bench:progress', { kind: 'cpu', stage: 'started', mode, startedAt });
       const onProgress = (progress) => emit('bench:progress', { kind: 'cpu', stage: progress.stage ?? 'running', done: progress.done, total: progress.total });
-      const single = mode === 'multi' || mode === 'memory' ? null : await benchmarkSingleCore({ onProgress });
-      const multi = mode === 'single' || mode === 'memory' ? null : await benchmarkMultiCore();
-      const memory = mode === 'memory' || mode === 'all' ? await benchmarkMemoryBandwidth() : null;
+      const single = mode === 'multi' || mode === 'memory' ? null : await benchmarkSingleCore({ onProgress, signal });
+      const multi = mode === 'single' || mode === 'memory' || signal.aborted ? null : await benchmarkMultiCore({ signal });
+      const memory = mode !== 'memory' && mode !== 'all' || signal.aborted ? null : await benchmarkMemoryBandwidth({ signal });
+      const measured = [single, multi, memory].some((entry) => entry && entry.error === 'cancelled');
+      if (measured) {
+        emit('bench:progress', { kind: 'cpu', stage: 'cancelled', mode });
+        return { mode, cancelled: true, at: startedAt, durationMs: Date.now() - started, results: null, fields: {} };
+      }
       const results = {
         single: single ?? { opsPerSecond: null, samples: [], spreadPercent: null, checksumStable: false, error: 'not measured in this mode' },
         multi: multi ?? { threads: 0, opsPerSecond: null, perThread: [], scaling: null, error: 'not measured in this mode' },
@@ -373,35 +403,110 @@ function registerHandlers() {
         startedAt,
         durationMs: Date.now() - started
       };
-      benchmarkResults.cpu = { mode, at: startedAt, durationMs: results.durationMs, results, fields: mapCpuBenchmarkResults(results) };
+      benchmarkResults.cpu = { mode, at: startedAt, durationMs: results.durationMs, results, fields: mapCpuBenchmarkResults(results), cancelled: false };
       emit('bench:progress', { kind: 'cpu', stage: 'finished', durationMs: results.durationMs });
       return benchmarkResults.cpu;
-    } finally {
-      benchmarkRunning = false;
     }
-  });
+  }));
 
-  handle('bench:disk', async () => {
-    if (benchmarkRunning) throw new Error('A benchmark is already running.');
-    benchmarkRunning = true;
+  handle('bench:disk', async () => runBenchmark('disk', async (signal) => {
     const startedAt = new Date().toISOString();
-    try {
+    {
       const allowWrite = settings.get('benchmark.diskWriteTest') !== false;
       const sizeMb = settings.get('benchmark.diskTestSizeMb');
       emit('bench:progress', { kind: 'disk', stage: 'started', allowWrite, sizeMb });
       const result = await runDiskBenchmark({
         allowWrite,
         sizeMb,
+        signal,
         onProgress: (progress) => emit('bench:progress', { kind: 'disk', stage: progress.stage, done: progress.done, total: progress.total })
       });
       benchmarkResults.disk = { at: startedAt, allowWrite, sizeMb, ...result };
-      emit('bench:progress', { kind: 'disk', stage: 'finished', cleanupRemoved: result.cleanup?.removed === true });
+      emit('bench:progress', {
+        kind: 'disk',
+        stage: result.cancelled ? 'cancelled' : 'finished',
+        cleanupRemoved: result.cleanup?.removed === true
+      });
       // The benchmark writes a file. Whether it was removed is part of the result, not a detail.
       if (!result.cleanup?.removed) await logger?.warn('disk benchmark left a temporary file behind', { scope: 'benchmark', path: result.cleanup?.path ?? null });
       return benchmarkResults.disk;
-    } finally {
-      benchmarkRunning = false;
     }
+  }));
+
+  // ── Stress testing ────────────────────────────────────────────────────────
+  // The guard, the limits and the refusals were written and tested in the first phase; nothing
+  // ever applied load. This is that part, kept deliberately small: CPU only, bounded, and
+  // reported without a verdict.
+  handle('stress:start', async ({ durationSec, threads, consent }) => {
+    if (stressRun) throw new Error('A stress run is already in progress.');
+    const permission = await detectPermissionState(new CommandRunner()).catch(() => ({ isAdmin: false }));
+    stressAbort = new AbortController();
+    const controller = stressAbort;
+    const runId = `stress-${Date.now()}`;
+    try {
+      const result = await runCpuStress({
+        durationSec,
+        threads,
+        consentGiven: consent === true,
+        maxDurationSec: settings.get('stress.maxDurationSec') ?? 300,
+        thermalLimitC: settings.get('stress.thermalLimitC') ?? 90,
+        isOnBattery: null,
+        signal: controller.signal,
+        // The thermal stop is only real if the reading is real. A sensor that cannot be read
+        // returns null here, and the guard then says the thermal stop was inactive rather than
+        // pretending a temperature.
+        readTemperature: async () => {
+          const readings = await readSensors({ runner: new CommandRunner(), includePrivileged: permission.isAdmin }).catch(() => null);
+          const value = readings?.['cpu.temp']?.value;
+          return typeof value === 'number' && Number.isFinite(value) ? value : null;
+        },
+        thermalSensorAvailable: true,
+        onSample: (sample) => emit('stress:sample', { runId, ...sample }),
+        logicalCpus: os.cpus()?.length ?? 1
+      });
+      stressLast = { runId, at: new Date().toISOString(), ...result };
+      emit('stress:finished', { runId, started: result.started, state: result.state, stopReason: result.stopReason ?? null });
+      if (!result.started) await logger?.warn('stress run refused', { scope: 'stress', reason: result.reason });
+      return stressLast;
+    } finally {
+      stressAbort = null;
+    }
+  });
+
+  handle('stress:stop', () => {
+    if (!stressAbort) return { stopped: false, reason: 'No stress run is running.' };
+    stressAbort.abort();
+    return { stopped: true };
+  });
+
+  handle('stress:state', async () => {
+    const permission = await detectPermissionState(new CommandRunner()).catch(() => ({ isAdmin: false }));
+    const readings = await readSensors({ runner: new CommandRunner(), includePrivileged: permission.isAdmin }).catch(() => ({}));
+    const temperature = readings?.['cpu.temp']?.value;
+    return {
+      running: Boolean(stressAbort),
+      last: stressLast,
+      capabilities: stressCapabilities({
+        thermalSensorAvailable: typeof temperature === 'number' && Number.isFinite(temperature),
+        logicalCpus: os.cpus()?.length ?? 1
+      }),
+      currentTemperatureC: typeof temperature === 'number' ? temperature : null,
+      thermalSensorReason: readings?.['cpu.temp']?.reason ?? null,
+      unsupported: { ...UNSUPPORTED_STRESS_KINDS },
+      limits: {
+        minDurationSec: 10,
+        maxDurationSec: settings.get('stress.maxDurationSec') ?? 300,
+        thermalLimitC: settings.get('stress.thermalLimitC') ?? 90,
+        requireConsent: settings.get('stress.requireConsent') !== false
+      }
+    };
+  });
+
+  handle('bench:cancel', () => {
+    if (!benchmarkAbort) return { cancelled: false, reason: 'No benchmark is running.' };
+    benchmarkAbort.abort();
+    emit('bench:progress', { kind: 'any', stage: 'cancelling' });
+    return { cancelled: true };
   });
 
   handle('bench:state', () => ({ cpu: benchmarkResults.cpu, disk: benchmarkResults.disk, running: benchmarkRunning }));
@@ -709,6 +814,13 @@ let monitor = null;
 /** Benchmark results for this session, and whether one is running. */
 const benchmarkResults = { cpu: null, disk: null };
 let benchmarkRunning = false;
+/** The running benchmark's abort controller, and the reason it was stopped if we stopped it. */
+let benchmarkAbort = null;
+/** The active stress run: its controller and its last result. */
+let stressAbort = null;
+let stressLast = null;
+/** Ceilings that exist so a benchmark cannot run forever on a machine that never answers. */
+const BENCHMARK_DEADLINE_MS = Object.freeze({ cpu: 240_000, disk: 180_000 });
 
 app.whenReady().then(async () => {
   logger = new Logger({ dir: logDir(), level: 'info' });

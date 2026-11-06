@@ -56,6 +56,10 @@ export const CHANNELS = Object.freeze({
   'bench:cpu': { args: ['mode'], description: 'Run a CPU benchmark: single-core, multi-core or memory bandwidth. Progress arrives on the event channel.' },
   'bench:disk': { args: [], description: 'Run the disk benchmark against a temporary file that is always deleted. Honours the Performance settings.' },
   'bench:state': { args: [], description: 'Last benchmark results, so the page survives navigation.' },
+  'bench:cancel': { args: [], description: 'Stop the benchmark that is running and terminate its workers.' },
+  'stress:start': { args: ['durationSec', 'threads', 'consent'], description: 'Start a bounded CPU stress run. Refused without consent, or when the safety guard cannot meet its conditions.' },
+  'stress:stop': { args: [], description: 'Stop the stress run that is running and terminate its workers.' },
+  'stress:state': { args: [], description: 'Whether a stress run is active and what the last run measured.' },
   'monitor:start': { args: [], description: 'Begin live sensor sampling. Samples arrive on the event channel.' },
   'monitor:stop': { args: [], description: 'Stop sampling.' },
   'shell:openDataFolder': { args: [], description: 'Reveal the local data folder in Explorer.' }
@@ -67,6 +71,8 @@ export const EVENTS = Object.freeze({
   'scan:finished': 'The sweep ended, with a summary.',
   'monitor:sample': 'One live sensor sample.',
   'bench:progress': 'One benchmark stage started or finished.',
+  'stress:sample': 'One stress-run sample: elapsed time, temperature when available, and state.',
+  'stress:finished': 'The stress run ended, with its stop reason.',
   'monitor:stopped': 'Sampling ended, with the reason if it failed.',
   'settings:changed': 'A setting changed, with the new value.',
   'app:error': 'Something failed in the main process.'
@@ -284,6 +290,22 @@ export function validateRequest(channel, args = []) {
         return { ok: false, reason: `"${mode}" is not a benchmark mode: single, multi, memory or all.` };
       }
       return { ok: true, value: { mode } };
+    }
+
+    case 'stress:start': {
+      // Bounds are checked here as well as in the guard: a request the renderer could have got
+      // wrong should not reach a code path that pins every core.
+      const durationSec = Number(named?.durationSec ?? 60);
+      if (!Number.isFinite(durationSec) || durationSec < 10 || durationSec > 300) {
+        return { ok: false, reason: 'The stress duration must be between 10 and 300 seconds.' };
+      }
+      const threads = named?.threads === undefined ? undefined : Number(named.threads);
+      if (threads !== undefined && (!Number.isFinite(threads) || threads < 1 || threads > 64)) {
+        return { ok: false, reason: 'The thread count must be between 1 and 64.' };
+      }
+      // Consent is a boolean the user ticked. A string "true" from a stray call is not consent.
+      if (named?.consent !== true) return { ok: false, reason: 'Explicit consent is required before a stress test can start.' };
+      return { ok: true, value: { durationSec: Math.round(durationSec), threads: threads === undefined ? undefined : Math.round(threads), consent: true } };
     }
 
     case 'history:compare': {

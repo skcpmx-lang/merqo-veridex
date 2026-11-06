@@ -83,6 +83,7 @@ const state = {
   comparison: { selected: [], result: null, loading: false, error: null },
   onboarding: null,
   bench: { cpu: null, disk: null, running: false, progress: null },
+  stress: { capabilities: null, limits: null, running: false, consent: false, durationSec: 30, threads: null, live: null, last: null },
   logs: { entries: null, summary: null, retention: null, stats: null, statsLoading: false, unparseable: 0, level: 'info', query: '', loading: false, error: null },
   export: { destination: null, plan: null, result: null, running: false, error: null },
   monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
@@ -807,7 +808,15 @@ pages.performance = () => {
   }
   card.append(cpuActions);
   if (runningCpu) {
-    card.append(el('p', { class: 'vx-dim', text: 'Measuring… the machine is working, not frozen. Results appear when the run finishes.' }));
+    card.append(
+      el('div', {
+        style: { display: 'flex', 'align-items': 'center', gap: 'var(--vx-space-md)' },
+        children: [
+          el('p', { class: 'vx-dim', text: 'Measuring… the machine is working, not frozen. Results appear when the run finishes.' }),
+          button({ label: 'Cancel benchmark', variant: 'danger', onClick: () => cancelBenchmark() })
+        ]
+      })
+    );
   } else if (cpuState) {
     const rows = el('div', { class: 'vx-rows' });
     for (const [key, value] of Object.entries(cpuState.fields ?? {})) {
@@ -855,7 +864,15 @@ pages.performance = () => {
     })
   );
   if (state.bench?.progress?.kind === 'disk') {
-    diskCard.append(el('p', { class: 'vx-dim', text: `Measuring… stage ${state.bench.progress.stage}` }));
+    diskCard.append(
+      el('div', {
+        style: { display: 'flex', 'align-items': 'center', gap: 'var(--vx-space-md)' },
+        children: [
+          el('p', { class: 'vx-dim', text: `Measuring… stage ${state.bench.progress.stage}` }),
+          button({ label: 'Cancel benchmark', variant: 'danger', onClick: () => cancelBenchmark() })
+        ]
+      })
+    );
   } else if (diskState) {
     const rows = el('div', { class: 'vx-rows' });
     for (const [key, value] of Object.entries(diskState.fields ?? {})) {
@@ -879,19 +896,224 @@ pages.performance = () => {
   }
   wrapper.append(diskCard);
 
-  // Stress testing is a different risk class and stays behind its own consent gate; the page
-  // says what exists rather than offering a button that does nothing.
-  const stressCard = el('div', { class: 'vx-card' });
-  stressCard.append(el('h2', { class: 'vx-card__title', text: 'Stress testing' }));
-  stressCard.append(
-    emptyState(
-      'Stress testing has no runner screen yet',
-      'The stress guard, its limits and its refusals are implemented and tested, but the screen that starts a run is not written. Until it is, this page does not offer a button that would do nothing.'
-    )
-  );
-  wrapper.append(stressCard);
+  wrapper.append(stressCard());
   return wrapper;
 };
+
+/**
+ * The stress card. CPU load only, and it says so: the kinds that are named in the specification
+ * but cannot be generated safely in this application are listed with the reason, not hidden.
+ */
+function stressCard() {
+  const card = el('div', { class: 'vx-card' });
+  card.append(el('h2', { class: 'vx-card__title', text: 'Stress testing' }));
+  const stress = state.stress;
+  const capabilities = stress?.capabilities;
+  const limits = stress?.limits;
+
+  if (!client.live) {
+    card.append(
+      emptyState(
+        'A stress test needs the main process',
+        'Load is generated and bounded by the main process, which owns the worker threads and the safety guard. This window is a design preview, so there is nothing to run and nothing is offered.'
+      )
+    );
+    return card;
+  }
+
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: `Supported: ${(capabilities?.kinds ?? ['cpu']).join(', ').toUpperCase()} load only, in worker threads for a bounded time. Every run needs your consent, a duration and a thermal ceiling, and every run can be stopped from this page.`
+    })
+  );
+
+  const running = Boolean(stress?.running);
+  const consent = Boolean(stress?.consent);
+
+  // Consent is a checkbox the user ticks, not a dialog VERIDEX dismisses for them.
+  const consentBox = el('input', { attrs: { type: 'checkbox', id: 'vx-stress-consent' } });
+  consentBox.checked = consent;
+  consentBox.addEventListener('change', () => {
+    state.stress = { ...(state.stress ?? {}), consent: consentBox.checked };
+    render();
+  });
+  card.append(
+    el('label', {
+      class: 'vx-dim',
+      attrs: { for: 'vx-stress-consent', style: 'display:flex;gap:var(--vx-space-sm);align-items:flex-start;margin:var(--vx-space-md) 0' },
+      children: [
+        consentBox,
+        el('span', {
+          text: 'I understand this runs the processor at full load for the whole duration, that a laptop on battery may throttle or shut down, and that VERIDEX cannot stop a machine from overheating when no temperature sensor is readable.'
+        })
+      ]
+    })
+  );
+
+  const durationSelect = el('select', { class: 'vx-select', attrs: { id: 'vx-stress-duration' } });
+  for (const seconds of [10, 30, 60, 120]) {
+    const max = limits?.maxDurationSec ?? 300;
+    if (seconds > max) continue;
+    const option = el('option', { text: `${seconds} seconds`, attrs: { value: String(seconds) } });
+    if (seconds === (stress?.durationSec ?? 30)) option.selected = true;
+    durationSelect.append(option);
+  }
+  durationSelect.disabled = running;
+  durationSelect.addEventListener('change', () => {
+    state.stress = { ...(state.stress ?? {}), durationSec: Number(durationSelect.value) };
+  });
+
+  const threadSelect = el('select', { class: 'vx-select', attrs: { id: 'vx-stress-threads' } });
+  const logical = capabilities?.logicalCpus ?? 2;
+  for (const threads of [...new Set([1, Math.max(1, logical - 1), logical])].sort((a, b) => a - b)) {
+    const option = el('option', { text: `${threads} thread${threads === 1 ? '' : 's'}`, attrs: { value: String(threads) } });
+    if (threads === (stress?.threads ?? Math.max(1, logical - 1))) option.selected = true;
+    threadSelect.append(option);
+  }
+  threadSelect.disabled = running;
+  threadSelect.addEventListener('change', () => {
+    state.stress = { ...(state.stress ?? {}), threads: Number(threadSelect.value) };
+  });
+
+  const controls = el('div', { style: { display: 'flex', gap: 'var(--vx-space-sm)', 'flex-wrap': 'wrap', 'align-items': 'center' } });
+  controls.append(durationSelect, threadSelect);
+  controls.append(
+    running
+      ? button({ label: 'Stop now', variant: 'danger', onClick: () => stopStress() })
+      : button({
+          label: 'Start stress test',
+          variant: 'danger',
+          disabled: !consent,
+          title: consent ? 'Runs CPU load for the selected duration.' : 'Tick the consent box first.',
+          onClick: () => startStress()
+        })
+  );
+  card.append(controls);
+
+  if (capabilities?.thermalSensorAvailable === false) {
+    card.append(
+      callout({
+        tone: 'warn',
+        title: 'No temperature sensor is readable',
+        body: 'The automatic thermal stop cannot work without a real sensor, so this run is bounded by its duration alone. VERIDEX will not substitute an estimated temperature.'
+      })
+    );
+  }
+
+  const live = stress?.live;
+  if (running && live) {
+    card.append(
+      el('p', {
+        class: 'vx-mono vx-dim',
+        text: `Running: ${live.elapsedSec}s elapsed · ${live.temperatureC === null ? 'temperature unavailable' : `${live.temperatureC} °C`} · state ${live.state}`
+      })
+    );
+  }
+
+  const last = stress?.last;
+  if (last && last.fields && Object.keys(last.fields).length > 0) {
+    const rows = el('div', { class: 'vx-rows' });
+    for (const [key, value] of Object.entries(last.fields)) {
+      const label = key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (character) => character.toUpperCase());
+      const notes = (value?.notes ?? []).join(' ');
+      rows.append(fieldRow(label, value?.value, { unit: value?.unit ?? null, status: value?.status, note: value?.error ?? (notes.length > 0 ? notes : null) }));
+    }
+    card.append(rows);
+  } else if (last && last.started === false) {
+    card.append(
+      callout({ tone: 'bad', title: 'The run was refused', body: `${last.reason ?? 'The safety guard refused the request.'} ${(last.warnings ?? []).join(' ')}`.trim() })
+    );
+  } else if (!running) {
+    card.append(emptyState('No stress run has been started in this session', 'A stress test is a load test, not a diagnostic: it reports how long the load ran, how hot the machine got, and why it stopped. It does not certify anything.'));
+  }
+
+  const unsupported = capabilities?.unsupported ?? stress?.unsupported;
+  if (unsupported) {
+    const rows = el('div', { class: 'vx-rows' });
+    for (const [kind, reason] of Object.entries(unsupported)) {
+      rows.append(fieldRow(`${kind} stress`, 'not implemented', { status: 'UNSUPPORTED', note: reason }));
+    }
+    card.append(el('h3', { class: 'vx-card__subtitle', text: 'What is not offered, and why' }), rows);
+  }
+  return card;
+}
+
+/** Read the stress surface so the card states the real limits and sensors. */
+async function loadStressState() {
+  if (!client.live) return;
+  const result = await withDeadline(client.invoke('stress:state'));
+  if (!result.ok) return;
+  state.stress = { ...(state.stress ?? {}), ...result.data };
+}
+
+async function startStress() {
+  const durationSec = state.stress?.durationSec ?? 30;
+  const threads = state.stress?.threads;
+  state.stress = { ...(state.stress ?? {}), running: true, live: { elapsedSec: 0, temperatureC: null, state: 'RUNNING' } };
+  render();
+  try {
+    const result = await client.invoke('stress:start', { durationSec, threads, consent: true });
+    if (!result.ok) throw new Error(result.error?.message ?? 'The stress run could not be started.');
+    state.stress = { ...(state.stress ?? {}), running: false, live: null, last: result.data };
+    if (result.data?.started === false) {
+      toast({ tone: 'bad', title: 'The stress run was refused', body: result.data.reason ?? 'The safety guard refused the request.' });
+    } else if (result.data?.state === 'STOPPED_THERMAL') {
+      toast({ tone: 'warn', title: 'Stopped at the thermal limit', body: result.data.stopReason ?? '' });
+    }
+  } catch (error) {
+    state.stress = { ...(state.stress ?? {}), running: false, live: null };
+    toast({ tone: 'bad', title: 'The stress run failed', body: error instanceof Error ? error.message : String(error) });
+  }
+  render();
+}
+
+async function stopStress() {
+  const result = await client.invoke('stress:stop');
+  if (!result.ok) {
+    toast({ tone: 'bad', title: 'The stress run could not be stopped', body: result.error?.message ?? '' });
+    return;
+  }
+  if (!result.data?.stopped) {
+    toast({ tone: 'info', title: 'Nothing to stop', body: result.data?.reason ?? 'No stress run is running.' });
+  }
+}
+
+/** Stop the running benchmark. The engine terminates its workers rather than finishing quietly. */
+async function cancelBenchmark() {
+  if (!client.live) return;
+  const result = await client.invoke('bench:cancel');
+  if (!result.ok) {
+    toast({ tone: 'bad', title: 'The benchmark could not be stopped', body: result.error?.message ?? 'The main process refused the request.' });
+    return;
+  }
+  if (!result.data?.cancelled) {
+    toast({ tone: 'info', title: 'Nothing to cancel', body: result.data?.reason ?? 'No benchmark is running.' });
+    return;
+  }
+  toast({ tone: 'warn', title: 'Benchmark cancelled', body: 'The workers were stopped. A partial run is not reported as a result.' });
+}
+
+/**
+ * Turn a benchmark reply into what the page should say. A cancelled or timed-out run is not a
+ * result: reporting half a measurement as a number would be the same lie as inventing one.
+ * @param {{cancelled?:boolean, timedOut?:boolean, durationMs?:number}} data
+ * @returns {boolean} true when the caller should keep the previous result
+ */
+function benchmarkEndedWithoutResult(data) {
+  if (data?.cancelled || data?.timedOut) {
+    const seconds = Math.round((data.durationMs ?? 0) / 1000);
+    toast({
+      tone: 'warn',
+      title: data.timedOut ? 'Benchmark stopped at the time limit' : 'Benchmark cancelled',
+      body: data.timedOut
+        ? `It ran for ${seconds}s and was stopped by the application, not by you. No figure is recorded from a run that did not finish.`
+        : 'The workers were stopped. A partial run is not reported as a result.'
+    });
+    return true;
+  }
+  return false;
+}
 
 /** Run a CPU benchmark and show the result. @param {string} mode */
 async function runCpuBenchmark(mode) {
@@ -901,7 +1123,13 @@ async function runCpuBenchmark(mode) {
   try {
     const result = await client.invoke('bench:cpu', { mode });
     if (!result.ok) throw new Error(result.error?.message ?? 'The benchmark could not be started.');
-    state.bench = { cpu: result.data, disk: state.bench?.disk ?? null, running: false, progress: null };
+    const skip = benchmarkEndedWithoutResult(result.data);
+    state.bench = {
+      cpu: skip ? state.bench?.cpu ?? null : result.data,
+      disk: state.bench?.disk ?? null,
+      running: false,
+      progress: null
+    };
   } catch (error) {
     state.bench = { ...(state.bench ?? {}), running: false, progress: null };
     toast({ tone: 'bad', title: 'The benchmark did not finish', body: error instanceof Error ? error.message : String(error) });
@@ -917,7 +1145,13 @@ async function runDiskBenchmark() {
   try {
     const result = await client.invoke('bench:disk');
     if (!result.ok) throw new Error(result.error?.message ?? 'The benchmark could not be started.');
-    state.bench = { cpu: state.bench?.cpu ?? null, disk: result.data, running: false, progress: null };
+    const skip = benchmarkEndedWithoutResult(result.data);
+    state.bench = {
+      cpu: state.bench?.cpu ?? null,
+      disk: skip ? state.bench?.disk ?? null : result.data,
+      running: false,
+      progress: null
+    };
     if (result.data?.cleanup?.removed === false) {
       toast({ tone: 'warn', title: 'The temporary file could not be deleted', body: 'The path is recorded in the activity log. Nothing else on the machine was touched.' });
     }
@@ -2567,6 +2801,20 @@ function subscribe() {
     if (state.page === 'performance') render();
   });
 
+  // A stress run is one invoke that does not return until it ends, so its progress arrives here.
+  client.on('stress:sample', (payload) => {
+    if (!state.stress?.running) return;
+    state.stress = { ...state.stress, live: { elapsedSec: payload?.elapsedSec ?? 0, temperatureC: payload?.temperatureC ?? null, state: payload?.state ?? 'RUNNING' } };
+    if (state.page === 'performance') render();
+  });
+
+  client.on('stress:finished', () => {
+    // The invoke reply carries the result; this only clears the live figure so the page stops
+    // showing an elapsed time for a run that has ended.
+    if (state.stress) state.stress = { ...state.stress, live: null };
+    if (state.page === 'performance') render();
+  });
+
   client.on('monitor:stopped', (payload) => {
     state.monitor.running = false;
     state.monitor.error = payload?.reason ?? null;
@@ -2618,7 +2866,8 @@ async function boot() {
       loadSettings(),
       loadGuard(),
       loadLastScan(),
-      loadBenchState()
+      loadBenchState(),
+      loadStressState()
     ]);
     const failed = loaded.filter((entry) => entry.status === 'rejected');
     if (failed.length > 0) {

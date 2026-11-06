@@ -122,3 +122,44 @@ test('the workload definition is bounded so a benchmark cannot run for minutes',
   assert.ok(WORKLOAD.integerIterations > 0 && WORKLOAD.integerIterations < 100_000_000);
   assert.ok(WORKLOAD.repeats >= 1 && WORKLOAD.repeats <= 5);
 });
+
+// ── Cancellation ────────────────────────────────────────────────────────────
+
+test('a cancelled single-core run reports cancellation and no figure', async () => {
+  const controller = new AbortController();
+  const run = benchmarkSingleCore({ repeats: 5, signal: controller.signal, onProgress: () => controller.abort() });
+  const result = await run;
+  // The abort may land between repeats or terminate the worker mid-flight; both must produce a
+  // cancelled result rather than a median of whatever happened to have finished.
+  assert.equal(result.cancelled, true);
+  assert.equal(result.opsPerSecond, null);
+  assert.equal(result.error, 'cancelled');
+});
+
+test('an already-aborted signal never starts a worker', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const started = Date.now();
+  const result = await benchmarkSingleCore({ signal: controller.signal });
+  assert.equal(result.cancelled, true);
+  assert.ok(Date.now() - started < 1000, 'no measurement should begin once the request is withdrawn');
+});
+
+test('a cancelled multi-core run tears down the whole pool', async () => {
+  const controller = new AbortController();
+  const pending = benchmarkMultiCore({ signal: controller.signal });
+  setTimeout(() => controller.abort(), 5);
+  const result = await pending;
+  assert.equal(result.cancelled, true);
+  assert.equal(result.opsPerSecond, null);
+  assert.equal(result.threads, 0);
+});
+
+test('a cancelled memory run reports cancellation rather than a bandwidth figure', async () => {
+  const controller = new AbortController();
+  const pending = benchmarkMemoryBandwidth({ signal: controller.signal });
+  setTimeout(() => controller.abort(), 1);
+  const result = await pending;
+  assert.equal(result.cancelled, true);
+  assert.equal(result.sequentialGbps, null);
+});

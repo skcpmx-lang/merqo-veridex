@@ -52,3 +52,17 @@ test('with writes disabled the write test is UNTESTED and says why', async () =>
   assert.equal(fields.sequentialWrite.status, Status.UNTESTED);
   assert.ok(fields.sequentialWrite.notes.some((note) => note.includes('disabled in Performance settings')));
 });
+
+// ── Cancellation ────────────────────────────────────────────────────────────
+
+test('a cancelled disk run reports no figure and still removes its temporary directory', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const result = await runDiskBenchmark({ sizeMb: 32, allowWrite: true, signal: controller.signal });
+  assert.equal(result.cancelled, true);
+  assert.equal(result.cleanup.removed, true, 'cleanup is not optional when a run is cancelled');
+  assert.equal(result.fields.aborted.status, Status.UNTESTED);
+  assert.equal(result.fields.aborted.value, null);
+  assert.match(result.fields.aborted.notes.join(' '), /cancelled/);
+  assert.equal(result.fields.sequentialWrite, undefined, 'a cancelled run must not report partial throughput');
+});
