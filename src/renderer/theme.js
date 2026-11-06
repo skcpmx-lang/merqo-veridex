@@ -55,7 +55,9 @@ export const SURFACES = Object.freeze({
     lineSoft: '#182739',
     ink: '#E8F1FA',
     inkSoft: '#9FB2C8',
-    inkMuted: '#6E8299',
+    // Lightened from #6E8299, which measured 4.16:1 on a card - under 4.5:1 for the small
+    // labels this colour is used for. #7A8EA6 measures 4.89:1 on a card, 5.58:1 on the page.
+    inkMuted: '#7A8EA6',
     shadow: 'rgba(3, 8, 16, 0.55)'
   },
   light: {
@@ -67,7 +69,10 @@ export const SURFACES = Object.freeze({
     lineSoft: '#E4ECF5',
     ink: '#0A1220',
     inkSoft: '#4A5B70',
-    inkMuted: '#6E8299',
+    // Darkened from #6E8299, which measured 3.71:1 on this surface: readable on the dark
+    // theme and not on the light one, because the same hex was used for both. #54647A measures
+    // 5.66:1 on the page and 6.03:1 on a card.
+    inkMuted: '#54647A',
     shadow: 'rgba(10, 18, 32, 0.12)'
   }
 });
@@ -123,6 +128,10 @@ export function themeTokens(options = {}) {
   const tone = TONES[mode] ?? TONES.dark;
   const accent = ACCENTS[options.accent] ?? ACCENTS.cyan;
   const accentBase = mode === 'light' ? accent.baseLight : accent.base;
+  // The label on an accent surface. In dark mode the accent is bright and the ink is dark; in
+  // light mode the accent is darkened for contrast against the page, which made the dark ink
+  // unreadable on it (2.52:1 for violet). White is the correct label colour on a dark accent.
+  const accentInk = mode === 'light' ? '#FFFFFF' : accent.ink;
   const density = METRICS.density[options.density ?? 'comfortable'] ?? 1;
 
   return {
@@ -141,7 +150,7 @@ export function themeTokens(options = {}) {
       '--vx-accent': accentBase,
       '--vx-accent-strong': accent.strong,
       '--vx-accent-soft': accent.soft,
-      '--vx-accent-ink': accent.ink,
+      '--vx-accent-ink': accentInk,
       '--vx-ok': tone.ok,
       '--vx-warn': tone.warn,
       '--vx-bad': tone.bad,
