@@ -86,7 +86,8 @@ const state = {
   logs: { entries: null, summary: null, retention: null, stats: null, statsLoading: false, unparseable: 0, level: 'info', query: '', loading: false, error: null },
   export: { destination: null, plan: null, result: null, running: false, error: null },
   monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
-  guard: null
+  guard: null,
+  bootError: null
 };
 
 /** @type {HTMLElement|null} */
@@ -283,7 +284,7 @@ function adoptScan(payload) {
 
 /** Fetch the last completed scan, if there is one, and adopt it. */
 async function loadLastScan() {
-  const result = await client.invoke('scan:last');
+  const result = await withDeadline(client.invoke('scan:last'), 20_000);
   if (result.ok && result.data?.scan) adoptScan(result.data.scan);
 }
 
@@ -364,6 +365,12 @@ const pages = {};
 pages.dashboard = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
+
+  // A startup read that did not answer is named here. The alternative is a page that looks
+  // complete while one of its figures is quietly missing.
+  if (state.bootError) {
+    wrapper.append(callout({ tone: 'warn', title: 'Some startup data did not arrive', body: state.bootError }));
+  }
 
   // Evidence on screen that predates a failed attempt must say so at the top, not only in a
   // toast that has already faded and a progress card further down the page.
@@ -2374,12 +2381,33 @@ async function changeSetting(key, value) {
 }
 
 /**
+ * Every startup read gets a deadline. A channel that never answers is a renderer that never
+ * shows the navigation, and a blank window with a spinner is worse than a window that says
+ * which read is missing.
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @returns {Promise<T>}
+ */
+function withDeadline(promise, ms = 8_000) {
+  return Promise.race([
+    promise,
+    new Promise((_resolve, reject) => setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms))
+  ]);
+}
+
+async function loadInfo() {
+  const result = await withDeadline(client.invoke('app:info'));
+  if (result.ok) state.info = result.data;
+}
+
+/**
  * Results survive navigation and a page reload, because a benchmark takes a minute of the
  * user's machine and losing the figure would mean asking for that minute again.
  */
 async function loadBenchState() {
   if (!client.live) return;
-  const result = await client.invoke('bench:state');
+  const result = await withDeadline(client.invoke('bench:state'));
   if (!result.ok) return;
   state.bench = {
     cpu: result.data.cpu ?? null,
@@ -2390,7 +2418,7 @@ async function loadBenchState() {
 }
 
 async function loadSettings() {
-  const result = await client.invoke('app:settings');
+  const result = await withDeadline(client.invoke('app:settings'));
   if (result.ok) state.settings = result.data;
 }
 
@@ -2470,7 +2498,7 @@ async function loadHistory() {
 }
 
 async function loadGuard() {
-  const result = await client.invoke('app:guardSummary');
+  const result = await withDeadline(client.invoke('app:guardSummary'));
   if (result.ok) state.guard = result.data;
 }
 
@@ -2544,17 +2572,14 @@ async function boot() {
 
   app.replaceChildren();
 
-  if (client.live) {
-    const infoResult = await client.invoke('app:info');
-    if (infoResult.ok) state.info = infoResult.data;
-    await loadSettings();
-    await loadGuard();
-    await loadLastScan();
-    await loadBenchState();
-  }
-
+  // The shell is built before any state is read. It used to be built after five sequential IPC
+  // calls, which meant one slow or unanswered call left the window saying "Starting VERIDEX…"
+  // for as long as the call took: the evidence harness caught exactly that, a renderer that
+  // never booted while the main process answered every channel it was asked. Chrome is drawn
+  // first, data arrives second, and each read has its own deadline.
+  // The default theme is applied before anything is drawn, so the window is never unstyled
+  // while the settings read is in flight; the stored theme replaces it when it arrives.
   applyTheme(state.settings?.ui);
-
   topbar = buildTopbar();
   contentHost = el('main', { class: 'vx-content', attrs: { id: 'vx-content' } });
 
@@ -2564,11 +2589,32 @@ async function boot() {
   subscribe();
   installShortcuts();
   navigate('dashboard');
+
   // The tour comes after the shell so a user who skips lands on a ready application, not a blank
   // one. It never blocks a scan: the dialog can be dismissed with Escape and the tour re-offered.
   void runOnboarding();
+
+  if (client.live) {
+    // allSettled, not a chain: one channel that fails or hangs must not cost the other four
+    // their results, and nothing here is allowed to throw past this point.
+    const loaded = await Promise.allSettled([
+      loadInfo(),
+      loadSettings(),
+      loadGuard(),
+      loadLastScan(),
+      loadBenchState()
+    ]);
+    const failed = loaded.filter((entry) => entry.status === 'rejected');
+    if (failed.length > 0) {
+      state.bootError = `${failed.length} of ${loaded.length} startup reads did not answer: ${failed
+        .map((entry) => (entry.reason instanceof Error ? entry.reason.message : String(entry.reason)))
+        .join('; ')}`;
+    }
+    applyTheme(state.settings?.ui);
+    navigate(state.page);
+  }
+
   await loadManual();
-  navigate(state.page);
 }
 
 // Booting needs a document. The module is also imported by tests that only want the

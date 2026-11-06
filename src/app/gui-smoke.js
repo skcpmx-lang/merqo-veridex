@@ -57,6 +57,10 @@ async function step(name, fn, timeoutMs = STEP_TIMEOUT_MS) {
     return { ok: true, value };
   } catch (error) {
     record('fail', `${name} threw: ${error instanceof Error ? error.message : String(error)}`);
+    // Capture what the screen actually looked like at the moment of failure. A step that fails
+    // on a blank page previously left no image behind, so the next run had to guess.
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+    await screenshot(`failure-${slug}`).catch(() => null);
     await persist();
     return { ok: false, value: null };
   }
@@ -66,6 +70,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let reportTarget = null;
 let runStartedAt = null;
+/** Console errors and warnings from the renderer, in arrival order. */
+const rendererErrors = [];
 
 /**
  * Persist the verdict so far.
@@ -89,7 +95,10 @@ async function persist(final = false) {
     packaged: app.isPackaged,
     screenshots: shots,
     findings,
-    problems
+    problems,
+    // Collected since the first phase and never written down: a blank page and its explanation
+    // were in the same run and only the blank page was published.
+    rendererConsole: rendererErrors.slice(0, 100)
   };
   try {
     await mkdir(path.dirname(reportTarget), { recursive: true });
@@ -217,12 +226,11 @@ async function main() {
   // Collect anything the renderer throws. Pattern-matching body text for the word
   // "typeerror" found nothing while a page was genuinely blank, because a thrown click
   // handler leaves no text behind - only an uncaught error.
-  const rendererErrors = [];
   app.on('web-contents-created', (_event, contents) => {
     contents.on('console-message', (_e, level, message) => {
-      if (level >= 2) rendererErrors.push(message);
+      if (level >= 2) rendererErrors.push({ level, message });
     });
-    contents.on('render-process-gone', (_e, details) => rendererErrors.push(`renderer gone: ${details.reason}`));
+    contents.on('render-process-gone', (_e, details) => rendererErrors.push({ level: 3, message: `renderer gone: ${details.reason}` }));
   });
 
   // ── 1. Boot ───────────────────────────────────────────────────────────────
@@ -629,6 +637,21 @@ async function main() {
     }
     record('info', `report sizes: ${JSON.stringify(outcomes)}`);
     return outcomes;
+  });
+
+  // ── 10b. The renderer's own account ───────────────────────────────────────
+  // Errors the pages logged are evidence in their own right. Recording them as a finding means
+  // a run cannot be green while an uncaught exception sits in the console with nothing but a
+  // blank region to show for it.
+  await step('the renderer logged no uncaught errors', async () => {
+    const errors = rendererErrors.filter((entry) => entry.level >= 3);
+    const warnings = rendererErrors.filter((entry) => entry.level === 2);
+    record('info', `renderer console: ${errors.length} error(s), ${warnings.length} warning(s)`);
+    if (errors.length > 0) {
+      for (const entry of errors.slice(0, 10)) record('info', `  error: ${entry.message.slice(0, 300)}`);
+      throw new Error(`${errors.length} uncaught renderer error(s)`);
+    }
+    return { errors: 0, warnings: warnings.length };
   });
 
   // ── 11. Shutdown ──────────────────────────────────────────────────────────
