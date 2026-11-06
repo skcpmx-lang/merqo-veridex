@@ -119,3 +119,27 @@ test('every document in docs/ is listed in the README or requirements', () => {
   );
   assert.deepEqual(unreferenced, [], `documents not referenced anywhere: ${unreferenced.join(', ')}`);
 });
+
+test('the forbidden-command count quoted in SECURITY.md matches the guard', async () => {
+  // The document said "sixteen" while the table held twenty-two, and nothing noticed: a count
+  // in prose is a claim about code. This pins it to FORBIDDEN_COMMANDS itself, in words and in
+  // digits, so the next rule that is added either updates the sentence or fails the build.
+  const { FORBIDDEN_COMMANDS, CONSENT_REQUIRED } = await import('../../src/security/guard.js');
+  const doc = readFileSync(path.join(DOCS, 'SECURITY.md'), 'utf8');
+  const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen',
+    'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five',
+    'twenty-six', 'twenty-seven', 'twenty-eight', 'twenty-nine', 'thirty'];
+  const count = FORBIDDEN_COMMANDS.length;
+  assert.ok(count < words.length, 'the table has outgrown the words this test knows');
+  assert.ok(
+    doc.includes(`${words[count]} damaging command lines`) || doc.includes(`${count} damaging command lines`),
+    `SECURITY.md does not quote the real forbidden count (${words[count]} / ${count}), which is what FORBIDDEN_COMMANDS holds`
+  );
+  const consent = words[CONSENT_REQUIRED.length];
+  const consentCapitalised = consent[0].toUpperCase() + consent.slice(1);
+  assert.ok(
+    doc.includes(`write files.** ${consentCapitalised}`) || doc.includes(`write files.** ${CONSENT_REQUIRED.length}`),
+    `SECURITY.md does not quote the real consent count (${consent}), which is what CONSENT_REQUIRED holds`
+  );
+});

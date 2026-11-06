@@ -19,7 +19,7 @@ is the narrative summary of it.
 | Implemented, untested | 18 |
 | In progress | 2 |
 | Not started | 0 |
-| Automated tests | 878, all passing |
+| Automated tests | 880, all passing |
 | Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.5 MiB + portable 106.5 MiB, unsigned |
 
@@ -57,7 +57,7 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
 - The coverage gate and its reason appear in all five.
 
 ### Security and privacy
-- Forbidden-command guard: 16 destructive command lines refused, 11 read-only ones
+- Forbidden-command guard: 22 destructive command lines refused, 11 read-only ones
   permitted, both directions tested.
 - Consent gating for the four operations that write files.
 - Outbound guard, plus the stronger guarantee that no network client exists in `src/`.

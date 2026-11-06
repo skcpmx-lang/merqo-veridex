@@ -5,7 +5,7 @@ Local. Read-only. Offline by construction. Honest about what it could not measur
 
 > **Status: installs, launches and uninstalls on a Windows virtual machine — never on
 > physical hardware.**
-> 878 tests pass on Linux **and** Windows; the static gate reports 0 errors and 0 warnings.
+> 880 tests pass on Linux **and** Windows; the static gate reports 0 errors and 0 warnings.
 > CI builds the installer and the portable executable, then *uses* them: it installs silently
 > and per-user, launches the installed application, drives its whole interface, and uninstalls
 > it — plus the portable build, launched from its extraction directory. All 130 requirements
@@ -29,8 +29,8 @@ evidence it was able to collect, and writes a report you can keep.
   posture, installed software, startup programs and scheduled tasks
 - **8 health components** with evidence-based scoring
 - **5 report formats** — PDF, HTML, JSON, CSV, and a one-page certificate
-- **15 interface pages**, two complete themes, five accents
-- **Read-only**. Sixteen destructive command patterns are refused outright; four
+- **18 interface pages**, two complete themes, five accents
+- **Read-only**. Twenty-two destructive command patterns are refused outright; four
   file-writing operations require per-operation consent
 
 ## What makes it different
@@ -87,7 +87,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 878 tests
+npm test            # 880 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```

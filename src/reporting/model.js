@@ -204,7 +204,7 @@ export const SECTION_ORDER = Object.freeze([
   { id: 'windowsInventory', title: 'Windows features & services' },
   { id: 'windowsHealth', title: 'Windows component health' },
   { id: 'events', title: 'Event log, bugchecks & crashes' },
-  { id: 'software', title: 'Installed software & startup' },
+  { id: 'software', title: 'Software, startup & scheduled tasks' },
   { id: 'processes', title: 'Running processes' },
   { id: 'security', title: 'Security posture' },
   { id: 'sensors', title: 'Sensors & monitoring' },

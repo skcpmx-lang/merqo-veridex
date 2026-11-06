@@ -25,14 +25,22 @@ evidence level of every subsystem.
 
 ### Unreleased build, for inspection only
 
-| Artifact | Size | SHA-256 |
-| --- | --- | --- |
-| `VERIDEX-Setup-1.0.0-x64.exe` | 117.5 MiB | `e6d0fdd88c6e9c78d2543e321b9b6c63fa63d2e407454c1343dd5d2ffa5ecec2` |
-| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `40d6a0db33414c3be914fb068c31048136c95394ca75acabad25bd43de14b487` |
+| Artifact | Size | SHA-256 | Built from |
+| --- | --- | --- | --- |
+| `VERIDEX-Setup-1.0.0-x64.exe` | 117.5 MiB | `e6d0fdd88c6e9c78d2543e321b9b6c63fa63d2e407454c1343dd5d2ffa5ecec2` | run 42160034210, an earlier tree than this one |
+| `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `40d6a0db33414c3be914fb068c31048136c95394ca75acabad25bd43de14b487` | run 42160034210, an earlier tree than this one |
 
-These come from a `windows-latest` CI runner. **Unsigned**, so SmartScreen will warn. They
-are not offered for download from a release page, because a release page is a
-recommendation and this build has not been run.
+Both are `windows-latest` CI builds and **unsigned**, so SmartScreen will warn. Their hashes
+describe the build from run 42160034210 and nothing else: every rebuild produces new bytes, so
+these two values must not be quoted for a later artifact.
+
+The build for the current tree is in the `veridex-windows` artifact of the packaging job
+(`RELEASE_VERIFICATION.md` records its run, byte size and GitHub's digest of the archive). Its
+two executables' hashes are **not** in this file, because the artifact could not be downloaded
+to compute them; `RELEASE_VERIFICATION.md` gives the exact commands that do it.
+
+None of these builds is offered for download from a release page, because a release page is a
+recommendation and this build has not been run on a machine anybody owns.
 
 ---
 

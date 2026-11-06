@@ -357,3 +357,44 @@ test('one slow sub-query must not cost the whole Windows inventory', async () =>
   assert.ok(fields.servicesSummary, 'the fast queries must survive the slow one');
   assert.ok(fields.updates, 'the fast queries must survive the slow one');
 });
+
+// ═══ The guard, applied to what the new providers send ═════════════════════
+
+test('no provider sends a command its own security guard would refuse', async () => {
+  // A provider whose script trips a FORBIDDEN_COMMANDS rule fails on every real machine with a
+  // refusal the UI reports as "unavailable", which looks exactly like a machine that has no such
+  // data. Nothing in the suite compared what providers send against the guard's own rules, so a
+  // future edit could silently add one. This walks every provider that talks to the runner.
+  const { buildDefaultRegistry } = await import('../../src/app/scan.js');
+  const { classifyCommand } = await import('../../src/security/guard.js');
+  const registry = buildDefaultRegistry();
+  const refused = [];
+  let checked = 0;
+
+  for (const [id, provider] of registry.providers) {
+    const sent = [];
+    const record = (command) => {
+      for (const candidate of ['powershell.exe', 'cmd.exe', command.split(' ')[0]]) {
+        const verdict = classifyCommand(candidate, ['-Command', command]);
+        if (verdict.verdict === 'forbid') sent.push({ verdict: verdict.id, command });
+      }
+    };
+    const runner = {
+      powershellJson: async (body) => { record(body); return { ok: true, data: [] }; },
+      powershell: async (body) => { record(body); return { ok: true, stdout: '', data: [] }; },
+      run: async (file, args = []) => { record([file, ...args].join(' ')); return { ok: true, stdout: '', code: 0 }; }
+    };
+
+    try {
+      await provider.collect({ permissions: { isAdmin: true }, logger: null, timeoutMs: 2000, runner, systeminformation: {} });
+    } catch {
+      // A provider that needs something this harness does not give it sends nothing to check.
+    }
+    checked += 1;
+    if (sent.length > 0) refused.push(...sent.map((entry) => `${id} -> ${entry.verdict}: ${entry.command.slice(0, 80)}`));
+  }
+
+  // If the harness ever stops capturing, this test would pass while checking nothing.
+  assert.ok(checked >= 20, `only ${checked} providers were inspected; the sweep has lost its runner`);
+  assert.deepEqual(refused, [], `a provider's own command is refused by the guard:\n${refused.join('\n')}`);
+});

@@ -937,7 +937,7 @@ pages.windows = stackPages([
 ]);
 pages.drivers = stackPages([
   modulePage('drivers', 'Drivers and devices', 'Driver inventory with dates, signing state and problem codes. Driver export is consent-gated and never installs anything.', 'Run a scan to enumerate drivers.'),
-  modulePage('software', 'Installed software & startup', 'Applications registered for uninstall, and the programs Windows starts at sign-in. Read-only: nothing is launched or removed.', 'Run a scan to read the installed-software registry.')
+  modulePage('software', 'Software, startup & scheduled tasks', 'Applications registered for uninstall, the programs Windows starts at sign-in — from the Run keys and both Startup folders — and the scheduled tasks on this machine. Read-only: nothing is launched, started or removed.', 'Run a scan to read the installed-software registry and the task scheduler.')
 ], () => [driverExportCard()]);
 
 // Windows component health belongs beside the rest of the Windows state: it answers the
@@ -1198,7 +1198,9 @@ function memoryStabilityCard() {
       children: [box, el('span', { text: 'I understand this allocates the selected buffer and holds it for several seconds' })]
     });
 
-    const sizeField = el('label', { class: 'vx-dim', text: 'Buffer (MB) ' });
+    // `for` as well as wrapping: the input is inside the label, so it is already associated, but
+    // an explicit association survives a future layout change that moves the input out.
+    const sizeField = el('label', { class: 'vx-dim', attrs: { for: 'vx-memory-mb' }, text: 'Buffer (MB) ' });
     const sizeInput = el('input', {
       class: 'vx-input',
       attrs: { type: 'number', min: '64', max: '1024', step: '64', id: 'vx-memory-mb' }
@@ -1209,7 +1211,7 @@ function memoryStabilityCard() {
     });
     sizeField.append(sizeInput);
 
-    const passField = el('label', { class: 'vx-dim', text: 'Passes ' });
+    const passField = el('label', { class: 'vx-dim', attrs: { for: 'vx-memory-passes' }, text: 'Passes ' });
     const passInput = el('input', {
       class: 'vx-input',
       attrs: { type: 'number', min: '1', max: '20', step: '1', id: 'vx-memory-passes' }

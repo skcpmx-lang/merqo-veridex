@@ -75,7 +75,7 @@ about a real PC.
 | Benchmarks | CPU, disk | **L2** | Scoring and the write-consent gate tested. Never benchmarked real hardware. |
 | Stress guard | thermal/load limits | **L2** | Guard behaviour tested; never applied to real silicon. |
 | UAC elevation | `detectPermissionState` | **L3** | The elevation probe ran for real on the runner and correctly detected an elevated session. **The UAC prompt itself has still never appeared.** |
-| Read-only guard | `FORBIDDEN_COMMANDS` | **L2** | 16 destructive lines refused, 11 read-only permitted, tested. |
+| Read-only guard | `FORBIDDEN_COMMANDS` | **L2** | 22 destructive lines refused, 11 read-only permitted, tested. |
 | Keyboard, mouse, touchpad, audio, microphone, camera, ports | — | **L1** | Requirement R-16-01 (vendor-agnostic detection) and the input-device modules are **not started**. The manual checklist covers some of this by asking the user to look. |
 | Packaged application | Electron + NSIS | **L3** | Built, installed, launched and uninstalled on the Windows runner (CI run 42160034210): 19 GUI steps, 17 install-lifecycle checks, 10 portable checks, no problems. **Never installed on physical hardware and never seen by a person.** |
 

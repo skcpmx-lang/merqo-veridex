@@ -17,7 +17,7 @@ Nothing in the last column is ever reported as done. Nothing in the third column
 - **Requirements:** 130 across 39 specification sections — 110 tested, 18 implemented, 2 partial, 0 not started, **0 verified on real hardware**
 - **Audit:** [`AUDIT_40_SECTIONS.md`](AUDIT_40_SECTIONS.md) — every section judged, with its gaps named
 - **Static gate:** 0 errors, 0 warnings
-- **Test suite:** 878 tests, 878 passing, on Linux and Windows
+- **Test suite:** 880 tests, 880 passing, on Linux and Windows
 
 ---
 
@@ -27,8 +27,8 @@ These ran, in this environment or in CI, and the output was read.
 
 | What | Where | Result |
 | --- | --- | --- |
-| Full test suite | this container (Linux) | `# tests 878 · # pass 878 · # fail 0` |
-| Full test suite | `windows-latest` (runs `42187908032`, `42194144517`) | green, 878 tests |
+| Full test suite | this container (Linux) | `# tests 880 · # pass 880 · # fail 0` |
+| Full test suite | `windows-latest` (runs `42187908032`, `42194144517`) | green, 880 tests |
 | Static gate | `node scripts/check.mjs` | "No findings." — 0 errors, 0 warnings |
 | Licence audit | `npm run audit:licences` | 339 packages, 0 errors, 1 recorded exception (`png-js`, undeclared licence, upstream states MIT) |
 | Requirement audit | `npm run audit:requirements -- --check` | "Every claimed status matches the repository contents." |
@@ -48,7 +48,7 @@ machine somebody owns.**
 
 ## 2. Tested
 
-878 automated tests. The ones that matter most for the newest work, and what each would catch:
+880 automated tests. The ones that matter most for the newest work, and what each would catch:
 
 | Area | Test file | Tests | The failure it is designed to catch |
 | --- | --- | --- | --- |
@@ -154,7 +154,7 @@ npm ci
 npm run check                       # 0 errors, 0 warnings
 npm run audit:licences              # 339 packages, 0 errors, 1 recorded exception
 npm run audit:requirements -- --check
-npm test                            # 878 tests
+npm test                            # 880 tests
 node --test tests/integration/gate-refusals.test.js   # proves the gate refuses bad input
 ```
 

@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 878 · pass 878 · fail 0
+tests 880 · pass 880 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -97,13 +97,13 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/memory-stability.test.js` | 10 | consent and bounds, a real 64 MB worker round trip, injected mismatches, cancellation |
 | `tests/integration/licence-audit.test.js` | 11 | the licence audit refuses undeclared, copyleft-runtime and unallowlisted licences |
 | `tests/integration/performance-card.test.js` | 3 | the memory card's consent gate in both directions, and the invoke arguments |
-| `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
+| `tests/integration/docs.test.js` | 7 | documentation paths and claims match the code |
 | `tests/integration/gui-coverage.test.js` | 9 | the Windows GUI harness covers every page and uploads its screenshots |
 | `tests/integration/install-smoke-harness.test.js` | 9 | the installed build smoke harness itself |
 | `tests/integration/new-surfaces.test.js` | 25 | first-run tour, activity log, driver export card, Reports and Privacy |
 | `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
 | `tests/integration/privacy-verification.test.js` | 7 | redaction on disk and on export, retention, reset safety |
-| `tests/integration/provider-invocation.test.js` | 13 | CI workflows reference scripts that exist; tests gate publishing |
+| `tests/integration/provider-invocation.test.js` | 14 | CI workflows reference scripts that exist; tests gate publishing |
 | `tests/integration/providers.test.js` | 7 | every provider executes and explains itself, including when its runner fails |
 | `tests/integration/renderer.test.js` | 17 | all 18 pages render under jsdom; live-mode pages with a fake bridge |
 | `tests/integration/renderer-graph.test.js` | 2 | the renderer's import graph never reaches a Node builtin |
@@ -113,7 +113,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **878** | |
+| **Total** | **880** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is
@@ -136,7 +136,7 @@ this run proves the suite and not an installer.
   silence.
 - The **health score** is gated: below 50 % coverage no number is published, and between
   50 % and 80 % it cannot read "Good".
-- The **guard** refuses sixteen destructive command lines and permits eleven read-only
+- The **guard** refuses twenty-two destructive command lines and permits eleven read-only
   ones.
 - **No network client** exists anywhere in `src/`.
 - The **renderer** renders all 18 pages with no `undefined`, `NaN` or `[object Object]`.

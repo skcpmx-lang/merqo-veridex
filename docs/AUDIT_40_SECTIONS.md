@@ -1,9 +1,9 @@
 # VERIDEX — 40-section requirements audit
 
-**Commit audited:** `29c7a32ba7e8a302804fd008de400a957082c185`
+**Commit audited:** `40674688c9e1225d5d5cb9855e0571ab993df78c`
 **Requirements audited:** 130 across 39 specification sections, plus the cross-cutting release gates as section 40.
 **Static gate:** `node scripts/check.mjs` → 0 errors, 0 warnings.
-**Test suite:** 878 tests, 878 passing, on ubuntu-latest and windows-latest.
+**Test suite:** 880 tests, 880 passing, on ubuntu-latest and windows-latest.
 
 ## How to read this document
 
@@ -1085,7 +1085,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 | --- | --- | --- |
 | Requirements complete | 130 of 130 implemented, 0 marked NS | `docs/requirements.json`, this document |
 | Static gate | 0 errors, 0 warnings | `node scripts/check.mjs` |
-| Test suite | 878/878 on Linux and Windows | run 42194144517 and predecessors |
+| Test suite | 880/880 on Linux and Windows | run 42194144517 and predecessors |
 | Renderer import graph | no Node builtin reachable from the renderer | `tests/integration/renderer-graph.test.js` |
 | Real-window evidence | 23 steps, 35 screenshots, 0 problems | design-evidence run 42192434597, `ci/ui-42192434597` |
 | Installer and portable build | produced and verified for tree `3281c01`; **stale for the current tree** | `docs/RELEASE_VERIFICATION.md` |

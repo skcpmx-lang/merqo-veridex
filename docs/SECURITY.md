@@ -127,8 +127,8 @@ that runs them. The list includes, among others:
 
 Command lines are normalised before matching, so a path or a flag order does not slip
 past a pattern. The set is table-driven and unit-tested (`tests/unit/security.test.js`). The tests assert
-both directions: sixteen damaging command lines must be refused, and the eleven read-only
-diagnostics VERIDEX actually runs must pass. A guard that is too broad makes the product
+both directions: all twenty-two damaging command lines must be refused, and the eleven
+read-only diagnostics VERIDEX actually runs must pass. A guard that is too broad makes the product
 useless, which is why the permissive direction is tested too.
 
 ### 3.3 Write operations and elevated operations require explicit consent
