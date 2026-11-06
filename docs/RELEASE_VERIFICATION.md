@@ -73,8 +73,9 @@ an SSD and a discrete GPU in it.
   modules, a rated score of 84 at 75% coverage, one remaining ERROR (a genuinely absent
   `dxdiag`), and zero structural problems. That is evidence about the **diagnostic layer**,
   on a virtual machine, with synthetic devices — not about a packaged application on a real
-  PC. **No packaged build has ever executed.**
-- UAC elevation has never been exercised.
+  PC. Packaged builds *have* executed since: the unpacked build, the portable executable and
+  the installed build each launch and render all 18 pages on the Windows runner (§7). What
+  has not happened is a packaged build running on hardware somebody owns.
 - DPI scaling, window resizing and multi-monitor behaviour are untested in a real window.
 - the artifact could not be downloaded in the environment where this document was written
   (GitHub serves artifacts from blob storage, outside the allowlist), so the binary has not
