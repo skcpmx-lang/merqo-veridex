@@ -390,7 +390,9 @@ body { overflow: hidden; }
 
 .vx-coverage {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  /* 84px so the seven-cell Manual strip (answered, passed, failed, warnings, N/A, not run,
+     complete) fits on one row at the minimum window width instead of orphaning its last cell. */
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   gap: var(--vx-space-sm);
 }
 .vx-coverage__cell {

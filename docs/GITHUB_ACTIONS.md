@@ -27,6 +27,10 @@ Recorded runs:
 | [`42157700654`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42157700654) | pull request | ❌ package job: two gui-smoke problems (tour missing, report label) — both real, both fixed |
 | [`42158921882`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42158921882) | pull request | ✅ both fixes confirmed on Windows: GUI 19 steps, install 18 checks, portable 10 checks, 0 problems |
 | [`42160034210`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42160034210) | pull request | ✅ final tree: GUI 19 steps, install 17 checks, portable 10 checks, 0 problems, and the "setting rejected" warning is gone |
+| [`42167493342`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42167493342) | push (design evidence) | ❌ the window never booted: 2 screenshots, no navigation, no tour. Cause: the renderer imported the logger two levels down and a sandboxed renderer cannot resolve `node:*` |
+| [`42169801753`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42169801753) | push (design evidence) | ✅ 21 steps, 32 screenshots, 0 problems — first run with the boot fix and the imported-graph test |
+| [`42172738818`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738818) | push | ✅ Linux and Windows: 725 tests, static checks clean |
+| [`42172738822`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42172738822) | push (design evidence) | ✅ 21 steps, 32 screenshots, 0 problems, including the populated pages |
 
 Before run 42013425380 the workflow had been **failing on every push since it was added**,
 and this document incorrectly said it had not run at all. That was wrong in a way worth

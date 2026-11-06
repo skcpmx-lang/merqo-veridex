@@ -167,6 +167,11 @@ There is no state in which a number appears without the coverage beside it.
 - Two densities: `comfortable` (1.0) and `compact` (0.72). The ratio scales row height
   and padding together, so a compact table is still a table.
 - Content is laid out in a max-width column; at narrow widths the rail collapses.
+- **Notifications take layout space.** The stack sits below the content region inside the
+  application column rather than floating over it, so a toast can never hide the figure it is
+  reporting on. One notification is shown at a time there (the newest replaces the previous),
+  with the body clamped to two lines; a window with no shell falls back to a floating stack of
+  up to four, because it covers nothing but itself.
 
 ---
 
