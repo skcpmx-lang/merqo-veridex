@@ -60,10 +60,10 @@ Artifacts — record the digest of the exact files used, not the version string:
 - [ ] Resize the window; nothing overlaps or clips
 - [ ] **Screenshot**: dashboard before any scan
 
-## 3. A standard-user scan — all 20 tasks
+## 3. A standard-user scan — all 21 tasks
 
 Run the full diagnostic and record each task's terminal state. This is the sweep the GUI
-smoke test deliberately bounds to three tasks; a person with time must run all twenty.
+smoke test deliberately bounds to three tasks; a person with time must run all twenty-one.
 
 | # | Task | State | Notable fields, and anything unavailable with its reason |
 | --- | --- | --- | --- |
@@ -85,8 +85,9 @@ smoke test deliberately bounds to three tasks; a person with time must run all t
 | 16 | `windows.events` | | |
 | 17 | `software.installed` | | |
 | 18 | `software.startup` | | |
-| 19 | `processes.snapshot` | | |
-| 20 | `security.posture` | | |
+| 19 | `software.scheduledTasks` | | |
+| 20 | `processes.snapshot` | | |
+| 21 | `security.posture` | | |
 
 - [ ] Every task reached a terminal state; none was left spinning
 - [ ] The whole sweep finished — record the wall-clock time
@@ -95,6 +96,25 @@ smoke test deliberately bounds to three tasks; a person with time must run all t
       the coverage gate is doing its job; if coverage is above 80 % and the score is 84, the
       machine genuinely scored 84 and that is a different finding
 - [ ] The reason for a capped or withheld score is visible on the dashboard, not only in a log
+
+## 3a. Two monitors, and a scaled display — the things a VM does not have
+
+The evidence runner has one 1024x700 display at 100 %, which is the only reason these boxes are
+here rather than in CI. Unit tests cover the arithmetic; a person has to see the window.
+
+- [ ] With two monitors connected, the window opens on the one **under the pointer** — record
+      the two displays' work areas and where the window landed
+- [ ] The window is entirely inside that monitor's work area, above the taskbar, with no part
+      under it
+- [ ] Unplug (or disable) the monitor the window is on. Within a second the window is on a
+      display that still exists; it is not at coordinates nothing covers
+- [ ] At 125 % (and at 150 % if available), the header, rail, cards and tables are readable and
+      nothing is clipped; record the scaling and the work area VERIDEX reports in the log
+- [ ] On a screen whose work area is smaller than 1024x700, the window still fits and the
+      startup log says the window is the work area — record the log line
+- [ ] Move the window to the other monitor, close the application, open it again: where does it
+      open? (It should open on the pointer's display; there is no remembered position, and that
+      is the design, not a fault — confirm it matches this document)
 
 ## 4. Battery, storage and GPU — the things a VM cannot have
 

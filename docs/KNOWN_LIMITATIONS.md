@@ -36,7 +36,7 @@ thing on macOS" is not a translation — the underlying data does not exist in t
 form.
 
 On any other platform every provider returns `UNSUPPORTED` with that reason. Nothing
-crashes and nothing pretends. A scan on Linux reports 20 tasks, 33 provider attempts and
+crashes and nothing pretends. A scan on Linux reports 21 tasks, 34 provider attempts and
 no errors, precisely because "not Windows" is an answer and not a failure.
 
 ---
@@ -224,18 +224,17 @@ sample data. `docs/PROJECT_STATUS.md` tracks them.
 
 ## 15. Requirements not started
 
-None. All 130 requirements now have an implementation, which is a different claim from
-"verified on hardware": 110 carry `TS` (tested), 18 `IM` (implemented and wired), 2 `IP`
-(partially implemented, with the missing part named per requirement) and none `VER`. `VER` means
-a person ran the product on a real Windows machine and saw it work, and that evidence does not
-exist for any requirement yet — see §1 of this document.
+None, and none partial. All 130 requirements now have an implementation, which is a different
+claim from "verified on hardware": 112 carry `TS` (tested), 18 `IM` (implemented and wired), none
+`IP` and none `VER`. `VER` means a person ran the product on a real Windows machine and saw it
+work, and that evidence does not exist for any requirement yet — see §1 of this document.
 
-The two still partial are named precisely in `docs/REQUIREMENTS.md`:
+The last two partial ones were closed by building the missing half, not by rewording:
 
-| ID | What exists | What does not |
-| --- | --- | --- |
-| R-12-02 | startup entries from the Run/RunOnce keys | scheduled tasks, running services, Windows components |
-| R-18-02 | every display enumerated; 125 % zoom checked in the harness | per-monitor window placement, scale-aware shell sizing |
+| ID | What was missing | What now exists | What remains unproven |
+| --- | --- | --- | --- |
+| R-12-02 | scheduled tasks; the Startup *folders* the provider's own title claimed | `Get-ScheduledTask` with a `schtasks` fallback; both Startup folders read alongside the four Run/RunOnce keys; services and optional features were already read through `Get-Service` and `Get-WindowsOptionalFeature` | the `schtasks` fallback has never run on a machine that lacks the ScheduledTasks module, so its parsing is tested against fixtures only; and none of it has been seen on physical hardware |
+| R-18-02 | per-monitor window placement and scale-aware sizing | `src/app/window-placement.js` places the window inside the *work area* of the display under the pointer, lowers its own minimum when the work area is smaller than the design minimum, and moves a stranded window back after a monitor is unplugged | the CI runner has one 1024x700 display at 100 %, so the second-monitor, negative-origin and 125 %-work-area cases are covered by unit tests, not by a person looking at two screens. There is also no remembered window position between runs — the window opens on the pointer's display every time |
 
 Two that were partial have since been closed by building the missing half rather than by
 rewording the requirement: R-08-03 now has a bounded write/read-back stability check

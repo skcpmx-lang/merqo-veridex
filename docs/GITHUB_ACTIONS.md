@@ -37,6 +37,29 @@ Recorded runs:
 | [`42184459268`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42184459268) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems — includes the memory, GPU and responsiveness cards and the arrangement editor |
 | [`42185390234`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42185390234) | push (design evidence) | ✅ 23 steps, 34 screenshots, 0 problems, and the memory card's consent row now reads correctly |
 | [`42186269187`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42186269187) | pull request | ✅ Linux and Windows tests, static checks, and **the Windows package job**: installer and portable built, artifact verification, package validation and the unpacked GUI smoke test all passed. The artifacts themselves could not be downloaded here — `gh run download` needs `*.blob.core.windows.net`, outside this environment's egress (`EOF`) — so this tree has a build but no hash |
+| [`42187908032`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42187908032) | pull request | ✅ Linux and Windows tests (878), static checks, and the package job: installer **installed, launched and uninstalled**, portable launched, unpacked build driven through the GUI smoke test. Artifact metadata read through the REST API: `veridex-windows`, 234,992,960 bytes, digest `sha256:74e1d5ec…a801` (an archive digest, not an executable hash) |
+| [`42192434597`](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42192434597) | push (design evidence) | ✅ 23 steps, 35 screenshots, 0 problems — adds the window-placement step: `window 1024x720 at 0,0; display 1024x768 at 100 %, work area 1024x720; overflow {0,0,0,0}` |
+
+
+---
+
+## Why `release.yml` cannot be dispatched from an agent session
+
+Two independent causes, both verified on 2026-11-06 rather than assumed:
+
+| Probe | Answer | Cause |
+| --- | --- | --- |
+| `gh workflow run release.yml --ref <branch>` | `HTTP 404: Not Found (/actions/workflows/release.yml)` | `release.yml` has never existed on `main`. GitHub only registers a `workflow_dispatch` workflow that is present on the default branch, and `GET /actions/workflows` returns two workflows: `build.yml` and `ui-evidence.yml`. Nothing is wrong with the file |
+| `POST /actions/workflows/build.yml/dispatches` | `403 {"message":"Resource not accessible by integration"}` | the session's credential is a GitHub App installation token (empty `X-OAuth-Scopes`, `X-Accepted-OAuth-Scopes` empty, `github-authentication` headers present). Dispatching needs the installation to hold **Actions: write**; it holds Actions read, which is enough to list runs and artifacts and not enough to start one |
+
+**Minimum change for an owner who wants an agent (or a bot) to dispatch:** give the App
+installation `Actions: write` on this repository only — no `Contents: write`, no
+`Administration`, no org-wide grant. A person does not need that at all: the *Run workflow*
+button needs ordinary repository write access, and `release.yml` becomes dispatchable the moment
+it exists on `main`.
+
+Nothing here was bypassed: no token was inspected beyond its public response headers, no
+permission was escalated, and no dispatch was faked.
 
 Before run 42013425380 the workflow had been **failing on every push since it was added**,
 and this document incorrectly said it had not run at all. That was wrong in a way worth

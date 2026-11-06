@@ -1,6 +1,6 @@
 # VERIDEX — 40-section requirements audit
 
-**Commit audited:** `d4185be944b7887122c482a739cdb35d79d03005`
+**Commit audited:** `90745b04bc4336302a66814775403cf720c8642c`
 **Requirements audited:** 130 across 39 specification sections, plus the cross-cutting release gates as section 40.
 **Static gate:** `node scripts/check.mjs` → 0 errors, 0 warnings.
 **Test suite:** 878 tests, 878 passing, on ubuntu-latest and windows-latest.
@@ -12,12 +12,12 @@ Four claims are kept apart, and nothing is upgraded by being listed near somethi
 | Claim | Meaning | Count in this audit |
 | --- | --- | --- |
 | **Implemented (IM)** | The code exists and is wired into the product. It may not have a dedicated test. | 18 requirements |
-| **Tested (TS)** | An automated test executes the behaviour and fails if it is removed. | 110 requirements |
-| **In progress (IP)** | Part of the requirement exists; the missing part is named in its section below. | 2 requirements |
+| **Tested (TS)** | An automated test executes the behaviour and fails if it is removed. | 112 requirements |
+| **In progress (IP)** | Part of the requirement exists; the missing part is named in its section below. | 0 requirements |
 | **VM-verified (VER)** | A person ran the product on a Windows machine and saw this requirement work. | **0 requirements** |
 | **Physically verified** | A person confirmed behaviour that only hardware can show (a key press, a speaker, a panel). | **0 requirements** |
 
-The Windows **evidence** runs are real: Electron 45.2.3, a real BrowserWindow, real Chromium, on a hosted Windows runner, driving 23 steps and capturing 34 screenshots. That proves the window boots, the pages render, the IPC contract holds, scans run through the interface, and reports produce bytes on Windows. It does **not** prove that a diagnostic value is correct for the machine it describes, and it does not touch a single physical component. Everything below is graded against that distinction.
+The Windows **evidence** runs are real: Electron 45.2.3, a real BrowserWindow, real Chromium, on a hosted Windows runner, driving 23 steps and capturing 35 screenshots. That proves the window boots, the pages render, the IPC contract holds, scans run through the interface, and reports produce bytes on Windows. It does **not** prove that a diagnostic value is correct for the machine it describes, and it does not touch a single physical component. Everything below is graded against that distinction.
 
 Each section states what is implemented, what a user actually sees, where the gaps are, what is untested, and the evidence that exists.
 
@@ -459,12 +459,12 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 ## 15. Inventory (spec 12)
 
-**Requirements:** 3 — TS 2, IM 0, IP 1, NS 0
+**Requirements:** 3 — TS 3, IM 0, IP 0, NS 0
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
 | R-12-01 | Installed applications: name, version, publisher, install date, location, uninstall info | `src/diagnostics/software.js` | `tests/unit/windows-extended.test.js` | **TS** |
-| R-12-02 | Windows components, startup apps, background processes, running services, scheduled tasks, features | `src/diagnostics/software.js#registerSoftware (startup keys)` | `tests/unit/windows-extended.test.js` | **IP** |
+| R-12-02 | Windows components, startup apps, background processes, running services, scheduled tasks, features | `src/diagnostics/software.js#registerSoftware, src/diagnostics/windows.js#registerWindows` | `tests/unit/scheduled-tasks.test.js, tests/unit/windows-extended.test.js, tests/unit/windows-modules-depth.test.js` | **TS** |
 | R-12-03 | Process monitoring: name, PID, CPU, RAM, disk; no unnecessary retention of sensitive process data | `src/diagnostics/processes.js` | `tests/unit/windows-extended.test.js` | **TS** |
 
 **What a user sees**
@@ -474,9 +474,8 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 **Gaps, placeholders and limits**
 
-- R-12-02 is IP: Windows components, scheduled tasks and background services are partially covered by the startup-key collector; the remainder is not built.
+- R-12-02 is TS: startup entries come from the four Run/RunOnce keys and both Startup folders; scheduled tasks from Get-ScheduledTask with a schtasks fallback; services, optional features and the process snapshot are read too. The fallback path has never run on a machine without the ScheduledTasks module.
 - Process sampling is a snapshot, not a monitor.
-- In progress in this section: R-12-02.
 
 **Evidence**
 
@@ -637,19 +636,19 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 **Evidence**
 
-- tests/integration/renderer.test.js (18 pages), ui-features.test.js; 34 screenshots from run 42184459268 and its predecessors.
+- tests/integration/renderer.test.js (18 pages), ui-features.test.js; 35 screenshots from run 42192434597 and its predecessors.
 
 
 ---
 
 ## 22. Layout (spec 18)
 
-**Requirements:** 2 — TS 0, IM 1, IP 1, NS 0
+**Requirements:** 2 — TS 1, IM 1, IP 0, NS 0
 
 | ID | Requirement | Implementation | Test | Status |
 | --- | --- | --- | --- | --- |
 | R-18-01 | Resizable window, min/max size, responsive grid, no overlap/clipping/overflow at supported sizes; verified by automated layout audit | `src/app/main.js#WINDOW_DEFAULTS, src/renderer/styles.css` | `—` | **IM** |
-| R-18-02 | High-DPI / display-scaling and multi-monitor handling | `src/diagnostics/display.js` | `tests/integration/gui-coverage.test.js` | **IP** |
+| R-18-02 | High-DPI / display-scaling and multi-monitor handling | `src/app/window-placement.js, src/diagnostics/display.js` | `tests/unit/window-placement.test.js, tests/integration/gui-coverage.test.js` | **TS** |
 
 **What a user sees**
 
@@ -658,8 +657,7 @@ Each section states what is implemented, what a user actually sees, where the ga
 
 **Gaps, placeholders and limits**
 
-- R-18-02 is IP: high-DPI handling is asserted at 125% only; multi-monitor layout behaviour is untested.
-- In progress in this section: R-18-02.
+- R-18-02 is TS: placement is computed from the work area, opens on the pointer display, and recovers a stranded window. The evidence runner has one 1024x700 display at 100 %, so two-monitor and 125 %-work-area placement are unit-tested, not observed.
 
 **Evidence**
 
@@ -1087,9 +1085,9 @@ Each section states what is implemented, what a user actually sees, where the ga
 | --- | --- | --- |
 | Requirements complete | 130 of 130 implemented, 0 marked NS | `docs/requirements.json`, this document |
 | Static gate | 0 errors, 0 warnings | `node scripts/check.mjs` |
-| Test suite | 878/878 on Linux and Windows | run 42172738818 and successors |
+| Test suite | 878/878 on Linux and Windows | runs 42187908032 and successors |
 | Renderer import graph | no Node builtin reachable from the renderer | `tests/integration/renderer-graph.test.js` |
-| Real-window evidence | 23 steps, 34 screenshots, 0 problems | design-evidence runs, `ci/ui-*` branches |
+| Real-window evidence | 23 steps, 35 screenshots, 0 problems | design-evidence run 42192434597, `ci/ui-42192434597` |
 | Installer and portable build | produced and verified for tree `3281c01`; **stale for the current tree** | `docs/RELEASE_VERIFICATION.md` |
 | Fresh artifact hashes | **do not exist for this tree** | blocked: `release.yml` cannot be dispatched from this environment |
 | Windows runtime on real hardware | **not done** | no VM available in this environment; see Phase 5 record |
@@ -1105,23 +1103,23 @@ satisfied from inside this session, and neither is a code defect.
 
 | Status | Count |
 | --- | --- |
-| Tested (TS) | 110 |
+| Tested (TS) | 112 |
 | Implemented (IM) | 18 |
-| In progress (IP) | 2 |
+| In progress (IP) | 0 |
 | Not started (NS) | 0 |
 | VM-verified (VER) | 0 |
 | **Total** | **130** |
 
 ### Requirements still partially implemented
 
-- **R-12-02** Windows components, startup apps, background processes, running services, scheduled tasks, features — see section 15
-- **R-18-02** High-DPI / display-scaling and multi-monitor handling — see section 22
+None. The last two - R-12-02 and R-18-02 - were closed by building the missing half in this milestone; each keeps a named residual limitation in `docs/KNOWN_LIMITATIONS.md` §15.
+
 
 ### What this audit does not prove
 
 - That any diagnostic value is correct for the machine it was collected from. No requirement is VER.
 - That a physical component works: no keyboard, panel, speaker, camera, port or battery has been exercised.
-- That the installer installs on a real desktop: the installer build was verified for an earlier tree only.
+- That the installer installs on a real desktop: it installs, launches and uninstalls on a virtual machine for this tree (run 42187908032), and has never touched a physical one.
 - That the GPU benchmark measures a real GPU: it has only been run against a fake WebGL context.
 - That the stress runner has been run on real hardware: it has only been run in tests with an injected load.
 

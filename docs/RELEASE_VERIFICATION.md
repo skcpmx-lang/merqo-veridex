@@ -20,7 +20,8 @@ listed here as **NOT VERIFIED**.
 | Hashes quoted below belong to | **the 42160034210 build, not the current tree.** The current tree's bytes could not be fetched into the environment that wrote this document: `gh run download` reaches `*.blob.core.windows.net`, which is outside its network egress (`EOF`), so no hash is claimed for them. A hash nobody computed is not a hash |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
-| Published | **No.** `.github/workflows/release.yml` cannot be dispatched from this environment (`403 Resource not accessible by integration`) and no tag has been cut, so nothing here is a published release |
+| Published | **No**, for two separate reasons that are both fixable by the owner and neither of them by me — see below |
+| Release workflow | **Not registered.** It has never existed on `main`, and GitHub only registers a `workflow_dispatch` workflow that is present on the default branch, so the endpoint answers `404`. Dispatching *any* workflow would also fail: this session's GitHub App installation token gets `403 Resource not accessible by integration` on `/actions/workflows/<id>/dispatches`, which is the `Actions: write` permission it does not have |
 | Result | **Installed, launched, uninstalled on a VM. Still never run on physical hardware.** |
 
 Every item below is unchecked except the build checks in §1 and the machine checks that
@@ -28,6 +29,71 @@ automation now performs, which are marked **VM** and quote their evidence. This 
 deliberately not pre-filled: a verification document with tick marks nobody earned is worse
 than no document, and a tick earned on a virtual machine is not a tick for a PC with a battery,
 an SSD and a discrete GPU in it.
+
+## The artifacts of the current tree, and what can and cannot be said about them
+
+The packaging job of run **42187908032** (source commit `72ad47b`, `windows-latest`) built the
+installer, the portable executable, the build manifest and `dist/SHA256SUMS.txt`, and passed
+artifact verification, package validation and the unpacked GUI smoke test. GitHub's REST API reports
+these artifacts for that run, and this section was written from its answer, not from memory:
+
+| Artifact | Size (bytes) | GitHub's archive digest | What it is |
+| --- | --- | --- | --- |
+| `veridex-windows` | 234,992,960 | `sha256:74e1d5ec5f991b88cedcb698f2ee6d4abbbf38af805cc93eeff024cd3ae5a801` | the zip containing the NSIS installer, the portable executable, the build manifest and `SHA256SUMS.txt` |
+| `veridex-gui-evidence` | 3,669,424 | `sha256:308d2ccbd96439dee85ed06138cb56f666df84b05d679baa1b6fca53d3faa776` | the GUI harness report and screenshots |
+| `test-results-windows-latest` | 34,382 | `sha256:563ab5286c3407faa46a5e57cd683ec506de36acfb5df286976340baf14331ed` | the Windows test run |
+| `test-results-ubuntu-latest` | 33,486 | `sha256:9e698e6e63e3c031b37bf0e57b8b0544a26de86f92345abacb821f79ad4bc576` | the Linux test run |
+
+**Those digests are GitHub's SHA-256 of the artifact _archives_, not of the executables inside
+them.** They prove the archive that holds the build, and they would let you confirm a download is
+the one CI produced — they are *not* `VERIDEX-Setup-1.0.0-x64.exe`'s hash, and quoting them as if
+they were would be exactly the kind of quiet substitution this document exists to prevent. The
+installer and portable hashes are **not recorded here**, because the bytes could not be fetched
+into the environment that wrote this file:
+
+```
+$ gh run download 42187908032 -R skcpmx-lang/merqo-veridex -D dist-ci
+error downloading test-results-windows-latest: Get "https://productionresultssa18.blob.core.windows.net/...": EOF
+```
+
+GitHub serves artifact payloads from `*.blob.core.windows.net`; this environment reaches
+`api.github.com` (which is why the table above exists) but not that host, so every download ends
+in `EOF` after the redirect. No authentication was bypassed, no URL was invented, and nothing was
+written into the hash table that nobody computed.
+
+### How to fetch them and fill in the hashes (owner)
+
+Either path works; the first needs a browser and no token.
+
+**Through the web UI**
+
+1. Open <https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42187908032>.
+2. Scroll to **Artifacts** and download `veridex-windows` (234,992,960 bytes).
+3. Confirm the downloaded zip's own SHA-256 is `74e1d5ec…a801` before opening it:
+   - Windows: `Get-FileHash .\veridex-windows.zip -Algorithm SHA256`
+   - macOS/Linux: `shasum -a 256 veridex-windows.zip`
+
+**Through the CLI (needs `gh auth login` on a machine with unrestricted network access)**
+
+```bash
+gh run download 42187908032 -R skcpmx-lang/merqo-veridex -n veridex-windows -D dist-ci
+cd dist-ci
+sha256sum VERIDEX-Setup-1.0.0-x64.exe VERIDEX-1.0.0-portable-x64.exe   # or Get-FileHash on Windows
+cat SHA256SUMS.txt                                                    # CI's own record, compare it
+cat build-manifest.json                                               # commit, version, sizes, runner
+```
+
+Then replace the two historical rows in the table above with the values from
+`SHA256SUMS.txt`, keeping the commit id and run id beside them, and cross-check them against the
+hashes you computed yourself — if the two disagree, the artifact is not the one CI published and
+must not be released. `scripts/verify-artifacts.mjs` enforces the same rule in CI: each entry in
+`SHA256SUMS.txt` must match the file it names.
+
+**What to do with the result.** When the two hashes and the two file sizes are in this document,
+with the commit they were built from, §1 is complete for this tree. Nothing else in this document
+can be completed without a physical machine — see §2 and §7.
+
+---
 
 ## What has been established, and what has not
 
@@ -54,6 +120,15 @@ an SSD and a discrete GPU in it.
   trip, JSON/HTML/PDF reports at real sizes (41 kB / 46 kB / 24 kB), cancellation, clean exit;
 - **the portable executable launched** from its extraction directory and reported a working
   interface: 10 checks, no problems, 15 seconds end to end;
+**Established for the current tree** (same runner, CI run
+[42187908032](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42187908032), source
+commit `72ad47b`): the installer and portable were built; artifact verification and package
+validation passed; the unpacked build was driven through the GUI smoke test; the portable
+executable launched from its extraction directory; and the installer installed silently,
+launched the installed application and uninstalled it. The *hashes* above are still the ones
+from the earlier run, because these bytes could not be fetched — see the section below for what
+that means and how to close it.
+
 - **the installer installed**: silently, per-user, into `%LOCALAPPDATA%\Programs\VERIDEX`,
   with an uninstaller and both shortcuts; **the installed application then launched and
   worked** — title, preload bridge with 44 invoke channels, a real `app:info` call, and all
@@ -83,7 +158,11 @@ an SSD and a discrete GPU in it.
   PC. Packaged builds *have* executed since: the unpacked build, the portable executable and
   the installed build each launch and render all 18 pages on the Windows runner (§7). What
   has not happened is a packaged build running on hardware somebody owns.
-- DPI scaling, window resizing and multi-monitor behaviour are untested in a real window.
+- **DPI scaling and multi-monitor behaviour on hardware that has both.** The window now opens
+  inside the work area of the display under the pointer (`src/app/window-placement.js`), and the
+  evidence runner asserts it — but that runner has one 1024x700 display at 100 %. A 125 % or
+  150 % panel, a second monitor with a negative origin, and a monitor unplugged mid-session are
+  covered by unit tests and have never been observed by a person.
 - the artifact could not be downloaded in the environment where this document was written
   (GitHub serves artifacts from blob storage, outside the allowlist), so the binary has not
   been inspected locally either — only its recorded metadata.

@@ -5,14 +5,17 @@ Local. Read-only. Offline by construction. Honest about what it could not measur
 
 > **Status: installs, launches and uninstalls on a Windows virtual machine — never on
 > physical hardware.**
-> The test suite passes on Linux **and** Windows. CI builds the installer and the portable
-> executable, then *uses* them: it installs silently and per-user, launches the installed
-> application, drives its whole interface, and uninstalls it — plus the portable build,
-> launched from its extraction directory (digests in
-> [release verification](docs/RELEASE_VERIFICATION.md)). What no automated test can do is run
-> on a real PC with a battery, an SSD and a discrete GPU, or show its window to a person. That
-> is why **no requirement is marked verified** and no release is published. See
-> [hardware compatibility](docs/HARDWARE_COMPATIBILITY.md) for exactly what has executed.
+> 878 tests pass on Linux **and** Windows; the static gate reports 0 errors and 0 warnings.
+> CI builds the installer and the portable executable, then *uses* them: it installs silently
+> and per-user, launches the installed application, drives its whole interface, and uninstalls
+> it — plus the portable build, launched from its extraction directory. All 130 requirements
+> are built (**112 tested, 18 implemented, none partial, none not started**) and **none is
+> verified**, because that word needs a person at a physical machine — which is also why no
+> release is published and no tag exists. The digests of the *previous* build are in
+> [release verification](docs/RELEASE_VERIFICATION.md), beside the exact commands that produce
+> this build's hashes; [hardware compatibility](docs/HARDWARE_COMPATIBILITY.md) records what has
+> actually executed; [verification report](docs/VERIFICATION_REPORT.md) keeps executed, tested,
+> inspected and unverified apart.
 
 ---
 
@@ -21,9 +24,9 @@ Local. Read-only. Offline by construction. Honest about what it could not measur
 VERIDEX reads hardware and operating-system state from the machine it runs on, scores the
 evidence it was able to collect, and writes a report you can keep.
 
-- **15 diagnostic modules, 20 tasks, 34 providers** — processor, memory, motherboard,
+- **15 diagnostic modules, 21 tasks, 35 providers** — processor, memory, motherboard,
   GPU, storage, battery, network, drivers, Windows servicing, system identity, security
-  posture
+  posture, installed software, startup programs and scheduled tasks
 - **8 health components** with evidence-based scoring
 - **5 report formats** — PDF, HTML, JSON, CSV, and a one-page certificate
 - **15 interface pages**, two complete themes, five accents

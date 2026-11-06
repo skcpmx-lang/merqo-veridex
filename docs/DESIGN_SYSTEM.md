@@ -167,6 +167,12 @@ There is no state in which a number appears without the coverage beside it.
 - Two densities: `comfortable` (1.0) and `compact` (0.72). The ratio scales row height
   and padding together, so a compact table is still a table.
 - Content is laid out in a max-width column; at narrow widths the rail collapses.
+- **The window fits the screen it opens on.** Size is chosen against a display's *work area*,
+  not its resolution (`src/app/window-placement.js`): a 1366x768 laptop at 125 % reports a
+  1093x574 work area, which is smaller than the 1024x700 minimum in both directions, so the
+  window becomes the work area and its own minimum is lowered to match. Opening on the display
+  under the pointer is what makes a two-monitor desk predictable, and a window left on a monitor
+  that has been unplugged is moved back rather than left at coordinates nothing covers.
 - **Notifications take layout space.** The stack sits below the content region inside the
   application column rather than floating over it, so a toast can never hide the figure it is
   reporting on. One notification is shown at a time there (the newest replaces the previous),
@@ -214,3 +220,4 @@ stops the spinner is replaced by a result or an explanation — never left turni
 | Page controllers and layout | `src/renderer/app.js` |
 | Rules, layout, media queries | `src/renderer/styles.css` |
 | Verification (tokens, contrast, reduced motion, no remote assets) | `tests/integration/renderer.test.js` |
+| Window placement across displays, work-area fit, DPI scaling | `src/app/window-placement.js`, `tests/unit/window-placement.test.js` |

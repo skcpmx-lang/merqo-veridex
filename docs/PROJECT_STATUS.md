@@ -37,7 +37,8 @@ the strength of a virtual machine.
 These are genuinely done: implemented, wired, and covered by tests that execute the code.
 
 ### Diagnostics
-- 15 modules, 20 tasks, 34 providers, all registering cleanly.
+- 15 modules, 21 tasks, 35 providers, all registering cleanly (`buildDefaultRegistry()`,
+  counted from the registry itself).
 - Provider chains fall through correctly; a provider that cannot answer explains why
   rather than returning an empty object.
 - Parsers for CIM/WMI output, `powercfg` battery reports, ATA SMART, NVMe health logs,
@@ -115,8 +116,8 @@ Implemented and connected, but resting on fixtures rather than a real machine.
 - Every Windows read. The parsers match their fixtures; whether the fixtures match real
   Windows is unknown.
 - The Electron shell's behaviour on a desktop somebody owns. The window opens on the Windows
-  runner (`42172738822`, 21 steps, 32 screenshots), but that is a hosted VM with no battery, no
-  keyboard and no thermal sensors.
+  runner (`42192434597`, 23 steps, 35 screenshots), but that is a hosted VM with no battery, no
+  keyboard, one 1024x700 display and no thermal sensors.
 - The packaged build on hardware. An installer was produced for an earlier tree and installed
   on a Windows VM; nothing has been installed on a physical machine, and the current tree has no
   artifact of its own yet.
@@ -129,14 +130,17 @@ This is the largest category and the reason no requirement says VER.
 
 ## 4. Not started
 
-None. Every one of the 130 requirements has an implementation and an owner in the repository;
-36 of them are not yet covered by a test that would fail if the code were removed, and 4 are
-honestly partial:
+None, and none partial. Every one of the 130 requirements has an implementation and an owner in
+the repository: **112 tested, 18 implemented, 0 in progress, 0 not started, 0 verified on
+hardware**. The two that were partial until this milestone — R-12-02 (scheduled tasks and the
+Startup folders) and R-18-02 (multi-monitor placement and scale-aware sizing) — were closed by
+building the missing half, and each carries a named residual limitation in
+`docs/KNOWN_LIMITATIONS.md` §15 rather than a quiet promotion:
 
-| ID | Requirement | What exists | What is missing |
+| ID | Was missing | Now | Still unproven |
 | --- | --- | --- | --- |
-| R-12-02 | Windows components, scheduled tasks, services | startup entries from the Run/RunOnce keys | scheduled tasks, running services, Windows components |
-| R-18-02 | High-DPI and multi-monitor handling | every display enumerated; 125 % zoom asserted in the harness | per-monitor window placement, scale-aware shell sizing |
+| R-12-02 | scheduled tasks; Startup folders | read through `Get-ScheduledTask`, with a `schtasks` fallback that states what it cannot report | the fallback path and every one of these reads have never run on physical hardware |
+| R-18-02 | per-monitor placement, scale-aware sizing | placement computed from the work area in `src/app/window-placement.js`; the harness asserts the real window sits inside a real work area | only one 1024x700 display exists in CI; no remembered position between runs |
 
 `docs/AUDIT_40_SECTIONS.md` is the section-by-section record: for each of the 40 specification
 sections it lists the requirements, what a user sees, where the gaps are, and what evidence

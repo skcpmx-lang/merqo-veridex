@@ -54,7 +54,8 @@ module and the integration tests exercise the direction.
 registering is recorded as a failure and the scan continues with the rest. This is
 deliberate: one broken module must not blank the whole report.
 
-Result on a healthy build: **15 modules, 20 tasks, 34 providers**.
+Result on a healthy build: **15 modules, 21 tasks, 35 providers**. Counted from
+`buildDefaultRegistry()` itself (`r.tasks.size`, `r.providers.size`), not from this table.
 
 | Task | Providers, in priority order |
 | --- | --- |
@@ -76,6 +77,7 @@ Result on a healthy build: **15 modules, 20 tasks, 34 providers**.
 | `windows.events` | `powershell.eventlog` |
 | `software.installed` | `registry.uninstall` |
 | `software.startup` | `powershell.startup` |
+| `software.scheduledTasks` | `powershell.scheduledTasks` |
 | `processes.snapshot` | `powershell.processes` |
 | `security.posture` | `cim-win32.security` |
 
@@ -93,8 +95,8 @@ next provider. A provider that returns `{}` is a bug: it looks like an answer th
 produced nothing, which is indistinguishable from "this machine has no such component".
 `tests/integration/providers.test.js` fails the build if any provider does that.
 
-Measured on a host without Windows: **20 tasks, 33 of 34 provider attempts, ~800 ms on the
-first run and ~200 ms once the modules are loaded** (the host has no Windows, so every
+Measured on a Linux host (`npm run smoke:live`, this tree): **21 tasks, 34 provider attempts,
+19 modules producing fields, 56 fields, no scan errors, 736 ms**, once the modules are loaded (the host has no Windows, so every
 command returns "not available here" immediately — this is the floor, not a forecast for a
 real machine, where CIM and PowerShell calls dominate).
 

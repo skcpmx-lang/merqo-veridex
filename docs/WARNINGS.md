@@ -5,6 +5,16 @@ were still open at the start of this milestone — R-08-05, R-08-06 and R-25-02 
 tested (see §1 below). Nothing was suppressed and no rule was relaxed: the warnings went away
 because the requirements were implemented, not because the gate stopped checking.
 
+**Where it ended up.** This file is a decision record, not a list of live warnings. As of the
+milestone that closed R-12-02 and R-18-02, the matrix reads **112 tested, 18 implemented, 0 in
+progress, 0 not started, 0 verified on hardware** — the warning list is empty because every
+requirement was built or documented, not because a rule was switched off. The two most recent
+closures are worth naming here: R-12-02 gained a scheduled-task provider (with a `schtasks`
+fallback that states what it cannot report) and the Startup folders its provider had always
+claimed to read; R-18-02 gained `src/app/window-placement.js`. Both are `TS`, both keep a named
+residual limitation in `docs/KNOWN_LIMITATIONS.md` §15, and neither is `VER` — that word still
+requires a person at a physical machine.
+
 The gate has since grown rather than shrunk. The 40-section audit found two rules the static
 check did not have, and both are now errors rather than notes:
 
