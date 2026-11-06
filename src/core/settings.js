@@ -337,8 +337,35 @@ export const SETTINGS_SPEC = [
     group: 'Privacy',
     type: 'boolean',
     default: false,
-    description: 'Set once the welcome and privacy screen has been acknowledged.',
-    appliesTo: 'src/app/settings-wiring.js'
+    description: 'Set once the welcome, limits, permission and privacy screens have been read — or explicitly skipped.',
+    appliesTo: 'src/app/onboarding.js'
+  },
+  {
+    key: 'privacy.firstRunCompletedAt',
+    label: 'First-run setup finished at',
+    group: 'Privacy',
+    type: 'string',
+    default: null,
+    description: 'When the tour was finished or skipped. Informational; the flag above is what decides.',
+    appliesTo: 'src/app/onboarding.js'
+  },
+  {
+    key: 'privacy.firstRunStep',
+    label: 'First-run tour step',
+    group: 'Privacy',
+    type: 'string',
+    default: null,
+    description: 'The step the tour reached. A part-way tour is not consent: it resumes rather than counting as complete.',
+    appliesTo: 'src/app/onboarding.js'
+  },
+  {
+    key: 'privacy.firstRunSkipped',
+    label: 'First-run setup skipped',
+    group: 'Privacy',
+    type: 'boolean',
+    default: false,
+    description: 'True when the tour was dismissed rather than read, so Settings can offer it again.',
+    appliesTo: 'src/app/onboarding.js'
   },
   {
     key: 'privacy.allowNetwork',

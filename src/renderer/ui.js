@@ -63,10 +63,28 @@ export function statusBadge(status, options = {}) {
  */
 export function formatValue(value, unit = null) {
   if (value === null || value === undefined) return '—';
-  if (Array.isArray(value)) return value.join(', ');
   if (value === true) return 'Yes';
   if (value === false) return 'No';
-  const text = typeof value === 'number' && Number.isFinite(value) ? formatNumber(value) : String(value);
+
+  if (Array.isArray(value)) {
+    // `Array.prototype.join` renders objects as "[object Object]", which is what a user saw on
+    // the hardware page for per-core data: two of them, comma-separated, meaningless. A count
+    // plus the shape of one entry is honest, and the values themselves stay in the field for
+    // the report, which renders them properly.
+    if (value.length === 0) return 'None recorded';
+    if (value.some((entry) => entry !== null && typeof entry === 'object')) {
+      const described = value.length === 1 ? '1 entry' : `${value.length} entries`;
+      return described;
+    }
+    return value.map((entry) => formatValue(entry)).join(', ');
+  }
+
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    return keys.length === 0 ? 'None recorded' : keys.length === 1 ? '1 value' : `${keys.length} values`;
+  }
+
+  const text = typeof value === 'number' ? (Number.isFinite(value) ? formatNumber(value) : 'Not a number') : String(value);
   return unit ? `${text}\u00A0${unit}` : text;
 }
 

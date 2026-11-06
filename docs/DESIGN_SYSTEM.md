@@ -144,7 +144,7 @@ There is no state in which a number appears without the coverage beside it.
 
 ## 6. Layout and density
 
-- **15 pages**, grouped in a persistent left rail, because a diagnostic tool is used to
+- **18 pages**, grouped in a persistent left rail, because a diagnostic tool is used to
   answer a specific question ("what is my battery doing?") and a single scrolling page
   hides the answer.
 - Two densities: `comfortable` (1.0) and `compact` (0.72). The ratio scales row height

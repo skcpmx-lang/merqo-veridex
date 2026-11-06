@@ -29,6 +29,10 @@ export const CHANNELS = Object.freeze({
   'app:setSetting': { args: ['key', 'value'], description: 'Change one setting. Validated and persisted by the main process.' },
   'app:applyPrivacyPreset': { args: ['presetId'], description: 'Apply a privacy preset through the settings store.' },
   'app:guardSummary': { args: [], description: 'Blocked network attempts and refused commands.' },
+  'app:onboarding': { args: [], description: 'Whether the first-run tour is still owed, and which step it reached.' },
+  'app:onboardingAdvance': { args: ['step'], description: 'Record progress through the first-run tour and return the next step.' },
+  'app:onboardingSkip': { args: [], description: 'Dismiss the first-run tour without reading it, and record that it was skipped.' },
+  'app:onboardingReset': { args: [], description: 'Make the first-run tour run again on the next launch.' },
   'scan:start': { args: ['options'], description: 'Start a diagnostic sweep. Progress arrives on the event channel.' },
   'scan:cancel': { args: [], description: 'Abort the running sweep.' },
   'scan:state': { args: [], description: 'Current scan state, for a window that opens mid-scan.' },
@@ -40,6 +44,15 @@ export const CHANNELS = Object.freeze({
   'manual:coverage': { args: [], description: 'Manual programme progress.' },
   'history:list': { args: [], description: 'Stored runs, newest first.' },
   'history:compare': { args: ['aId', 'bId'], description: 'Field-level diff between two runs.' },
+  'drivers:chooseDestination': { args: [], description: 'Ask the user for a folder, through the operating system dialog.' },
+  'drivers:plan': { args: ['destination'], description: 'Check a destination before writing: path, space and folder naming.' },
+  'drivers:export': { args: ['destination'], description: 'Export installed driver packages into a new folder. Elevates per task; never installs anything.' },
+  'drivers:cancelExport': { args: [], description: 'Stop a running export and report what was copied.' },
+  'drivers:lastExport': { args: [], description: 'The outcome of the most recent export, or null.' },
+  'logs:recent': { args: ['options'], description: 'Recent log entries, filtered by level, source and text.' },
+  'logs:stats': { args: [], description: 'Log volume, retention limits and the levels present.' },
+  'logs:export': { args: [], description: 'Write a redacted log export to a file the user chooses.' },
+  'logs:clear': { args: [], description: 'Delete the log files on this machine.' },
   'monitor:start': { args: [], description: 'Begin live sensor sampling. Samples arrive on the event channel.' },
   'monitor:stop': { args: [], description: 'Stop sampling.' },
   'shell:openDataFolder': { args: [], description: 'Reveal the local data folder in Explorer.' }
@@ -228,6 +241,35 @@ export function validateRequest(channel, args = []) {
           }
         }
       };
+    }
+
+    case 'app:onboardingAdvance': {
+      const step = String(named?.step ?? '');
+      if (!step) return { ok: false, reason: 'A step is required.' };
+      if (step.length > 40) return { ok: false, reason: 'That is not a step id.' };
+      return { ok: true, value: { step } };
+    }
+
+    case 'drivers:plan':
+    case 'drivers:export': {
+      const destination = String(named?.destination ?? '');
+      if (!destination) return { ok: false, reason: 'A destination folder is required.' };
+      if (destination.length > 260) return { ok: false, reason: 'The destination path is too long.' };
+      if (/[\u0000-\u001f]/.test(destination)) return { ok: false, reason: 'The destination contains control characters.' };
+      return { ok: true, value: { destination } };
+    }
+
+    case 'logs:recent': {
+      const options = named?.options ?? named ?? {};
+      const minLevel = options.minLevel === undefined ? undefined : String(options.minLevel);
+      if (minLevel !== undefined && !['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(minLevel)) {
+        return { ok: false, reason: `"${minLevel}" is not a log level.` };
+      }
+      const limit = options.limit === undefined ? 200 : Number(options.limit);
+      if (!Number.isFinite(limit) || limit < 1 || limit > 2000) return { ok: false, reason: 'The limit must be between 1 and 2000.' };
+      const query = options.query === undefined ? '' : String(options.query);
+      if (query.length > 120) return { ok: false, reason: 'The search text is too long.' };
+      return { ok: true, value: { minLevel, scope: options.scope === undefined ? undefined : String(options.scope).slice(0, 60), query, limit: Math.floor(limit) } };
     }
 
     case 'history:compare': {

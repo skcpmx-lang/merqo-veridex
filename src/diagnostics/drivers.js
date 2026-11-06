@@ -278,11 +278,38 @@ export function registerDrivers(registry) {
     capability: 'drivers.export',
     priority: 1,
     collect: async (ctx) => {
-      // This provider is only ever invoked from an explicit, user-initiated export
-      // action; it never runs as part of a scan.
+      // This provider describes whether an export *could* be started; it is never the export
+      // itself. It reports the same three facts the export card relies on - elevation state,
+      // the mechanism, and the promise - so the scan and the card cannot disagree.
+      const isAdmin = ctx.permissions?.isAdmin === true;
+      const mechanism = 'pnputil /export-driver * <folder>';
+
+      const exportStatus = isAdmin
+        ? available(
+            'Ready. Exporting will copy every installed driver package into a new folder you choose.',
+            'driver-export.drivers',
+            {
+              notes: [
+                'Runs only when you choose "Export drivers"; the scan never exports anything on its own.',
+                'An export is a copy, not a restore point: VERIDEX cannot reinstall a driver from it.'
+              ]
+            }
+          )
+        : unavailable(
+            'Export needs administrator rights, so it is not available in this session. Everything else on this page was read at standard privilege.',
+            'driver-export.drivers',
+            {
+              notes: [
+                'VERIDEX does not elevate itself at start-up. Choosing "Export drivers" raises one Windows prompt for that one action, and declining it changes nothing.'
+              ]
+            }
+          );
+
       return {
-        exportStatus: unsupported('Driver export runs only when you choose "Export drivers" and confirm the destination folder.', 'driver-export.drivers'),
-        commandTemplate: available('pnputil /export-driver * <destination>', 'driver-export.drivers', { notes: ['pnputil exports the driver packages currently installed. VERIDEX does not use it to install anything.'] })
+        exportStatus,
+        commandTemplate: available(mechanism, 'driver-export.drivers', {
+          notes: ['pnputil only exports the driver packages that are currently installed. VERIDEX never uses it to install, update or remove a driver.']
+        })
       };
     }
   });

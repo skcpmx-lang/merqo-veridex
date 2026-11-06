@@ -58,15 +58,36 @@ export function summariseEvents(records, options = {}) {
   const windowDays = options.windowDays ?? EVENT_WINDOW_DAYS;
   const cutoff = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
 
-  const rows = asArray(records)
+  const mapped = asArray(records)
     .map((record) => {
       const level = normaliseLevel(record?.LevelDisplayName ?? record?.Level);
       const when = parseEventTime(record?.TimeCreated ?? record?.timeCreated);
       const id = num(record?.Id ?? record?.EventID);
       const provider = cleanString(record?.ProviderName ?? record?.providerName) ?? 'unknown';
-      return { level, when, id, provider, logName: cleanString(record?.LogName) };
+      const recordId = num(record?.RecordId ?? record?.recordId);
+      return { level, when, id, provider, recordId, logName: cleanString(record?.LogName) };
     })
     .filter((row) => row.when && new Date(row.when).getTime() >= cutoff);
+
+  // One event must be counted once. A query that spans two logs can return the same record from
+  // both when events are forwarded, and a duplicate here doubles an error count — which is the
+  // difference between "2 errors this week" and "4 errors this week" in a report.
+  //
+  // The event log's own RecordId identifies a record within a log, so it is the key — and the
+  // query asks for it for exactly this reason.
+  //
+  // Rows that arrive without one are counted as they arrive. A timestamp/provider/id triple
+  // cannot distinguish a forwarded duplicate from two genuine events in the same second (two
+  // applications crashing together look identical), and silently dropping one of those would
+  // under-report crashes. Double-counting is recoverable by a reader; a lost crash is not.
+  const seen = new Set();
+  const rows = mapped.filter((row) => {
+    if (row.recordId === null) return true;
+    const key = `record:${row.recordId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
   const providerCounts = new Map();
   const idCounts = new Map();
@@ -254,7 +275,7 @@ export function registerEvents(registry) {
       const query = [
         `$start = (Get-Date).AddDays(-${EVENT_WINDOW_DAYS})`,
         '$rows = @(Get-WinEvent -FilterHashtable @{ LogName = @(\'System\',\'Application\'); Level = 1,2; StartTime = $start } -MaxEvents 400 -ErrorAction SilentlyContinue |',
-        '  Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, LogName)',
+        '  Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, LogName, RecordId)',
         // Get-WinEvent throws when there is nothing to return; an empty window is data, not a fault.
         '$rows | ConvertTo-Json -Compress -Depth 3'
       ].join('\n');

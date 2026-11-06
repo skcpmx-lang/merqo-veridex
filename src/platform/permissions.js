@@ -72,6 +72,14 @@ export const CAPABILITIES = Object.freeze({
     label: 'Battery cycle count',
     requiresAdmin: false,
     reason: 'Exposed by firmware through WMI when the battery controller supports it; no elevation needed.'
+  },
+  'battery.report': {
+    label: 'Battery report (powercfg /batteryreport)',
+    requiresAdmin: true,
+    // The in-scan attempt is read-only and degrades to "unavailable" at standard privilege;
+    // the elevated task exists for machines where powercfg refuses the standard user. Both
+    // statements are true, so the reason names both rather than picking the convenient one.
+    reason: 'powercfg /batteryreport writes a file only an administrator is guaranteed to be allowed to create; at standard privilege VERIDEX reports the report as unavailable instead of failing the scan.'
   }
 });
 

@@ -36,7 +36,14 @@ import {
 } from './ipc-contract.js';
 import { wireAll, uiPayload } from './settings-wiring.js';
 import { runScan, reportInputFromScan } from './scan.js';
-import { buildReport, computeCoverage, aggregateStatus } from '../reporting/model.js';
+import { buildReport } from '../reporting/model.js';
+import { projectScan } from './scan-projection.js';
+import { planExport, describeExport, verifyExport, EXPORT_PROMISE, formatBytes } from './driver-export.js';
+import { runElevatedTask } from './elevated-runner.js';
+import { onboardingState, advanceOnboarding, skipOnboarding, resetOnboarding } from './onboarding.js';
+import { parseLogText, filterRecords, summariseLog, buildExport, describeRetention, DEFAULT_LEVEL } from './logs.js';
+import { spawn as spawnChild } from 'node:child_process';
+import { readdir, readFile as readTextFile, rm, statfs, mkdir, writeFile } from 'node:fs/promises';
 import { renderPdf } from '../reporting/pdf.js';
 import { renderHtml } from '../reporting/html.js';
 import { renderCsv } from '../reporting/csv.js';
@@ -351,53 +358,227 @@ function registerHandlers() {
 
   handle('manual:coverage', () => ({ coverage: session.coverage(), progress: session.progress(), issues: session.toIssues() }));
 
+  // ── First run (R-20-01) ──
+  //
+  // Completion is a setting, so it is visible, resettable and recorded honestly: a tour that was
+  // skipped is recorded as skipped rather than as read.
+  handle('app:onboarding', () => onboardingState({ values: settings.all() }));
+
+  handle('app:onboardingAdvance', async ({ step }) => {
+    const advance = advanceOnboarding({ currentStepId: step });
+    for (const [key, value] of Object.entries(advance.values)) await settings.set(key, value);
+    return { ...onboardingState({ values: settings.all() }), done: advance.done };
+  });
+
+  handle('app:onboardingSkip', async () => {
+    const skip = skipOnboarding();
+    for (const [key, value] of Object.entries(skip.values)) await settings.set(key, value);
+    return onboardingState({ values: settings.all() });
+  });
+
+  handle('app:onboardingReset', async () => {
+    const reset = resetOnboarding();
+    for (const [key, value] of Object.entries(reset.values)) await settings.set(key, value);
+    return onboardingState({ values: settings.all() });
+  });
+
+  // ── Driver export (R-11-03) ──
+  //
+  // Three separate steps, because they fail differently and a user needs to know which one did:
+  // choosing a folder (dialog), planning (space and path checks, nothing written), and exporting
+  // (a privileged copy). The export never installs, updates or removes a driver.
+  let exportAbort = null;
+  let lastExport = null;
+
+  const freeBytesAt = async (target) => {
+    try {
+      const stats = await statfs(path.parse(target).root || target);
+      return stats.bavail * stats.bsize;
+    } catch {
+      return null; // A missing measurement is not a reason to refuse the export.
+    }
+  };
+
+  const countInfFiles = async (folder) => {
+    try {
+      const entries = await readdir(folder, { withFileTypes: true });
+      const found = [];
+      for (const entry of entries) {
+        if (entry.isFile() && /\.inf$/i.test(entry.name)) found.push(entry.name);
+        else if (entry.isDirectory()) {
+          const nested = await readdir(path.join(folder, entry.name)).catch(() => []);
+          for (const name of nested) if (/\.inf$/i.test(name)) found.push(name);
+        }
+      }
+      return found;
+    } catch {
+      return [];
+    }
+  };
+
+  handle('drivers:chooseDestination', async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Choose a folder for the driver export',
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: 'Export here'
+    });
+    if (result.canceled || !result.filePaths?.[0]) return { chosen: false };
+    return { chosen: true, path: result.filePaths[0] };
+  });
+
+  handle('drivers:plan', async ({ destination }) => {
+    const freeBytes = await freeBytesAt(destination);
+    const driverCount = lastScan ? Object.keys(lastScan.modules?.drivers ?? {}).length : null;
+    const plan = planExport({ destination, driverCount, freeBytes });
+    return { ...plan, freeBytes, driverCount, promise: EXPORT_PROMISE, freeLabel: Number.isFinite(freeBytes) ? formatBytes(freeBytes) : null };
+  });
+
+  handle('drivers:export', async ({ destination }) => {
+    if (exportAbort) return { ok: false, code: 'already_running', reason: 'An export is already running.' };
+
+    const freeBytes = await freeBytesAt(destination);
+    const driverCount = lastScan ? Object.keys(lastScan.modules?.drivers ?? {}).length : null;
+    const plan = planExport({ destination, driverCount, freeBytes });
+    if (!plan.ok) {
+      lastExport = { ...plan, promise: EXPORT_PROMISE };
+      return lastExport;
+    }
+
+    // The folder is created by us, at standard privilege, so pnputil writes into a folder that
+    // already exists and the user can see where the export is going before the prompt appears.
+    try {
+      await mkdir(plan.path, { recursive: true });
+    } catch (error) {
+      lastExport = {
+        ok: false,
+        code: 'destination_unwritable',
+        reason: `The folder could not be created (${error instanceof Error ? error.message : String(error)}). Nothing was written.`,
+        promise: EXPORT_PROMISE
+      };
+      return lastExport;
+    }
+
+    exportAbort = new AbortController();
+    const resultPath = path.join(app.getPath('temp'), `veridex-elevated-${Date.now()}.json`);
+    let outcome;
+    try {
+      outcome = await runElevatedTask({
+        taskId: 'drivers.export',
+        params: { destination: plan.path },
+        appPath: process.execPath,
+        resultPath,
+        spawn: spawnChild,
+        readFile: (target) => readTextFile(target, 'utf8'),
+        unlink: (target) => rm(target, { force: true }),
+        timeoutMs: 15 * 60_000,
+        signal: exportAbort.signal
+      });
+    } finally {
+      exportAbort = null;
+    }
+
+    if (!outcome.ok) {
+      // A cancelled or declined export may still have copied files, so the folder is checked
+      // before anything is claimed about it.
+      const copied = await countInfFiles(plan.path);
+      lastExport = {
+        ...describeExport({ folder: plan.folder, infFiles: copied, pnputilExitCode: outcome.exitCode, cancelled: outcome.cancelled }),
+        reason: outcome.reason,
+        path: plan.path,
+        promise: EXPORT_PROMISE
+      };
+      return lastExport;
+    }
+
+    const infFiles = await countInfFiles(plan.path);
+    const described = describeExport({ folder: plan.folder, infFiles, pnputilExitCode: 0 });
+    const verified = verifyExport({ expected: described.packageCount, infFiles });
+    lastExport = {
+      ...described,
+      ok: described.ok && verified.ok,
+      verification: verified,
+      path: plan.path,
+      promise: EXPORT_PROMISE
+    };
+    logger?.info?.('driver export finished', { scope: 'export', packages: described.packageCount, verified: verified.ok });
+    return lastExport;
+  });
+
+  handle('drivers:cancelExport', () => {
+    if (!exportAbort) return { cancelled: false, reason: 'No export is running.' };
+    exportAbort.abort();
+    return { cancelled: true };
+  });
+
+  handle('drivers:lastExport', () => lastExport);
+
+  // ── Logging surface (R-24-03) ──
+  const logDir = () => path.join(dataDir(), 'logs');
+
+  const readAllLogs = async () => {
+    const files = await logger.files();
+    let text = '';
+    for (const file of files.slice(0, 10)) {
+      text += `${await readTextFile(file, 'utf8').catch(() => '')}\n`;
+    }
+    return { ...parseLogText(text), fileCount: files.length };
+  };
+
+  handle('logs:recent', async (options = {}) => {
+    const { records, unparseable } = await readAllLogs();
+    const retention = describeRetention({ level: settings.get('storage.logLevel') ?? DEFAULT_LEVEL });
+    return {
+      entries: filterRecords(records, options),
+      unparseable,
+      summary: summariseLog(records),
+      retention
+    };
+  });
+
+  handle('logs:stats', async () => {
+    const { records, fileCount } = await readAllLogs();
+    return {
+      summary: summariseLog(records, { fileCount }),
+      retention: describeRetention({ maxBytes: logger.maxBytes, maxFiles: logger.maxFiles, level: logger.level })
+    };
+  });
+
+  handle('logs:export', async () => {
+    const { records } = await readAllLogs();
+    const result = await dialog.showSaveDialog({
+      defaultPath: path.join(app.getPath('documents'), `VERIDEX-log-${new Date().toISOString().slice(0, 10)}.txt`),
+      filters: [{ name: 'Text', extensions: ['txt', 'log'] }]
+    });
+    if (result.canceled || !result.filePath) return { saved: false };
+    await writeFile(result.filePath, buildExport(records, { version: app.getVersion(), platform: process.platform } ), 'utf8');
+    return { saved: true, path: result.filePath, entries: records.length };
+  });
+
+  handle('logs:clear', async () => {
+    const files = await logger.files();
+    let removed = 0;
+    for (const file of files) {
+      try {
+        await rm(file, { force: true });
+        removed += 1;
+      } catch {
+        /* reported by the count */
+      }
+    }
+    return { removed, remaining: files.length - removed };
+  });
+
   // What the interface renders after a run.
   //
   // The renderer previously had no channel to ask for the results: `scan:finished` carried
   // five summary numbers, `scan:state` carried three, and the module pages read
   // `state.scan.modules`, which nothing ever assigned. The result was an application that
-  // ran a full sweep and then showed "Not collected yet" on every diagnostic page. This
-  // channel exists so the pages have real data, and it is deliberately a projection: it
-  // carries fields, assessment, coverage and issues, and none of the internal attempt
-  // records or the manual session.
-  handle('scan:last', () => {
-    if (!lastScan) return { scan: null };
-
-    const modules = Object.fromEntries(
-      Object.entries(lastScan.modules ?? {}).map(([id, fields]) => {
-        const aggregated = aggregateStatus(fields);
-        return [
-          id,
-          {
-            title: lastScan.sectionTitles?.[id] ?? id,
-            status: aggregated.status,
-            note: aggregated.note,
-            fields: fields ?? {}
-          }
-        ];
-      })
-    );
-
-    // Coverage is computed with the same function the report uses. A second implementation
-    // here would eventually disagree with the PDF, and the disagreement would be invisible.
-    const sections = Object.values(lastScan.modules ?? {}).map((fields) => ({ rows: Object.values(fields ?? {}) }));
-
-    return {
-      scan: {
-        startedAt: lastScan.startedAt,
-        finishedAt: lastScan.finishedAt,
-        durationMs: lastScan.durationMs,
-        cancelled: lastScan.cancelled,
-        quick: lastScan.quick,
-        assessment: lastScan.assessment,
-        coverage: computeCoverage(sections, []),
-        issues: lastScan.issues,
-        taskCount: lastScan.taskCount,
-        providersAttempted: lastScan.providersAttempted,
-        modules
-      }
-    };
-  });
+  // ran a full sweep and then showed "Not collected yet" on every diagnostic page.
+  //
+  // The projection itself lives in `scan-projection.js` so it can be tested against a real
+  // scan without an Electron process, and so the interface and the report provably share one
+  // definition of module status and coverage.
+  handle('scan:last', () => ({ scan: lastScan ? projectScan(lastScan) : null }));
 
   handle('history:list', async () => {
     const store = new HistoryStore({ file: historyFile(), ...wireAll(settings).history.storeOptions, logger });

@@ -54,8 +54,10 @@ test('the wiring layer consumes every engine-side key', () => {
   const wired = wireAll(defaultSettings());
   const keys = new Set(wired.applied.map((entry) => entry.key));
 
-  // Every setting whose behaviour lives in the main process must appear here.
-  const mainProcessKeys = SETTINGS_SPEC.map((spec) => spec.key).filter((key) => !/^(appearance|dashboard|shortcuts|privacy\.firstRunComplete|startup\.)/.test(key));
+  // Every setting whose behaviour lives in the main process must appear here. The first-run keys
+  // are bookkeeping owned by `src/app/onboarding.js` — they record how far the tour got, and no
+  // engine behaviour depends on them — so they are excluded by prefix rather than one by one.
+  const mainProcessKeys = SETTINGS_SPEC.map((spec) => spec.key).filter((key) => !/^(appearance|dashboard|shortcuts|privacy\.firstRun|startup\.)/.test(key));
   const missing = mainProcessKeys.filter((key) => !keys.has(key));
   assert.deepEqual(missing, [], `these settings are never applied: ${missing.join(', ')}`);
 });

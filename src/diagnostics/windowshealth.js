@@ -48,18 +48,36 @@ const VERDICTS = [
  */
 export function parseDismHealth(stdout, stderr = '') {
   const text = `${stdout ?? ''}\n${stderr ?? ''}`;
+
+  // Collect every verdict the output contains, not the first one. An output that says both
+  // "no corruption detected" and "not repairable" is contradictory, and resolving that by which
+  // sentence happens to come first is how a parser reports a healthy store on a broken machine.
+  const found = [];
   for (const candidate of VERDICTS) {
-    const found = text.match(candidate.match);
-    if (found) {
-      // Report the sentence as DISM wrote it, trimmed to the sentence itself.
-      const line = text
-        .split(/\r?\n/)
-        .map((entry) => entry.trim())
-        .find((entry) => candidate.match.test(entry)) ?? found[0];
-      return { verdict: candidate.verdict, sentence: line.replace(/^[^A-Za-z]*/, '').slice(0, 200), raw: text.slice(0, 600) };
-    }
+    const match = text.match(candidate.match);
+    if (match) found.push({ verdict: candidate.verdict, candidate, match });
   }
-  return { verdict: 'unknown', sentence: null, raw: text.slice(0, 600) };
+
+  const distinct = [...new Set(found.map((entry) => entry.verdict))];
+  if (distinct.length > 1) {
+    return {
+      verdict: 'unknown',
+      sentence: null,
+      ambiguous: true,
+      candidates: distinct,
+      raw: text.slice(0, 600)
+    };
+  }
+
+  if (found.length === 0) return { verdict: 'unknown', sentence: null, raw: text.slice(0, 600) };
+
+  const { verdict, candidate, match } = found[0];
+  // Report the sentence as DISM wrote it, trimmed to the sentence itself.
+  const line = text
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .find((entry) => candidate.match.test(entry)) ?? match[0];
+  return { verdict, sentence: line.replace(/^[^A-Za-z]*/, '').slice(0, 200), raw: text.slice(0, 600) };
 }
 
 /**
@@ -110,9 +128,18 @@ export function describeStoreHealth(parsed, source) {
       componentStoreVerdict: field('unrepairable', { status: Status.FAIL, source })
     };
   }
+  const reason = parsed.ambiguous
+    ? `DISM printed contradictory verdicts (${(parsed.candidates ?? []).join(' and ')}), so nothing is claimed about the component store.`
+    : 'DISM returned an answer this build does not recognise, so nothing is claimed about the component store.';
   return {
-    componentStore: unsupported('DISM returned an answer this build does not recognise, so nothing is claimed about the component store.', source, { notes: [parsed.raw ? `DISM printed: ${parsed.raw.split(/\r?\n/).filter(Boolean).slice(-2).join(' ').slice(0, 200)}` : 'DISM printed nothing.'] }),
-    componentStoreVerdict: unsupported('Unrecognised DISM output', source)
+    componentStore: unsupported(reason, source, {
+      notes: [
+        parsed.raw
+          ? `DISM printed: ${parsed.raw.split(/\r?\n/).filter(Boolean).slice(-2).join(' ').slice(0, 200)}`
+          : 'DISM printed nothing.'
+      ]
+    }),
+    componentStoreVerdict: unsupported(parsed.ambiguous ? 'Contradictory DISM output' : 'Unrecognised DISM output', source)
   };
 }
 
@@ -124,7 +151,8 @@ export function registerWindowsHealth(registry) {
   registry.registerProvider({
     id: 'dism.checkhealth',
     title: 'DISM component-store check',
-    capability: 'windowsHealth',
+    // Must be the declared capability id: an unknown id makes the permission gate a no-op.
+    capability: 'windows.dism',
     priority: 1,
     // /CheckHealth reads a flag, so it returns in a second or two when it works at all.
     // If it has not answered in 90 s the servicing stack is busy, which is worth reporting
@@ -147,16 +175,38 @@ export function registerWindowsHealth(registry) {
       const parsed = parseDismHealth(run.stdout, run.stderr);
       const fields = describeStoreHealth(parsed, 'dism');
 
+      // Order matters. A timeout is a timeout whatever else is true, and it used to be checked
+      // after the generic failure branch, which made this message unreachable: a hung DISM was
+      // reported as "did not answer" rather than "did not finish in time".
+      if (run.timedOut) {
+        return {
+          componentStore: unavailable('DISM did not finish within its budget; the servicing stack may be busy.', 'dism'),
+          componentStoreVerdict: unavailable('Not read: the check timed out', 'dism')
+        };
+      }
+
       if (!run.ok && parsed.verdict === 'unknown') {
         fields.componentStore = failed(`DISM did not answer${summariseToolOutput(run)}`, 'dism', {
           notes: ['Without an answer from DISM the component store is untested, not healthy.']
         });
         return fields;
       }
-      if (run.timedOut) {
-        return {
-          componentStore: unavailable('DISM did not finish within its budget; the servicing stack may be busy.', 'dism')
-        };
+
+      // DISM exits 0 for all three verdicts. A non-zero exit with a readable sentence means the
+      // tool itself had trouble, so the sentence is reported but downgraded: it is evidence, not
+      // a confident verdict.
+      if (!run.ok && parsed.verdict !== 'unknown') {
+        const downgraded = { ...fields };
+        const original = downgraded.componentStore;
+        downgraded.componentStore = field(original?.value ?? 'Read with a warning', {
+          status: Status.WARNING,
+          source: 'dism',
+          notes: [
+            ...(original?.notes ?? []),
+            `DISM printed a verdict but exited with ${run.code === null || run.code === undefined ? 'an error' : `code ${run.code}`}${summariseToolOutput(run)}. The sentence is reported; the run that produced it did not complete cleanly.`
+          ]
+        });
+        return downgraded;
       }
       return fields;
     }
@@ -167,7 +217,7 @@ export function registerWindowsHealth(registry) {
     module: 'windowsHealth',
     title: 'Windows component-store health',
     quick: false,
-    requiresCapability: 'windowsHealth',
+    requiresCapability: 'windows.dism',
     providers: ['dism.checkhealth'],
     validate: (fields) => {
       const verdict = fields.componentStoreVerdict?.value;

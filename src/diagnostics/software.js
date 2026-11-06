@@ -71,10 +71,15 @@ export function normaliseInstallDate(value) {
   if (compact) {
     const [, year, month, day] = compact;
     const candidate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
-    if (!Number.isNaN(candidate.getTime()) && candidate.getUTCFullYear() === Number(year)) {
-      return candidate.toISOString().slice(0, 10);
-    }
-    return null;
+    // Compare all three components, not just the year. `Date.UTC(2025, 1, 30)` is 2 March, and a
+    // year-only check accepted that rollover: an impossible registry date became a plausible,
+    // wrong one — the worst outcome for a value that ends up in a report beside a real date.
+    const exact =
+      !Number.isNaN(candidate.getTime()) &&
+      candidate.getUTCFullYear() === Number(year) &&
+      candidate.getUTCMonth() === Number(month) - 1 &&
+      candidate.getUTCDate() === Number(day);
+    return exact ? candidate.toISOString().slice(0, 10) : null;
   }
   const parsed = date(text);
   // A date is a day, not a timestamp: the registry stores YYYYMMDD and nothing finer, and a
@@ -89,7 +94,28 @@ export function normaliseInstallDate(value) {
  */
 export function summariseApplications(applications, options = {}) {
   const now = options.now ?? new Date();
-  const list = applications.filter(Boolean);
+
+  // The three uninstall keys overlap. A 64-bit machine lists some packages in both the native
+  // and the WOW6432Node view, and an application installed for all users plus the current user
+  // can appear twice. Two rows with the same name, version, publisher and install location are
+  // one application; counting both inflates the inventory and the publisher histogram.
+  const seen = new Set();
+  let duplicatesRemoved = 0;
+  const list = applications.filter(Boolean).filter((application) => {
+    const key = [
+      application.name.toLowerCase(),
+      (application.version ?? '').toLowerCase(),
+      (application.publisher ?? '').toLowerCase(),
+      (application.location ?? '').toLowerCase()
+    ].join('\u0000');
+    if (seen.has(key)) {
+      duplicatesRemoved += 1;
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
   const publishers = new Map();
   for (const application of list) {
     const publisher = application.publisher ?? 'Unknown publisher';
@@ -113,7 +139,8 @@ export function summariseApplications(applications, options = {}) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8),
     installedInLast30Days: recent.slice(0, 20),
-    applications: list.sort((a, b) => a.name.localeCompare(b.name))
+    applications: list.sort((a, b) => a.name.localeCompare(b.name)),
+    duplicatesRemoved
   };
 }
 
@@ -170,14 +197,20 @@ export function registerSoftware(registry) {
     collect: async (ctx) => {
       // One query for all three keys: three separate PowerShell starts cost three times the
       // startup, and this is the slowest part of most software inventories.
+      // Each path is read in its own try/catch so a hive the process cannot open is *reported*
+      // rather than skipped. With -ErrorAction SilentlyContinue a denied key produced a smaller,
+      // cheerful inventory and no indication that a third of the machine had not been read.
       const body = [
         `$paths = @(${UNINSTALL_KEYS.map((key) => `'${key}'`).join(', ')})`,
         '$items = @()',
+        '$failures = @()',
         'foreach ($path in $paths) {',
-        '  $items += @(Get-ItemProperty -Path $path -ErrorAction SilentlyContinue |',
-        '    Select-Object DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation, UninstallString, SystemComponent, ParentKeyName, @{n=\'__KeyPath\';e={$_.PSPath}})',
+        '  try {',
+        '    $items += @(Get-ItemProperty -Path $path -ErrorAction Stop |',
+        '      Select-Object DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation, UninstallString, SystemComponent, ParentKeyName, @{n=\'__KeyPath\';e={$_.PSPath}})',
+        '  } catch { $failures += $path }',
         '}',
-        '$items | ConvertTo-Json -Compress -Depth 3'
+        '[pscustomobject]@{ items = @($items); failures = @($failures) } | ConvertTo-Json -Compress -Depth 4'
       ].join('\n');
 
       const result = await ctx.runner.powershellJson(body, { name: 'software:uninstall', timeoutMs: 40_000 });
@@ -189,8 +222,25 @@ export function registerSoftware(registry) {
         };
       }
 
-      const summary = summariseApplications(asArray(result.data).map(normaliseApplication));
+      // Two shapes are accepted: the current `{ items, failures }` object and the plain array an
+      // older build returned. The renderer and the report only ever see the fields built below.
+      const payload = result.data && !Array.isArray(result.data) && Array.isArray(result.data.items) ? result.data : { items: asArray(result.data), failures: [] };
+      const summary = summariseApplications(asArray(payload.items).map(normaliseApplication));
       const fields = describeApplications(summary, 'registry.uninstall');
+
+      const unread = asArray(payload.failures).filter(Boolean);
+      if (unread.length > 0) {
+        fields.applicationHivesUnread = unavailable(
+          `${unread.length} of ${UNINSTALL_KEYS.length} registry locations could not be read`,
+          'registry.uninstall',
+          {
+            notes: [
+              'The installed-software list below is incomplete: it is what could be read, not everything installed.',
+              ...unread.slice(0, 3).map((path) => `Could not read ${String(path).slice(0, 120)}`)
+            ]
+          }
+        );
+      }
       // The full list is the point of the page, and the report model truncates it for the
       // document. Storing it as a field keeps one code path for UI, JSON and PDF.
       fields.applications = available(summary.applications.map((application) => ({
@@ -264,14 +314,18 @@ export function registerSoftware(registry) {
           })
           : available(0, 'powershell.startup', { notes: ['Nothing is registered to start automatically at sign-in.'] }),
         startupEntryList: entries.length > 0 ? field(entries.slice(0, 40), { source: 'powershell.startup' }) : unavailable('No startup entries are registered', 'powershell.startup'),
-        startupEntryWarning: entries.some((entry) => /temp|appdata\\\\local\\\\temp/i.test(entry.command ?? ''))
-          ? field('At least one entry runs from a temporary directory', {
-            status: Status.WARNING,
-            source: 'powershell.startup',
-            notes: ['Software that launches from a temporary folder usually cannot be trusted to stay the same software between launches.']
-          })
-          : null
       };
+      if (entries.some((entry) => /temp|appdata\\\\local\\\\temp/i.test(entry.command ?? ''))) {
+        fields.startupEntryWarning = field('At least one entry runs from a temporary directory', {
+          status: Status.WARNING,
+          source: 'powershell.startup',
+          notes: ['Software that launches from a temporary folder usually cannot be trusted to stay the same software between launches.']
+        });
+      }
+      // Returning the fields is the whole job of a provider. This one built them and dropped
+      // them: the startup task reported an empty object, which reads to the engine as "no data"
+      // and to the user as "nothing starts automatically".
+      return fields;
     }
   });
 

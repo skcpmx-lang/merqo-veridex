@@ -15,11 +15,12 @@ is the narrative summary of it.
 | --- | --- |
 | Requirements | 130 across 39 modules |
 | Verified on Windows | **0** |
-| Tested (automated) | 75 |
-| Implemented, untested | 11 |
-| Not started | 44 |
-| Automated tests | 526, all passing |
-| Source | 54 modules, ~16,500 lines |
+| Tested (automated) | 93 |
+| Implemented, untested | 14 |
+| In progress | 2 |
+| Not started | 21 |
+| Automated tests | 662, all passing |
+| Source | 67 JavaScript modules under `src/`, ~21,800 lines |
 | Build | **produced** on Windows: installer 117.4 MiB + portable 106.5 MiB, unsigned |
 
 The headline: **the application now builds on Windows, its full test suite passes there, and
@@ -60,9 +61,12 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
 - Consent gating for the four operations that write files.
 - Outbound guard, plus the stronger guarantee that no network client exists in `src/`.
 - Field-level redaction with failure-closed defaults.
+- Privileged work runs in a separate elevated helper against a closed allowlist of named
+  tasks; the renderer can request a name, never a command. A declined prompt is recorded
+  as cancelled, and a zero exit with no result file is a failure.
 
 ### Interface
-- 15 pages, all rendering under jsdom with no `undefined`/`NaN`/`[object Object]`.
+- 18 pages, all rendering under jsdom with no `undefined`/`NaN`/`[object Object]`.
 - Two complete themes with measured contrast; five accents with light-mode pairs.
 - Strict CSP, no remote assets, reduced-motion support.
 - Honest empty states: pages whose actions are not wired say so in plain words.
@@ -70,9 +74,19 @@ These are genuinely done: implemented, wired, and covered by tests that execute 
   and withheld scores preserved rather than rendered as zero.
 - Live monitoring wired to a real `Monitor` in the main process, which previously
   answered `{ started: true }` without starting anything.
+- First-run tour: four steps, persisted progress, skip recorded as skip, reset offered
+  from Privacy. It never asks for elevation.
+- Activity log page: level and text filters, unparseable lines shown rather than dropped,
+  redacted export, deletion, and the real retention figures.
+- Driver export card on the Drivers page: destination check, fresh folder per export,
+  elevation named per task, `.inf` count verified afterwards.
+- Reports page states what the file will contain before a format is chosen.
+- Privacy page states what is stored, where, and how large it is.
 
 ### Tooling
-- `scripts/check.mjs` static gate: 0 errors.
+- `scripts/check.mjs` static gate: 0 errors, 21 warnings — all of them requirements that
+  are not started, each listed in `docs/WARNINGS.md` with its reason.
+- Packaging boundary test: no test, fixture, documentation or harness file can be packaged.
 - Requirement auditor that refuses a `VER` status without recorded evidence.
 - Artifact verifier producing `SHA256SUMS.txt`.
 - Documentation checks: paths named in docs must exist, and the CSP quoted in

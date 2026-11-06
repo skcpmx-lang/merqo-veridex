@@ -17,7 +17,7 @@ Every requirement in `docs/requirements.json` is marked **TS** (tested) or **IM*
 (implemented), and **none** is marked **VER**. VER means a person ran the feature on a
 real Windows 10/11 machine and recorded what they saw. That has not happened.
 
-The consequence: the parsing, scoring, merging and reporting logic is exercised by 526
+The consequence: the parsing, scoring, merging and reporting logic is exercised by 662
 automated tests, but the Windows-specific reads have only ever run against simulated
 output. A real `Win32_Processor` query returning a value shaped differently than the
 fixtures expect would not have been caught.
@@ -189,10 +189,8 @@ SHA-256 in `SHA256SUMS.txt` against the published value before running the insta
 
 ## 14. Some UI features are not wired yet
 
-The renderer is complete and tested, but a few actions have no main-process handler
-behind them:
-
-- embedding performance results from the Performance page
+The renderer is complete and tested, but one action still has no main-process handler
+behind it: embedding performance results from the Performance page.
 
 The **history list is now wired**: it reads stored runs through `history:list` and shows
 each run's real score, rating and coverage. It distinguishes three states that used to be
@@ -211,10 +209,64 @@ sample data. `docs/PROJECT_STATUS.md` tracks them.
 
 ## 15. Requirements not started
 
-44 of 130 requirements are not started. They are grouped by module in
-`docs/REQUIREMENTS.md`, which is generated from `docs/requirements.json` and is the
-authoritative list. The largest concentrations are Windows inventory depth, benchmarking
-variants, driver inventory, compatibility notes, notifications, search and report
-history.
+21 of 130 requirements are not started. Eight of those are **refused by design** rather
+than deferred — an auto-updater, crash reporting, a plugin surface, driver rollback,
+driver version comparison against a catalogue, and two GPU/panel judgements that need
+hardware. `docs/WARNINGS.md` lists all 21 with the reason for each; `docs/REQUIREMENTS.md`
+is generated from `docs/requirements.json` and is the authoritative list.
 
-Nothing in this document is a promise about when those will arrive.
+Nothing in this document is a promise about when the other thirteen will arrive.
+
+---
+
+## 16. Driver export is a copy, not a backup
+
+The export on the Drivers page copies the installed driver packages into a new folder.
+It is **not a restore point**, and VERIDEX cannot reinstall a driver from it:
+
+- there is no import path in the application, and none is claimed;
+- the export is verified only by counting `.inf` files against what `pnputil` reported —
+  that proves the copy is as complete as `pnputil` said, not that the packages can be
+  installed on another machine;
+- a partial or cancelled export leaves a folder that looks like an export. The result
+  says so, and the folder should not be treated as complete.
+
+---
+
+## 17. Logs are redacted, not anonymous
+
+The activity log redacts serial numbers, addresses, account names and command lines, on
+write and again on export. That removes **direct** identifiers.
+
+It does not make a log anonymous. Timestamps, module names and error codes can still
+describe a machine and a session. The Privacy page says this where the setting is, and
+the export header records the level and the redaction state so a reader knows what they
+were given.
+
+A log line that cannot be parsed is shown as it was written rather than dropped, so a
+malformed line is visible as a gap-filler, not as silence.
+
+---
+
+## 18. The first-run tour can be skipped, and skipping is not reading
+
+The four-step tour explains what the product does, what it cannot do, which readings need
+administrator rights and what is kept. It can be skipped at every step, and closing the
+window halfway through resumes at the step reached.
+
+A skipped tour is recorded as skipped, so Settings offers it again. That is deliberate:
+a product that treats "dismissed" as "consented" has learned nothing about its user.
+
+---
+
+## 19. Visual verification on this build was structural, not photographic
+
+The interface was reviewed through the jsdom suite (every page builds, no `undefined`,
+`NaN` or `[object Object]`, focus and Escape behaviour, accessible names) and through a
+design harness in a browser. No screenshot-based review was possible in the environment
+where this milestone was assembled, so statements about spacing, contrast and layout rest
+on the design tokens and the stylesheet, not on a recorded image.
+
+The harness lives outside the repository and a test asserts that no test, fixture,
+documentation or harness file is packaged.
+

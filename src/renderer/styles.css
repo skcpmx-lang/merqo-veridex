@@ -710,6 +710,102 @@ select.vx-row__value:hover,
   outline-offset: 2px;
 }
 
+/* ── First-run tour ──────────────────────────────────────────────────────── */
+
+.vx-onboarding { display: flex; flex-direction: column; gap: var(--vx-space-sm); }
+.vx-onboarding__progress { display: flex; gap: 6px; margin-bottom: var(--vx-space-xs); }
+.vx-onboarding__pip {
+  height: 3px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--vx-line);
+  transition: background var(--vx-motion);
+}
+.vx-onboarding__pip.is-done { background: var(--vx-accent); }
+.vx-onboarding__step {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--vx-ink-muted);
+}
+.vx-onboarding__title { margin: 0 0 var(--vx-space-xs); font-size: 20px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
+.vx-onboarding__body { margin: 0; color: var(--vx-ink-soft); line-height: 1.6; font-size: var(--vx-font-md); }
+.vx-onboarding__actions { display: flex; gap: var(--vx-space-sm); margin-top: var(--vx-space-md); flex-wrap: wrap; }
+
+/* ── Driver export ───────────────────────────────────────────────────────── */
+
+.vx-export {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+  padding: var(--vx-space-sm) var(--vx-space-md);
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line-soft);
+  border-radius: var(--vx-radius-md);
+}
+.vx-export__path {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-family: var(--vx-font-mono);
+  font-size: 11px;
+  color: var(--vx-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Activity log ────────────────────────────────────────────────────────── */
+
+.vx-log-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+  padding-bottom: var(--vx-space-sm);
+  border-bottom: 1px solid var(--vx-line-soft);
+}
+.vx-log-controls select,
+.vx-log-controls input {
+  font: inherit;
+  font-size: var(--vx-font-sm);
+  color: var(--vx-ink);
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius-sm);
+  padding: 6px 10px;
+}
+.vx-log-controls input { flex: 1 1 240px; min-width: 160px; }
+
+.vx-row--log { grid-template-columns: minmax(170px, 26%) 1fr; align-items: start; }
+.vx-rows--log { font-family: var(--vx-font-mono); }
+.vx-log__time { font-size: 11px; color: var(--vx-ink-muted); display: block; }
+.vx-log__level {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px solid var(--vx-line);
+  color: var(--vx-ink-muted);
+}
+.vx-log__level--warn { color: var(--vx-warn); border-color: color-mix(in srgb, var(--vx-warn) 50%, transparent); }
+.vx-log__level--error,
+.vx-log__level--fatal { color: var(--vx-bad); border-color: color-mix(in srgb, var(--vx-bad) 50%, transparent); }
+.vx-log__level--debug,
+.vx-log__level--trace { color: var(--vx-ink-muted); }
+.vx-log__ctx {
+  display: block;
+  width: 100%;
+  font-size: 10px;
+  color: var(--vx-ink-muted);
+  word-break: break-all;
+  margin-top: 2px;
+}
+
 /* ── Toasts ──────────────────────────────────────────────────────────────── */
 /*
    Bottom-right, above everything, never wider than a comfortable reading measure. The

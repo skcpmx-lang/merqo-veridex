@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 526 · pass 526 · fail 0
+tests 662 · pass 662 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -48,41 +48,52 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/bench-disk.test.js` | 6 | disk benchmark, consent for the write half |
 | `tests/unit/cpu-model.test.js` | 9 | model-number decoding, unknown-name handling |
 | `tests/unit/cpu.test.js` | 13 | CIM processor parsing, fallbacks |
+| `tests/unit/driver-export.test.js` | 11 | export planning, destination refusal, describe/verify outcomes |
 | `tests/unit/drivers.test.js` | 10 | driver inventory, age assessment, problem codes |
+| `tests/unit/elevate.test.js` | 9 | the elevation allowlist: named tasks only, argument refusal, UAC decline |
+| `tests/unit/elevated-runner.test.js` | 8 | the elevated helper: stale result files, timeout, missing/broken results |
+| `tests/unit/export-and-capabilities.test.js` | 6 | capability declarations match tasks and the elevated allowlist |
 | `tests/unit/fallback.test.js` | 8 | provider chain fall-through |
 | `tests/unit/field.test.js` | 13 | FieldValue construction, status vocabulary |
 | `tests/unit/gpu.test.js` | 16 | GPU parsing, vendor heuristic, VRAM sanity |
+| `tests/unit/health-cap.test.js` | 9 | coverage cap and withheld score |
 | `tests/unit/health.test.js` | 24 | component scoring, coverage gating, rating |
+| `tests/unit/history-store.test.js` | 7 | persistence, id generation, retention, quarantine, comparison |
+| `tests/unit/ipc-arity.test.js` | 7 | every channel accepts exactly the arguments it declares |
 | `tests/unit/ipc-contract.test.js` | 17 | the preload surface, forbidden exposure |
+| `tests/unit/logs-surface.test.js` | 13 | log parsing, filtering, summary, export redaction and retention |
 | `tests/unit/manual.test.js` | 48 | manual checklist, session, coverage separation |
 | `tests/unit/monitor.test.js` | 9 | sampling, series |
 | `tests/unit/network.test.js` | 8 | adapter parsing, socket derivation |
+| `tests/unit/onboarding.test.js` | 12 | first-run steps, advance, skip, reset, no elevation |
+| `tests/unit/pe-metadata.test.js` | 6 | PE header parsing used by the artifact checks |
+| `tests/unit/permissions.test.js` | 16 | elevation detection, capability gating, blocked matrix |
+| `tests/unit/platform.test.js` | 16 | CIM error classification, registry, shared plumbing |
 | `tests/unit/report.test.js` | 34 | model → json/html/pdf/csv/certificate |
 | `tests/unit/security.test.js` | 15 | forbidden commands, consent, network guard |
-| `tests/unit/permissions.test.js` | 16 | elevation detection, capability gating, blocked matrix |
-| `tests/unit/history-store.test.js` | 7 | persistence, id generation, retention, quarantine, comparison |
-| `tests/unit/platform.test.js` | 16 | CIM error classification, registry, shared plumbing |
 | `tests/unit/smart.test.js` | 18 | ATA SMART and NVMe health log parsing |
+| `tests/unit/smoke-regressions.test.js` | 9 | the packaging smoke tests catch the failures they were written for |
 | `tests/unit/stress.test.js` | 16 | stress guard, elapsed time, transitions |
-| `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a tier |
-| `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
-| `tests/integration/docs.test.js` | 5 | documentation paths and claims match the code |
-| `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
-| `tests/integration/providers.test.js` | 7 | every provider executes and explains itself, including when its runner fails |
-| `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
-| `tests/integration/renderer.test.js` | 17 | all 15 pages render under jsdom; live-mode pages with a fake bridge |
-| `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
-| `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults |
+| `tests/unit/windows-extended.test.js` | 22 | Windows inventory parsing beyond the core modules |
+| `tests/unit/windows-modules-depth.test.js` | 31 | the four new modules against their per-module checklists |
+| `tests/unit/windowshealth-depth.test.js` | 11 | DISM parsing, unknown never PASS, non-admin honesty |
 | `tests/integration/artifacts.test.js` | 7 | release artifact verification: signatures, checksums, tampering |
-| `tests/integration/workflow.test.js` | 12 |
-| `tests/unit/pe-metadata.test.js` | 6 |
-| `tests/unit/ipc-arity.test.js` | 7 |
-| `tests/unit/health-cap.test.js` | 9 |
-| `tests/unit/windows-extended.test.js` | 22 |
-| `tests/integration/ui-features.test.js` | 16 |
-| `tests/integration/install-smoke-harness.test.js` | 9 |
-| `tests/unit/smoke-regressions.test.js` | 9 |
+| `tests/integration/build-boundary.test.js` | 3 | nothing test-only or fixture-only can be packaged |
+| `tests/integration/confidence-tiers.test.js` | 6 | every provider mechanism has a declared tier |
+| `tests/integration/diagnostic-run.test.js` | 16 | task execution end to end with a fake runner |
+| `tests/integration/docs.test.js` | 6 | documentation paths and claims match the code |
+| `tests/integration/install-smoke-harness.test.js` | 9 | the installed build smoke harness itself |
+| `tests/integration/new-surfaces.test.js` | 20 | first-run tour, activity log, driver export card, Reports and Privacy |
+| `tests/integration/no-network.test.js` | 4 | no transport code exists in `src/` |
 | `tests/integration/provider-invocation.test.js` | 13 | CI workflows reference scripts that exist; tests gate publishing |
+| `tests/integration/providers.test.js` | 7 | every provider executes and explains itself, including when its runner fails |
+| `tests/integration/renderer.test.js` | 17 | all 18 pages render under jsdom; live-mode pages with a fake bridge |
+| `tests/integration/scan-path.test.js` | 12 | the twelve scan:last data-flow checks from engine to report |
+| `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
+| `tests/integration/settings-wiring.test.js` | 15 | settings read/write, privacy defaults, engine-side coverage |
+| `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
+| `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
+| **Total** | **662** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is
@@ -103,7 +114,7 @@ providers run against a no-op runner.
 - The **guard** refuses sixteen destructive command lines and permits eleven read-only
   ones.
 - **No network client** exists anywhere in `src/`.
-- The **renderer** renders all 15 pages with no `undefined`, `NaN` or `[object Object]`.
+- The **renderer** renders all 18 pages with no `undefined`, `NaN` or `[object Object]`.
 - The **documentation** refers only to files that exist, and the CSP quoted in
   `SECURITY.md` matches the one the shell declares.
 

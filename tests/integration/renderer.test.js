@@ -84,9 +84,9 @@ async function bootRenderer() {
 test('the renderer boots and builds the shell', { skip: JSDOM === null && 'jsdom not installed' }, async () => {
   const { document, restore } = await bootRenderer();
   try {
-    // 17: the original 15 plus Reliability and Processes, added by the audit to expose the
-    // event log, component-store health, installed software and process snapshot.
-    assert.equal(document.querySelectorAll('.vx-nav__item').length, 17, 'every navigation page must be present');
+    // 18: the original 15, plus Reliability and Processes (which expose the event log,
+    // component-store health, installed software and the process snapshot), plus the Activity log.
+    assert.equal(document.querySelectorAll('.vx-nav__item').length, 18, 'every navigation page must be present');
     assert.equal(document.querySelector('.vx-topbar__title').textContent, 'Dashboard');
     assert.ok(document.querySelector('.vx-brand__name').textContent.includes('VERIDEX'));
     assert.ok(document.querySelectorAll('*').length > 30, 'the shell must actually be built');
@@ -116,7 +116,7 @@ test('every page builds without throwing', { skip: JSDOM === null && 'jsdom not 
   const { document, restore } = await bootRenderer();
   try {
     const pages = [...document.querySelectorAll('.vx-nav__item')].map((node) => node.dataset.page);
-    assert.equal(pages.length, 17);
+    assert.equal(pages.length, 18);
 
     for (const page of pages) {
       const button = document.querySelector(`.vx-nav__item[data-page="${page}"]`);

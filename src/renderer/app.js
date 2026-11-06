@@ -17,6 +17,9 @@
 import { createClient, PREVIEW_NOTE } from './bridge.js';
 import { themeTokens, statusPresentation } from './theme.js';
 import { SHORTCUTS, shortcutOf } from './shortcuts.js';
+// The first-run copy lives with the main-process state machine so the words on screen and the
+// promises asserted by the tests are literally the same strings.
+import { STEPS as ONBOARDING_STEPS } from '../app/onboarding.js';
 import { el, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
 
 const client = createClient();
@@ -39,6 +42,7 @@ const PAGES = [
   { id: 'history', label: 'History', glyph: '⟲', group: 'Output' },
   { id: 'settings', label: 'Settings', glyph: '⚒', group: 'Application' },
   { id: 'privacy', label: 'Privacy', glyph: '⛨', group: 'Application' },
+  { id: 'logs', label: 'Activity log', glyph: '⌸', group: 'Application' },
   { id: 'about', label: 'About', glyph: 'ⓘ', group: 'Application' }
 ];
 
@@ -57,6 +61,14 @@ const state = {
     taskId: null,
     finished: null,
     error: null,
+    /**
+     * True when the panels below describe an EARLIER run, because the attempt that just
+     * finished failed. Without this flag a failed scan either blanked good evidence or — worse —
+     * left it on screen looking like the result of the run the user just started.
+     */
+    stale: false,
+    /** When the displayed evidence was collected. Null before the first successful run. */
+    adoptedAt: null,
     assessment: null,
     coverage: null,
     issues: null,
@@ -68,6 +80,9 @@ const state = {
   history: null,
   historyLoading: false,
   comparison: { selected: [], result: null, loading: false, error: null },
+  onboarding: null,
+  logs: { entries: null, summary: null, retention: null, stats: null, statsLoading: false, unparseable: 0, level: 'info', query: '', loading: false, error: null },
+  export: { destination: null, plan: null, result: null, running: false, error: null },
   monitor: { running: false, starting: false, sample: null, sensors: null, error: null, note: null },
   guard: null
 };
@@ -222,6 +237,30 @@ function navigate(pageId) {
  *
  * @param {any} payload the `scan:last` projection, or null when nothing has been collected
  */
+/**
+ * Normalise the issues summary.
+ *
+ * `scan:last` sends `{warnings, errors, conflicts}`, but this function exists because the
+ * renderer must not depend on a payload shape it did not validate: a stored projection written
+ * by an older build, or a truncated one, would otherwise throw inside `pages.dashboard` and
+ * blank the whole window. An unexpected array is read as a list of messages; anything else is
+ * read as three empty lists, which renders as "nothing needs attention" only after the
+ * projection itself has already said there is a plan to report.
+ *
+ * @param {unknown} issues
+ */
+function normalizeIssues(issues) {
+  if (!issues || typeof issues !== 'object') return null;
+  const list = (value) => (Array.isArray(value) ? value : []);
+  if (Array.isArray(issues)) return { warnings: [], errors: [], conflicts: [], messages: issues };
+  return {
+    warnings: list(issues.warnings),
+    errors: list(issues.errors),
+    conflicts: list(issues.conflicts),
+    messages: list(issues.messages)
+  };
+}
+
 function adoptScan(payload) {
   if (!payload) return;
   state.scan.finished = {
@@ -232,9 +271,11 @@ function adoptScan(payload) {
     taskCount: payload.taskCount ?? null,
     providersAttempted: payload.providersAttempted ?? null
   };
+  state.scan.stale = false;
+  state.scan.adoptedAt = payload.finishedAt ?? null;
   state.scan.assessment = payload.assessment ?? null;
   state.scan.coverage = payload.coverage ?? null;
-  state.scan.issues = payload.issues ?? null;
+  state.scan.issues = normalizeIssues(payload.issues);
   state.scan.modules = payload.modules ?? null;
 }
 
@@ -280,7 +321,15 @@ function scanProgressCard() {
     return card;
   }
   if (state.scan.error) {
-    card.append(callout({ tone: 'bad', title: 'The scan could not run', body: state.scan.error }));
+    card.append(
+      callout({
+        tone: 'bad',
+        title: 'The scan could not run',
+        body: state.scan.stale
+          ? `${state.scan.error} The panels below are from the run completed at ${formatTimestamp(state.scan.adoptedAt ?? '')}; nothing on this screen came from the attempt that just failed.`
+          : state.scan.error
+      })
+    );
     return card;
   }
   if (total === 0) {
@@ -313,6 +362,18 @@ const pages = {};
 pages.dashboard = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
+
+  // Evidence on screen that predates a failed attempt must say so at the top, not only in a
+  // toast that has already faded and a progress card further down the page.
+  if (state.scan.stale) {
+    wrapper.append(
+      callout({
+        tone: 'warn',
+        title: 'These results are from an earlier run',
+        body: `The most recent scan attempt failed${state.scan.error ? `: ${state.scan.error}` : '.'} Everything below was collected at ${formatTimestamp(state.scan.adoptedAt ?? '')} and has not been refreshed since.`
+      })
+    );
+  }
 
   const data = state.scan.finished;
   const assessment = state.scan.assessment;
@@ -440,14 +501,19 @@ pages.dashboard = () => {
   );
 
   // Issues
-  if (state.scan.issues && (state.scan.issues.warnings.length || state.scan.issues.errors.length)) {
+  const issues = state.scan.issues;
+  const issueCount = issues ? issues.warnings.length + issues.errors.length + (issues.messages?.length ?? 0) : 0;
+  if (issues && issueCount > 0) {
     const issuesCard = el('div', { class: 'vx-card' });
     issuesCard.append(el('h2', { class: 'vx-card__title', text: 'Needs attention' }));
-    for (const error of state.scan.issues.errors) {
+    for (const error of issues.errors) {
       issuesCard.append(callout({ tone: 'bad', title: 'Error', body: error }));
     }
-    for (const warning of state.scan.issues.warnings) {
+    for (const warning of issues.warnings) {
       issuesCard.append(callout({ tone: 'warn', title: 'Warning', body: warning }));
+    }
+    for (const message of issues.messages ?? []) {
+      issuesCard.append(callout({ tone: 'warn', title: 'Issue', body: String(message) }));
     }
     wrapper.append(issuesCard);
   }
@@ -475,7 +541,7 @@ pages.dashboard = () => {
  * reader wants to see together, and three separate sidebar entries would bury them.
  * @param {Array<() => HTMLElement>} builders
  */
-function stackPages(builders) {
+function stackPages(builders, extras = null) {
   return () => {
     const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
     for (const builder of builders) {
@@ -487,6 +553,9 @@ function stackPages(builders) {
       }
     }
     wrapper.append(scanProgressCard());
+    // Extras are page-specific panels that are not scan modules (the export card, for instance).
+    // They come after the evidence, because a reader looking for driver state wants the drivers.
+    if (typeof extras === 'function') for (const child of extras() ?? []) if (child) wrapper.append(child);
     return wrapper;
   };
 }
@@ -549,7 +618,7 @@ pages.windows = stackPages([
 pages.drivers = stackPages([
   modulePage('drivers', 'Drivers and devices', 'Driver inventory with dates, signing state and problem codes. Driver export is consent-gated and never installs anything.', 'Run a scan to enumerate drivers.'),
   modulePage('software', 'Installed software & startup', 'Applications registered for uninstall, and the programs Windows starts at sign-in. Read-only: nothing is launched or removed.', 'Run a scan to read the installed-software registry.')
-]);
+], () => [driverExportCard()]);
 
 // Windows component health belongs beside the rest of the Windows state: it answers the
 // question a reader has after seeing a driver problem - "are the system files themselves
@@ -759,21 +828,95 @@ pages.monitor = () => {
   return wrapper;
 };
 
+/**
+ * Count what the report will actually contain, from the scan the report is built from.
+ *
+ * A report page that says only "choose a format" makes the user take on faith that the document
+ * is complete. These figures are the same ones the dashboard shows, so a mismatch is visible
+ * before the file is written rather than after it is sent to someone.
+ */
+function reportFacts() {
+  const modules = state.scan.modules ?? {};
+  let fields = 0;
+  let warnings = 0;
+  let errors = 0;
+  const byStatus = { PASS: 0, WARNING: 0, ERROR: 0 };
+  for (const module of Object.values(modules)) {
+    for (const field of Object.values(module?.fields ?? {})) {
+      fields += 1;
+      if (field?.status === 'WARNING') { warnings += 1; byStatus.WARNING += 1; }
+      else if (field?.status === 'ERROR') { errors += 1; byStatus.ERROR += 1; }
+      else if (field?.status === 'PASS') byStatus.PASS += 1;
+    }
+  }
+  return { modules: Object.keys(modules).length, fields, warnings, errors, byStatus };
+}
+
 pages.reports = () => {
   const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
   if (!client.live) wrapper.append(previewBanner());
 
   const card = el('div', { class: 'vx-card' });
-  card.append(el('h2', { class: 'vx-card__title', text: 'Export' }));
-
   if (!state.scan.finished) {
+    card.append(el('h2', { class: 'vx-card__title', text: 'Export' }));
     card.append(emptyState('No scan to export', 'Run a scan first. A report is built from collected evidence, and VERIDEX will not generate a document from nothing.'));
     wrapper.append(card);
     return wrapper;
   }
 
+  const facts = reportFacts();
+  const assessment = state.scan.assessment;
+  const coverage = state.scan.coverage;
+  const issues = state.scan.issues;
+  const finishedAt = state.scan.finished.finishedAt ?? state.scan.finished.startedAt ?? null;
+
+  // What is in the file, before the file exists.
+  const summaryCard = el('div', { class: 'vx-card' });
+  summaryCard.append(el('h2', { class: 'vx-card__title', text: 'What this report contains' }));
+  summaryCard.append(
+    el('p', {
+      class: 'vx-dim',
+      text: finishedAt
+        ? `Built from the scan that finished at ${formatTimestamp(finishedAt)}${state.scan.finished.cancelled ? ', which was cancelled before it completed' : ''}.`
+        : 'Built from the last completed scan in this session.'
+    })
+  );
+  summaryCard.append(
+    coverageStrip([
+      { label: 'Modules', value: facts.modules },
+      { label: 'Evidence fields', value: facts.fields },
+      { label: 'Warnings', value: facts.warnings },
+      { label: 'Errors', value: facts.errors },
+      { label: 'Coverage', value: coverage?.percent !== undefined ? `${coverage.percent}%` : '—' }
+    ])
+  );
+
+  if (state.scan.stale) {
+    summaryCard.append(
+      callout({
+        tone: 'warn',
+        title: 'These readings are older than this session',
+        body: 'The report will carry the collection time of each field, so a reader can see when it was measured. Re-run a scan if you need the current state.'
+      })
+    );
+  }
+
+  const contents = el('div', { class: 'vx-rows' });
+  contents.append(
+    fieldRow('Device health', assessment ? `${assessment.rating ?? assessment.status}${assessment.score !== undefined ? ` · ${assessment.score}/100` : ''}` : 'not assessed'),
+    fieldRow('Modules with evidence', `${facts.modules}${assessment?.modules ? ` of ${assessment.modules}` : ''}`),
+    fieldRow('Open issues', issues ? String(issues.warnings.length + issues.errors.length + (issues.messages?.length ?? 0)) : 'none recorded'),
+    fieldRow('Manual checks', state.manual?.coverage ? `${state.manual.coverage.answered ?? 0} answered, ${state.manual.coverage.untested ?? 0} untested` : 'not started'),
+    fieldRow('Machine identity', state.settings?.values?.['diagnostics.includeSensitiveInReport'] ? 'included (identifiers present)' : 'redacted')
+  );
+  summaryCard.append(contents);
+  wrapper.append(summaryCard);
+
+  const card2 = el('div', { class: 'vx-card' });
+  card2.append(el('h2', { class: 'vx-card__title', text: 'Choose a format' }));
+
   const privacy = state.settings?.values?.['diagnostics.includeSensitiveInReport'];
-  card.append(
+  card2.append(
     callout({
       tone: privacy ? 'warn' : 'ok',
       title: privacy ? 'This export will include identifiers' : 'Identifiers are redacted',
@@ -783,21 +926,40 @@ pages.reports = () => {
     })
   );
 
+  // Each format says what it is for. Four buttons labelled PDF/HTML/CSV/JSON tell a technician
+  // nothing about which one to hand to a customer.
+  const formats = [
+    { id: 'pdf', label: 'Save PDF', purpose: 'A document to read or send. Fixed layout, one file, evidence and limitations included.' },
+    { id: 'html', label: 'Save HTML', purpose: 'The same report as a single web page you can open in any browser and print.' },
+    { id: 'csv', label: 'Save CSV', purpose: 'One row per field, for a spreadsheet. Loses the narrative and the layout.' },
+    { id: 'json', label: 'Save JSON', purpose: 'The raw structure, for your own tooling. Includes timestamps and sources for every field.' }
+  ];
   const buttons = el('div', { style: { display: 'flex', gap: 'var(--vx-space-sm)', flexWrap: 'wrap' } });
-  for (const format of ['pdf', 'html', 'csv', 'json']) {
+  for (const format of formats) {
     buttons.append(
       button({
-        label: `Save ${format.toUpperCase()}`,
-        variant: format === 'pdf' ? 'primary' : 'ghost',
-        onClick: () => saveReport(format)
+        label: format.label,
+        variant: format.id === 'pdf' ? 'primary' : 'ghost',
+        onClick: () => saveReport(format.id),
+        title: format.purpose
       })
     );
   }
-  card.append(buttons);
+  card2.append(buttons);
+
+  const purposes = el('div', { class: 'vx-rows' });
+  for (const format of formats) purposes.append(fieldRow(format.id.toUpperCase(), format.purpose));
+  card2.append(purposes);
 
   const status = el('p', { class: 'vx-dim', id: 'vx-report-status' });
-  card.append(status);
-  wrapper.append(card);
+  card2.append(status);
+  card2.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Every format carries the same headings: what was measured, how, what could not be measured, and what the result does not prove.'
+    })
+  );
+  wrapper.append(card2);
   return wrapper;
 };
 
@@ -1060,6 +1222,82 @@ pages.privacy = () => {
   }
   wrapper.append(guarantees);
 
+  const stored = el('div', { class: 'vx-card' });
+  stored.append(el('h2', { class: 'vx-card__title', text: 'Stored on this machine' }));
+  const stats = state.logs.stats;
+  const history = state.history?.entries;
+  const rows = el('div', { class: 'vx-rows' });
+  rows.append(
+    fieldRow('Data folder', state.info?.dataDir ?? 'not reported'),
+    fieldRow('Reports', state.info?.dataDir ? `${state.info.dataDir}\\reports` : 'inside the data folder'),
+    fieldRow('Run history', `${Array.isArray(history) ? history.length : '—'} stored run${history?.length === 1 ? '' : 's'}${state.settings?.values?.['diagnostics.persistHistory'] === false ? ' (hidden: history is turned off in Settings)' : ''}`),
+    fieldRow('Activity log', stats ? `${stats.files ?? 0} file(s), ${formatBytesText(stats.bytes ?? 0)} of ${formatBytesText(stats.maxBytes ?? 0)}${stats.level ? `, level ${stats.level}` : ''}` : 'reading…')
+  );
+  stored.append(rows);
+
+  const actions = el('div', { class: 'vx-export' });
+  const reveal = button({
+    label: 'Open the activity log',
+    onClick: () => navigate('logs')
+  });
+  const replay = button({
+    label: 'Show the tour again',
+    onClick: async () => {
+      const result = await client.invoke('app:onboardingReset');
+      if (!result.ok) {
+        toast({ tone: 'bad', title: 'The tour could not be reset', body: result.error?.message ?? 'Unknown error.' });
+        return;
+      }
+      toast({ tone: 'good', title: 'The tour will run next time', body: 'It is shown once more when VERIDEX starts.' });
+    },
+    disabled: !client.live
+  });
+  const remove = button({
+    label: 'Delete the log',
+    variant: 'danger',
+    onClick: () => void clearLogs(),
+    disabled: !client.live
+  });
+  actions.append(reveal, replay, remove);
+  stored.append(actions);
+  stored.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Deleting the log removes the files on this machine and nothing else. Reports you have already saved are yours to keep or delete; VERIDEX does not track them.'
+    })
+  );
+  wrapper.append(stored);
+
+  // The one privacy setting that changes what a file contains, next to the explanation of it.
+  const settingCard = el('div', { class: 'vx-card' });
+  settingCard.append(el('h2', { class: 'vx-card__title', text: 'What reports may contain' }));
+  const include = state.settings?.values?.['diagnostics.includeSensitiveInReport'] === true;
+  const toggleRow = el('div', { class: 'vx-rows' });
+  const toggle = el('input', { attrs: { type: 'checkbox', id: 'vx-privacy-identifiers' } });
+  toggle.checked = include;
+  toggle.disabled = !client.live;
+  toggle.addEventListener('change', () => void changeSetting('diagnostics.includeSensitiveInReport', toggle.checked));
+  toggleRow.append(
+    el('div', {
+      class: 'vx-row',
+      children: [
+        el('label', { class: 'vx-row__label', text: 'Include serial numbers and addresses in reports', attrs: { for: 'vx-privacy-identifiers' } }),
+        el('div', { class: 'vx-row__value', children: [toggle] })
+      ]
+    })
+  );
+  settingCard.append(toggleRow);
+  settingCard.append(
+    callout({
+      tone: include ? 'warn' : 'ok',
+      title: include ? 'Identifiers will be written into reports' : 'Reports will not identify this machine',
+      body: include
+        ? 'A report is personal data once it carries a serial number or an address. Share it only with someone who needs to identify the machine.'
+        : 'The machine is still identifiable from its hardware configuration in most cases; redaction removes the direct identifiers, not the fingerprint. VERIDEX says so rather than claiming anonymity it cannot provide.'
+    })
+  );
+  wrapper.append(settingCard);
+
   const guardCard = el('div', { class: 'vx-card' });
   guardCard.append(el('h2', { class: 'vx-card__title', text: 'Blocked this session' }));
   const guard = state.guard;
@@ -1076,6 +1314,18 @@ pages.privacy = () => {
     guardCard.append(el('p', { class: 'vx-dim', text: guard.statement }));
   }
   wrapper.append(guardCard);
+
+  // Load the log statistics the "stored" rows need, once.
+  if (client.live && !state.logs.stats && !state.logs.statsLoading) {
+    state.logs.statsLoading = true;
+    void client.invoke('logs:stats').then((result) => {
+      state.logs.statsLoading = false;
+      if (result.ok) {
+        state.logs.stats = result.data;
+        if (state.page === 'privacy') render();
+      }
+    });
+  }
 
   return wrapper;
 };
@@ -1110,6 +1360,418 @@ pages.about = () => {
   return wrapper;
 };
 
+/** Bytes as a person reads them. Binary units, because that is what the file system reports. */
+function formatBytesText(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return 'unknown';
+  if (value < 1024) return `${value} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let size = value / 1024;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unit]}`;
+}
+
+// ── First run (R-20-01) ─────────────────────────────────────────────────────
+
+/**
+ * The first-run tour.
+ *
+ * Shown once, over the application, the first time the window opens on a machine that has not
+ * finished it. Four screens: what this is, what it cannot do, what it needs permission for, and
+ * what it keeps. Skipping is offered on every screen and never asks for elevation.
+ *
+ * The copy lives in `src/app/onboarding.js` and arrives through `app:onboarding`; this function
+ * only draws it, so the promises in the tour cannot drift from the ones the tests assert.
+ */
+async function runOnboarding() {
+  const response = await client.invoke('app:onboarding');
+  if (!response.ok) return; // No bridge, no tour: the preview banner already says what this window is.
+  const status = response.data;
+  state.onboarding = status ?? null;
+  if (!status?.needed) return;
+
+  const steps = ONBOARDING_STEPS;
+
+  let index = typeof status.stepIndex === 'number' ? status.stepIndex : 0;
+  let handle = null;
+
+  const draw = () => {
+    const step = steps[Math.min(index, steps.length - 1)];
+    const body = el('div', { class: 'vx-onboarding' });
+
+    body.append(
+      el('div', {
+        class: 'vx-onboarding__progress',
+        attrs: { role: 'progressbar', 'aria-valuemin': '1', 'aria-valuemax': String(steps.length), 'aria-valuenow': String(index + 1) },
+        children: steps.map((entry, position) =>
+          el('span', { class: `vx-onboarding__pip${position <= index ? ' is-done' : ''}`, attrs: { 'aria-hidden': 'true' } })
+        )
+      })
+    );
+    body.append(el('p', { class: 'vx-onboarding__step', text: `Step ${index + 1} of ${steps.length}` }));
+    body.append(el('h2', { class: 'vx-onboarding__title', text: step.title }));
+    for (const paragraph of step.body) body.append(el('p', { class: 'vx-onboarding__body', text: paragraph }));
+
+    const actions = el('div', { class: 'vx-onboarding__actions' });
+    actions.append(
+      button({
+        label: step.action,
+        variant: 'primary',
+        onClick: async () => {
+          const advance = await client.invoke('app:onboardingAdvance', { step: step.id });
+          if (!advance.ok) {
+            toast({ tone: 'bad', title: 'The tour could not be recorded', body: advance.error?.message ?? 'Unknown error.' });
+            return;
+          }
+          if (advance.data?.done) {
+            handle?.close();
+            toast({ tone: 'good', title: 'Ready', body: 'Run a full scan whenever you like. Nothing is collected until you do.' });
+            render();
+            return;
+          }
+          index += 1;
+          handle?.close();
+          draw();
+        }
+      }),
+      button({
+        label: 'Skip the tour',
+        onClick: async () => {
+          await client.invoke('app:onboardingSkip');
+          handle?.close();
+          render();
+        }
+      })
+    );
+    body.append(actions);
+    body.append(
+      el('p', {
+        class: 'vx-dim',
+        text: 'Skipping is recorded as skipping, not as read. Settings offers the tour again whenever you want it.'
+      })
+    );
+
+    handle = dialog({ title: 'Welcome to VERIDEX', body });
+  };
+
+  draw();
+}
+
+// ── Driver export (R-11-03) ─────────────────────────────────────────────────
+
+/** The export promise, echoed on the page so it cannot drift from the engine's copy. */
+const EXPORT_PROMISE_TEXT =
+  'Export copies the driver packages installed on this machine into a folder you choose. It changes nothing on the machine. VERIDEX cannot restore a driver from an export, and does not install, update or remove drivers.';
+
+async function chooseExportDestination() {
+  const result = await client.invoke('drivers:chooseDestination');
+  if (!result.ok) {
+    state.export.error = result.error?.message ?? 'The folder chooser could not be opened.';
+    render();
+    return;
+  }
+  if (!result.data?.chosen) return; // The user cancelled the dialog; nothing to say.
+  state.export.destination = result.data.path;
+  state.export.result = null;
+  state.export.error = null;
+  const plan = await client.invoke('drivers:plan', { destination: result.data.path });
+  state.export.plan = plan.ok ? plan.data : null;
+  if (!plan.ok) state.export.error = plan.error?.message ?? 'The destination could not be checked.';
+  render();
+}
+
+async function startExport() {
+  if (!state.export.destination || state.export.running) return;
+  state.export.running = true;
+  state.export.error = null;
+  state.export.result = null;
+  render();
+  toast({ tone: 'info', title: 'Export starting', body: 'Windows will ask for administrator permission. Declining is safe: nothing is changed on this machine either way.' });
+
+  const result = await client.invoke('drivers:export', { destination: state.export.destination });
+  state.export.running = false;
+  if (result.ok) {
+    state.export.result = result.data;
+    toast({
+      tone: result.data.ok ? 'good' : result.data.code === 'cancelled' ? 'warn' : 'bad',
+      title: result.data.ok ? 'Export finished' : 'Export did not finish',
+      body: result.data.reason
+    });
+  } else {
+    state.export.error = result.error?.message ?? 'The export could not be started.';
+  }
+  render();
+}
+
+async function cancelExport() {
+  const result = await client.invoke('drivers:cancelExport');
+  if (result.ok && result.data?.cancelled) toast({ tone: 'warn', title: 'Stopping the export', body: 'The helper is being stopped; whatever was copied stays in the folder.' });
+  else toast({ tone: 'info', title: 'Nothing to cancel', body: result.ok ? (result.data?.reason ?? 'No export is running.') : 'The main process could not be reached.' });
+}
+
+/** The export card. Rendered on the Drivers page, below the inventory. */
+function driverExportCard() {
+  const card = el('div', { class: 'vx-card' });
+  card.append(el('h2', { class: 'vx-card__title', text: 'Export driver packages' }));
+
+  card.append(
+    callout({
+      tone: 'info',
+      title: 'Copy, not backup',
+      body: EXPORT_PROMISE_TEXT
+    })
+  );
+
+  const row = el('div', { class: 'vx-export' });
+  const chosen = state.export.destination;
+  const pathLabel = el('span', {
+    class: 'vx-export__path',
+    text: chosen ?? 'No folder chosen yet',
+    attrs: chosen ? { title: chosen } : {}
+  });
+
+  const chooseButton = button({
+    label: chosen ? 'Change folder…' : 'Choose folder…',
+    variant: chosen ? 'ghost' : 'primary',
+    onClick: () => void chooseExportDestination(),
+    disabled: !client.live || state.export.running
+  });
+  chooseButton.id = 'vx-export-choose';
+
+  const exportButton = button({
+    label: state.export.running ? 'Exporting…' : 'Export drivers',
+    variant: 'primary',
+    onClick: () => void startExport(),
+    // Exporting needs a destination and an idle state; both are stated in the title of a
+    // disabled button rather than left for the user to discover by clicking.
+    disabled: !client.live || !chosen || state.export.running
+  });
+  exportButton.id = 'vx-export-start';
+  if (!chosen) exportButton.title = 'Choose a folder first.';
+  if (!client.live) exportButton.title = 'Export needs the VERIDEX main process.';
+
+  const cancelButton = button({ label: 'Stop', variant: 'danger', onClick: () => void cancelExport(), disabled: !state.export.running });
+  cancelButton.id = 'vx-export-cancel';
+
+  row.append(pathLabel, chooseButton, exportButton, cancelButton);
+  card.append(row);
+
+  if (state.export.plan) {
+    const plan = state.export.plan;
+    if (plan.ok) {
+      card.append(
+        el('p', {
+          class: 'vx-dim',
+          text: `This export will create "${plan.folder}" inside the chosen folder${plan.freeLabel ? ` — ${plan.freeLabel} free` : ''}. Existing files are never overwritten: each export gets its own folder.`
+        })
+      );
+    } else {
+      card.append(callout({ tone: 'warn', title: 'That folder cannot be used', body: plan.reason }));
+    }
+  }
+
+  if (state.export.error) card.append(callout({ tone: 'bad', title: 'Export failed', body: state.export.error }));
+
+  if (state.export.result) {
+    const result = state.export.result;
+    card.append(
+      callout({
+        tone: result.ok ? 'good' : result.code === 'cancelled' ? 'warn' : 'bad',
+        title: result.ok ? 'Export complete' : 'Export incomplete',
+        body: result.reason
+      })
+    );
+    if (result.verification) {
+      card.append(
+        el('p', {
+          class: 'vx-dim',
+          text: result.verification.ok
+            ? result.verification.reason
+            : `Verification failed: ${result.verification.reason}`
+        })
+      );
+    }
+    if (result.path) card.append(el('p', { class: 'vx-dim vx-mono', text: result.path }));
+  }
+
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Exporting requires administrator rights and raises a Windows prompt. If you decline it, nothing is copied and the rest of the application carries on unchanged.'
+    })
+  );
+  return card;
+}
+
+// ── Activity log (R-24-03) ──────────────────────────────────────────────────
+
+async function loadLogs() {
+  if (!client.live) return;
+  state.logs.loading = true;
+  const result = await client.invoke('logs:recent', { minLevel: state.logs.level, query: state.logs.query, limit: 200 });
+  state.logs.loading = false;
+  if (result.ok) {
+    state.logs.entries = result.data.entries;
+    state.logs.summary = result.data.summary;
+    state.logs.retention = result.data.retention;
+    state.logs.unparseable = result.data.unparseable ?? 0;
+    state.logs.error = null;
+  } else {
+    state.logs.error = result.error?.message ?? 'The log could not be read.';
+  }
+  if (state.page === 'logs') render();
+}
+
+async function exportLogs() {
+  const result = await client.invoke('logs:export');
+  if (!result.ok) {
+    toast({ tone: 'bad', title: 'The log could not be exported', body: result.error?.message ?? 'Unknown error.' });
+    return;
+  }
+  toast(
+    result.data.saved
+      ? { tone: 'good', title: 'Log exported', body: `${result.data.entries} entries written to ${result.data.path}. Identifiers are redacted.` }
+      : { tone: 'info', title: 'Export cancelled', body: 'No file was written.' }
+  );
+}
+
+async function clearLogs() {
+  const result = await client.invoke('logs:clear');
+  if (!result.ok) {
+    toast({ tone: 'bad', title: 'The log could not be cleared', body: result.error?.message ?? 'Unknown error.' });
+    return;
+  }
+  toast({ tone: 'good', title: 'Log cleared', body: `${result.data.removed} file${result.data.removed === 1 ? '' : 's'} removed.` });
+  await loadLogs();
+  render();
+}
+
+pages.logs = () => {
+  const wrapper = el('div', { class: 'vx-grid', style: { gap: 'var(--vx-space-lg)' } });
+  if (!client.live) wrapper.append(previewBanner());
+
+  if (client.live && state.logs.entries === null && !state.logs.loading) {
+    state.logs.loading = true;
+    void loadLogs();
+  }
+
+  const card = el('div', { class: 'vx-card' });
+  const head = el('div', { class: 'vx-card__head' });
+  head.append(el('h2', { class: 'vx-card__title', text: 'Activity log' }));
+  head.append(
+    button({ label: 'Export…', onClick: () => void exportLogs(), disabled: !client.live }),
+    button({ label: 'Delete logs', variant: 'danger', onClick: () => void clearLogs(), disabled: !client.live })
+  );
+  card.append(head);
+
+  if (state.logs.error) {
+    card.append(callout({ tone: 'bad', title: 'The log could not be read', body: state.logs.error }));
+    wrapper.append(card);
+    return wrapper;
+  }
+
+  const summary = state.logs.summary;
+  if (summary) {
+    card.append(
+      coverageStrip([
+        { label: 'Entries', value: summary.entries },
+        { label: 'Warnings', value: summary.counts?.warn ?? 0 },
+        { label: 'Errors', value: summary.counts?.error ?? 0 },
+        { label: 'Fatals', value: summary.counts?.fatal ?? 0 },
+        { label: 'Files', value: summary.fileCount ?? '—' }
+      ])
+    );
+  }
+
+  // Filters. A select rather than a free-text level, because "wran" is not a level.
+  const controls = el('div', { class: 'vx-log-controls' });
+  const levelSelect = el('select', { attrs: { 'aria-label': 'Minimum level' } });
+  for (const level of ['trace', 'debug', 'info', 'warn', 'error', 'fatal']) {
+    const option = el('option', { text: level, attrs: { value: level } });
+    if (level === state.logs.level) option.selected = true;
+    levelSelect.append(option);
+  }
+  levelSelect.addEventListener('change', () => {
+    state.logs.level = levelSelect.value;
+    void loadLogs();
+  });
+
+  const search = el('input', {
+    attrs: { type: 'search', placeholder: 'Filter by message, source or context…', 'aria-label': 'Filter log entries', value: state.logs.query }
+  });
+  let debounce = null;
+  search.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      state.logs.query = search.value;
+      void loadLogs();
+    }, 200);
+  });
+
+  controls.append(el('label', { class: 'vx-dim', text: 'Minimum level' }), levelSelect, search);
+  card.append(controls);
+
+  if (state.logs.entries === null) {
+    card.append(el('p', { class: 'vx-dim', text: 'Reading the log…' }));
+  } else if (state.logs.entries.length === 0) {
+    card.append(
+      emptyState(
+        state.logs.query || state.logs.level !== 'info' ? 'No entries match that filter' : 'The log is empty',
+        state.logs.query || state.logs.level !== 'info'
+          ? 'The log itself is not empty — this filter simply matches nothing. Clear the filter to see everything.'
+          : 'Nothing has been written yet. Entries appear as VERIDEX runs, and a scan writes one per provider attempt.'
+      )
+    );
+  } else {
+    const rows = el('div', { class: 'vx-rows vx-rows--log' });
+    for (const entry of state.logs.entries) {
+      const row = el('div', { class: 'vx-row vx-row--log' });
+      row.append(
+        el('div', {
+          class: 'vx-row__label',
+          children: [
+            el('span', { class: 'vx-log__time', text: entry.ts ? formatTimestamp(entry.ts) : 'no timestamp' }),
+            el('span', { class: `vx-log__level vx-log__level--${entry.level ?? 'unknown'}`, text: entry.level ?? 'unknown' })
+          ]
+        })
+      );
+      const value = el('div', { class: 'vx-row__value' });
+      value.append(el('span', { class: 'vx-row__text', text: entry.msg ?? '' }));
+      value.append(el('span', { class: 'vx-row__source', text: ` ${entry.scope ?? 'app'}` }));
+      if (entry.ctx && Object.keys(entry.ctx).length > 0) {
+        value.append(el('span', { class: 'vx-log__ctx', text: JSON.stringify(entry.ctx).slice(0, 240) }));
+      }
+      row.append(value);
+      rows.append(row);
+    }
+    card.append(rows);
+    if (state.logs.unparseable > 0) {
+      card.append(
+        callout({
+          tone: 'warn',
+          title: `${state.logs.unparseable} line(s) could not be parsed`,
+          body: 'Those lines are shown as they were written rather than dropped: a gap in a log looks exactly like a lie.'
+        })
+      );
+    }
+  }
+
+  if (state.logs.retention) card.append(el('p', { class: 'vx-dim', text: state.logs.retention.statement }));
+  card.append(
+    el('p', {
+      class: 'vx-dim',
+      text: 'Logs contain timestamps, levels, sources and messages. Serial numbers, machine names, user names, addresses, tokens and keys are redacted before anything is written, and again on export.'
+    })
+  );
+
+  wrapper.append(card);
+  return wrapper;
+};
+
 pages.notFound = () => emptyState('Page not found', 'That page does not exist in this build.');
 
 const PAGE_BUILDERS = {
@@ -1129,6 +1791,7 @@ const PAGE_BUILDERS = {
   history: pages.history,
   settings: pages.settings,
   privacy: pages.privacy,
+  logs: pages.logs,
   about: pages.about
 };
 
@@ -1459,13 +2122,21 @@ function installShortcuts() {
 async function startScan() {
   if (!client.live || state.scan.running) return;
   toast({ tone: 'info', title: 'Scan started', body: 'Collecting evidence from this machine. Anything that cannot be read is reported as unavailable, never assumed good.' });
-  state.scan = { running: true, done: 0, total: 0, taskId: null, finished: null, error: null };
+  state.scan.running = true;
+  state.scan.done = 0;
+  state.scan.total = 0;
+  state.scan.taskId = null;
+  state.scan.error = null;
   updateScanButtons();
   render();
 
   const result = await client.invoke('scan:start', { tasks: [] });
   if (!result.ok) {
-    state.scan = { running: false, done: 0, total: 0, taskId: null, finished: null, error: result.error.message };
+    state.scan.running = false;
+    state.scan.error = result.error.message;
+    // The evidence already on screen is from an earlier run. Keep it — throwing away a good
+    // report because a new attempt failed is its own kind of dishonesty — but mark it.
+    state.scan.stale = Boolean(state.scan.adoptedAt);
     render();
     return;
   }
@@ -1516,6 +2187,7 @@ async function refreshScanState() {
   const result = await client.invoke('scan:state');
   if (!result.ok) {
     state.scan.running = false;
+    state.scan.error = result.error?.message ?? 'The scan state could not be read.';
     render();
     return;
   }
@@ -1673,6 +2345,9 @@ async function boot() {
   subscribe();
   installShortcuts();
   navigate('dashboard');
+  // The tour comes after the shell so a user who skips lands on a ready application, not a blank
+  // one. It never blocks a scan: the dialog can be dismissed with Escape and the tour re-offered.
+  void runOnboarding();
   await loadManual();
   navigate(state.page);
 }

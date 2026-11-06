@@ -186,6 +186,56 @@ does not mean "collect anything". `enforceNeverCollect()` and `mayCollectField()
 layer, so a log file written to disk never contains a raw serial number. Logs stay
 local; there is no log upload path.
 
+### 5.1 What a log record contains
+
+A record is `{ts, level, scope, msg, ctx}`. `scope` names the subsystem that wrote it
+(`app`, `scan`, `provider`, `settings`, …). `ctx` carries structured context such as the
+provider id and the failure code.
+
+Not logged, by construction:
+
+- **command lines and process arguments** — a provider records that a command failed
+  and its exit code, never the argument vector, because arguments can contain paths with
+  account names in them;
+- **field values** — a serial number, address or account name is never written to the log
+  even when it is collected for a report;
+- **full event messages** from the Windows event log — only the provider, the event id
+  and the count.
+
+Redaction runs on write and **again on export** (`src/app/logs.js`), so a file that
+somehow contains an unredacted value cannot be exported unredacted. Export writes a
+header naming the log level and the redaction state, and truncates a message at 500
+characters with the truncation visible.
+
+### 5.2 Rotation and deletion
+
+Logs rotate by size (default 2 MB per file, 5 files). The oldest file is deleted when a
+new one is created, so the folder has a hard ceiling. The Activity log page states the
+real totals, offers deletion of the files, and says that nothing is uploaded. Deletion
+removes the files on this machine; it does not touch reports the user has saved.
+
+### 5.3 The elevated helper
+
+Privileged work does not run inside the application. `src/app/elevate.js` holds a closed
+allowlist of **named** tasks (`windows.componentHealth`, `drivers.export`,
+`battery.report`), each with a fixed executable and an argument builder; the renderer can
+only ask for a name, never for a command. `src/app/elevated-runner.js` starts the helper
+in a separate elevated process through a single PowerShell shim, waits for a JSON result
+file written to a temporary path, and:
+
+- deletes any stale result file **before** the run, so a previous result cannot be
+  mistaken for this one;
+- kills the helper on timeout or on cancellation;
+- treats a zero exit code with no result file as a **failure**, because a silent helper
+  has told us nothing;
+- classifies UAC decline (error 1223) before blaming a missing file, and reports it as
+  *cancelled — continues at standard privilege*;
+- refuses a missing, empty, malformed, non-object or oversized (> 64 KB) result.
+
+Arguments that contain quotes, `$`, `;` or `|` are **refused, not escaped**. There is no
+in-process fallback: if the elevated helper cannot be started, the task reports that it
+did not run.
+
 ---
 
 ## 6. Integrity of the build

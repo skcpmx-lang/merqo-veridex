@@ -10,6 +10,14 @@ of guessing.
 
 ## 1. Before you start
 
+On the first launch VERIDEX shows a four-step tour: what the application does, what it
+deliberately cannot do, which readings need administrator rights, and what is kept on
+your machine. Every step can be skipped, and skipping is recorded as skipping — Settings
+offers the tour again whenever you want it. The tour never asks for elevation.
+
+If you close the window halfway through, the tour resumes at the step you reached next
+time. Being interrupted is not the same as having read it.
+
 - **Windows 10 or 11, 64-bit.** VERIDEX is a Windows diagnostic tool; the build is a
   Windows executable. (See `docs/COMPATIBILITY.md` for what is and is not tested.)
 - **No installation rights needed.** The installer installs per-user, not per-machine.
@@ -102,8 +110,36 @@ From the **Reports** page you can produce:
 - **JSON** — the full data, including the redaction policy that produced it
 - **CSV** — flat fields for a spreadsheet
 
+Before you choose a format the page tells you what the file will contain: how many
+modules produced evidence, how many fields were collected, how many carry a warning, the
+coverage figure, the open issues and the manual-check progress. A report page that says
+only "pick a format" asks you to trust that the document is complete; these figures are
+the same ones the dashboard shows, so a disagreement is visible before the file exists.
+
 Every report records **the privacy settings in force when it was generated**. So a report
 you shared last month can always be traced back to exactly what it exposed.
+
+### 4.1 Exporting the driver packages
+
+The **Drivers** page carries an export card below the inventory. It copies the driver
+packages currently installed into a **new folder** inside a folder you choose:
+
+```
+<your folder>\VERIDEX-drivers-YYYY-MM-DD-HHMMSS\*.inf
+```
+
+- Each export gets its own folder. Nothing is ever overwritten.
+- The destination is checked before anything is written: drive roots and system folders
+  are refused, and the free space is compared with the size of the installed packages
+  plus a margin. If the free space cannot be read, the export is allowed and says so.
+- Exporting needs administrator rights, so Windows shows **one** elevation prompt. The
+  folder is created at standard privilege first, so declining the prompt leaves an empty
+  folder and nothing else. Declining is recorded as *cancelled*, not as a failure.
+- The export is **not a backup you can restore from**. VERIDEX cannot reinstall a driver
+  from an export and does not claim to. It is a copy you can hand to a technician, who
+  may use it with their own tools and their own judgement.
+- Afterwards the folder is counted: the number of `.inf` files must match what `pnputil`
+  reported. A mismatch is reported as *cannot be confirmed complete*, never as success.
 
 ---
 
@@ -119,6 +155,27 @@ hostnames, account names, product keys, and Wi-Fi names.
   can tell "not present" from "hidden on purpose".
 - Nothing leaves your computer. There is no upload, no account, no telemetry, no
   crash reporting.
+- Redaction removes the **direct identifiers**. It does not make a report anonymous:
+  the hardware configuration in it can still distinguish one machine from another. The
+  Privacy page says this where the setting is, rather than promising anonymity it cannot
+  deliver.
+
+The **Privacy** page also states what is stored on this machine and where — the data
+folder, the number of stored runs, and the log folder with its real size and limit — and
+gives you the two actions that matter: open the activity log, or delete it.
+
+### 5.1 The activity log
+
+**Activity log** lists what VERIDEX did, newest first: timestamp, level, source and
+message. You can filter by minimum level and by text, export a redacted copy to a file,
+or delete the log files.
+
+- A line that cannot be parsed is shown as it was written and counted at the top. A gap
+  in a log looks exactly like a lie.
+- Messages longer than 500 characters are truncated on export, with the truncation
+  visible.
+- Logs rotate by size: when a file reaches its limit a new one is started and the oldest
+  is deleted, so the folder cannot grow without bound.
 
 See `docs/SECURITY.md` for how this is enforced rather than merely intended.
 

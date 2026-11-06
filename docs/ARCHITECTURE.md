@@ -1,6 +1,6 @@
 # Architecture
 
-54 modules, ~16,500 lines of source, one process boundary. This document explains how a
+67 modules, ~21,800 lines of source, one process boundary. This document explains how a
 scan becomes a report. It is written from the code, and every file it names exists.
 
 ---
@@ -194,12 +194,40 @@ produced it, so an old report can never be mistaken for a less redacted one.
 
 ## 5. The renderer
 
-`src/renderer/app.js` is a single page controller with **15 pages**. It renders only what
+`src/renderer/app.js` is a single page controller with **18 pages**. It renders only what
 the main process hands it; it never infers a value. The history page reads stored runs
 through `history:list` and keeps three states distinct — loading, empty and unreadable —
 because collapsing them would report a failed read as "no data". Where a feature is not wired yet
 (performance, monitor, history, report saving), the page says so in plain words rather
 than showing an empty shell or invented sample data.
+
+### 5.1 Application-side modules
+
+Four modules sit between the renderer and the engine. They are plain ES modules with no
+Electron dependency, which is why each can be unit-tested directly.
+
+| Module | Responsibility | Notable rule |
+| --- | --- | --- |
+| `src/app/onboarding.js` | first-run state machine: four steps, advance, skip, reset | interruption is not completion; skip is recorded as skip |
+| `src/app/elevate.js` | the closed allowlist of privileged tasks and their arguments | renderer asks for a **name**, never a command; quoting characters are refused |
+| `src/app/elevated-runner.js` | starts one elevated helper, waits for its JSON result | zero exit with no result is a failure; UAC decline is classified first |
+| `src/app/driver-export.js` | plans, describes and verifies a driver export | fresh folder per export; `.inf` count must match or the result is "cannot be confirmed complete" |
+| `src/app/logs.js` | parse, filter, summarise, export and describe the log | unparseable lines are kept; redaction is re-applied on export |
+
+### 5.2 New IPC channels
+
+Thirteen channels were added, each with an argument validator in
+`src/app/ipc-contract.js`:
+
+- `app:onboarding`, `app:onboardingAdvance`, `app:onboardingSkip`, `app:onboardingReset`
+- `drivers:chooseDestination`, `drivers:plan`, `drivers:export`, `drivers:cancelExport`,
+  `drivers:lastExport`
+- `logs:recent`, `logs:stats`, `logs:export`, `logs:clear`
+
+`src/app/preload.cjs` exposes **32 invoke channels and 6 event channels**. That list is
+generated from `INVOKE_CHANNELS` and `EVENT_CHANNELS`, not typed by hand: a test compares
+the exposed surface with the contract, and a hand-edited list drifted from it once
+already.
 
 The renderer runs with `contextIsolation: true`, `nodeIntegration: false`,
 `sandbox: true` and a strict CSP (`default-src 'none'`, `connect-src 'none'`).
@@ -213,7 +241,9 @@ The renderer runs with `contextIsolation: true`, `nodeIntegration: false`,
 | Pure functions (parsers, scoring, privacy) | direct unit tests with real fixture data |
 | Providers | executed against a `NoopRunner`; every returned field validated |
 | Modules | registration, task wiring, provider resolution |
-| Renderer | jsdom boot of the real `app.js`; all 15 pages rendered and asserted |
+| Renderer | jsdom boot of the real `app.js`; all 18 pages rendered and asserted |
+| Interaction | jsdom clicks and keystrokes against a fake bridge: tour, log filters, export card, dialog focus |
+| Packaging boundary | the builder's `files:` patterns resolved against the real tree |
 | Documentation | paths named in docs must exist; CSP quoted in docs must match the shell |
 | Static | `scripts/check.mjs` parses every module, checks imports and entry points |
 

@@ -58,9 +58,24 @@ impossible; the tool says instead:
 **There is no network client.** Not "telemetry disabled" — the source contains no HTTP
 client, socket, DNS lookup or updater, and a test fails the build if one appears.
 
+**Privileged work is named, not commanded.** The interface cannot ask for a command; it can
+ask for one of three named tasks (`windows.componentHealth`, `drivers.export`,
+`battery.report`). A separate elevated helper runs it, writes a JSON result, and returns.
+Declining the Windows prompt is recorded as *cancelled — continues at standard privilege*,
+and a helper that exits zero without a result file is treated as a failure.
+
+## What the four newest surfaces do
+
+| Surface | What it does | What it refuses to claim |
+| --- | --- | --- |
+| First-run tour | Explains the product, its limits, which readings need administrator rights and what is stored; four steps, skip on every one, resumes after an interruption | That reading the tour is consent — a skip is recorded as a skip |
+| Activity log | Level and text filters over a rotating, redacted log; export and delete | That redaction is anonymity — the machine is still describable by its configuration |
+| Driver export | Copies installed driver packages into a new folder per export, after a space and destination check | That it is a backup — there is no restore path and none is described |
+| Reports & Privacy | States what a report will contain before you pick a format; states what is stored and where | A coverage number it did not measure, or a file whose contents the page did not preview |
+
 ## Screenshot
 
-The interface is a dark-first, dense diagnostic layout: a left rail of 15 pages, a status
+The interface is a dark-first, dense diagnostic layout: a left rail of 18 pages, a status
 strip, and per-page tables of values with glyph + word + colour status markers. When run
 outside the packaged application it says **"Design preview — no machine was inspected"**
 and disables the scan button, rather than showing invented data.
@@ -69,7 +84,7 @@ and disables the scan button, rather than showing invented data.
 
 ```bash
 npm ci
-npm test            # 526 tests
+npm test            # 662 tests
 npm run check       # static gate
 npm run start       # requires Electron + a desktop session
 ```
@@ -91,6 +106,7 @@ Requires Node ≥ 20.11.0 for development. End users need nothing but the instal
 | [Health score](docs/HEALTH_SCORE.md) | How the number is built, and when it is withheld |
 | [Security](docs/SECURITY.md) | What it can do to a machine, and what it refuses to do |
 | [Known limitations](docs/KNOWN_LIMITATIONS.md) | What it cannot see, and why |
+| [Warnings](docs/WARNINGS.md) | Every remaining static-check warning, with its reason |
 | [Compatibility](docs/COMPATIBILITY.md) | Supported platforms vs. verified platforms |
 | [Design system](docs/DESIGN_SYSTEM.md) | Colour, spacing, status presentation, accessibility |
 | [Project status](docs/PROJECT_STATUS.md) | Finished, wired-but-unproven, not started |
@@ -116,7 +132,7 @@ npm run audit:requirements -- --check   # verify claims without rewriting
 | --- | --- |
 | Parsers and scoring | Real fixtures, including malformed and vendor-weird output |
 | Providers | Every one executed against a no-op runner; field shape and explanation validated |
-| Renderer | All 15 pages booted under jsdom; no `undefined`, `NaN` or `[object Object]` |
+| Renderer | All 18 pages booted under jsdom; no `undefined`, `NaN` or `[object Object]` |
 | Security | 16 destructive command lines refused, 11 read-only ones permitted |
 | Documentation | Every path a document names must exist; quoted CSP must match the shell |
 

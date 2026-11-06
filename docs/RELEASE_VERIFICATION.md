@@ -36,7 +36,7 @@ an SSD and a discrete GPU in it.
 | `VERIDEX-Setup-1.0.0-x64.exe` | 117.4 MiB | `90a5602b6f4a5c72b68ed7838ea9308cd85d0303cbd3439c03ca9da76fd511c0` |
 | `VERIDEX-1.0.0-portable-x64.exe` | 106.5 MiB | `3627a41d3e3ce6e7c73c5ac6afad19099fa61766699da23c8aafb378e9d7ff0a` |
 
-- the full test suite passes on Windows as well as Linux (526 tests at the time of writing);
+- the full test suite passes on Windows as well as Linux (662 tests at the time of writing);
 - electron-builder produced both targets without error;
 - the artifacts carry valid PE headers and plausible sizes;
 - the digests were recomputed and match, so the files are the files that were built;
@@ -44,14 +44,16 @@ an SSD and a discrete GPU in it.
 - a build manifest with these facts is published beside the artifacts;
 - **the unpacked build launched and was driven through its whole interface**: 13 steps, no
   problems — boot, a visible window, the shipped `webPreferences`, a scan through the
-  interface, the rendered result, all 15 pages, history, live monitoring, a settings round
+  interface, the rendered result, all 15 pages **of that build**, history, live monitoring, a settings round
   trip, JSON/HTML/PDF reports at real sizes (41 kB / 46 kB / 24 kB), cancellation, clean exit;
 - **the portable executable launched** from its extraction directory and reported a working
   interface: 10 checks, no problems, 15 seconds end to end;
 - **the installer installed**: silently, per-user, into `%LOCALAPPDATA%\Programs\VERIDEX`,
   with an uninstaller and both shortcuts; **the installed application then launched and
   worked** — title, preload bridge with 18 invoke channels, a real `app:info` call, and all
-  15 pages rendered — and **the uninstaller removed it**; 16 checks, no problems.
+  15 pages rendered (the interface now has 18; the three added since are covered by the jsdom
+  suite and need a GUI re-run before release) — and **the uninstaller removed it**; 16 checks,
+  no problems.
 
 **Not established — and these are the reasons no release is published:**
 
@@ -87,7 +89,7 @@ machine, and nothing in this document becomes **L4** evidence until that happens
 ## 1. Build — performed by CI on windows-latest
 
 - [x] `npm ci` completes from a clean checkout
-- [x] `npm test` passes with zero failures (526 tests, both platforms)
+- [x] `npm test` passes with zero failures (662 tests, both platforms)
 - [x] `npm run check` reports 0 errors
 - [x] `npm run audit:requirements -- --check` reports no inconsistency
 - [x] `npm run build:win` produces an NSIS installer and a portable executable
@@ -110,7 +112,8 @@ list: every unchecked box needs a person in front of a physical machine.
 - [x] **VM** The portable build launches from its temporary extraction directory
 - [x] **VM** The window title is `VERIDEX — Advanced All-in-One Windows PC & Laptop Diagnostics`
 - [x] **VM** The preload bridge loads: 18 invoke channels, event subscription present
-- [x] **VM** All 15 pages render from inside the asar
+- [x] **VM** All 15 pages render from inside the asar (recorded before Activity log, export
+      card and first-run tour existed; re-run required)
 - [ ] No blank white frame, no flash of unstyled content — **a flash is not observable from
       inside the process; it needs an eye on the screen**
 - [ ] The window opens at a size that looks right on a real display, and does not open over
