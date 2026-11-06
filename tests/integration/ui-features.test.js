@@ -407,3 +407,100 @@ test('the dashboard shows device state rather than a decorative shell', { skip }
     restore();
   }
 });
+
+// ── The scan projection (found while wiring the new pages) ──────────────────
+
+/**
+ * The interface had no way to ask the main process for the results of a run: `scan:finished`
+ * carries five numbers, and every diagnostic page read `state.scan.modules`, which nothing
+ * assigned. A completed sweep therefore left the whole application saying "Not collected yet".
+ */
+const scanProjection = {
+  startedAt: '2026-03-04T09:00:00.000Z',
+  finishedAt: '2026-03-04T09:00:42.000Z',
+  durationMs: 42_000,
+  cancelled: false,
+  taskCount: 20,
+  providersAttempted: 33,
+  assessment: {
+    score: 84,
+    rating: 'Good',
+    status: 'WARNING',
+    gated: false,
+    ratedComponents: 9,
+    totalComponents: 11,
+    coveragePercent: 71.4,
+    disclaimer: 'Scored only from the evidence collected.'
+  },
+  coverage: { assessed: 120, passed: 104, warned: 12, failed: 4, untested: 8, blocked: 2, unsupported: 14, coveragePercent: 71.4, note: 'Coverage counts automated fields that produced an assessment.' },
+  issues: { warnings: ['battery.info: elevation required'], errors: [], conflicts: [] },
+  modules: {
+    cpu: {
+      title: 'Processor',
+      status: 'PASS',
+      note: null,
+      fields: {
+        name: { value: 'Intel Core i7-1165G7', status: 'PASS', source: 'cim-win32.cpu', unit: null },
+        cores: { value: 4, status: 'PASS', source: 'cim-win32.cpu', unit: null }
+      }
+    },
+    windowsHealth: {
+      title: 'Component store',
+      status: 'WARNING',
+      note: '1 field(s) warrant attention.',
+      fields: {
+        storeHealth: { value: 'REPAIRABLE', status: 'WARNING', source: 'dism.checkhealth', unit: null, notes: ['Repair is possible but nothing was run.'] }
+      }
+    }
+  }
+};
+
+test('the scan:last projection reaches the interface, not just the event stream', { skip }, async () => {
+  const answers = baseAnswers();
+  answers['scan:last'] = { ok: true, data: { scan: scanProjection } };
+
+  const { document, restore } = await bootWithBridge(answers);
+  try {
+    await waitFor(() => /84/.test(document.querySelector('.vx-content').textContent), { label: 'the adopted score' });
+    const text = document.querySelector('.vx-content').textContent;
+    assert.match(text, /84/, 'the score from the last scan must be shown');
+    assert.match(text, /Good/, 'with its rating');
+    assert.match(text, /71\.4%/, 'and the coverage the score was limited by');
+    assert.match(text, /elevation required/, 'the warnings must be listed, not swallowed');
+    assert.ok(document.querySelector('.vx-dial'), 'the score is rendered in the health dial');
+  } finally {
+    restore();
+  }
+});
+
+test('a collected module renders its fields and its aggregate status', { skip }, async () => {
+  const answers = baseAnswers();
+  answers['scan:last'] = { ok: true, data: { scan: scanProjection } };
+
+  const { document, restore } = await bootWithBridge(answers);
+  try {
+    document.querySelector('.vx-nav__item[data-page="windows"]').click();
+    await waitFor(() => /Component-store health/.test(document.querySelector('.vx-content').textContent), { label: 'the Windows page' });
+    const text = document.querySelector('.vx-content').textContent;
+    assert.match(text, /Repairable|REPAIRABLE/, 'the component-store verdict must be shown, in DISM\'s own words');
+    assert.match(text, /dism\.checkhealth/, 'the field must name the provider that produced it');
+
+    // The card for a collected module must not say "Not collected yet". Sibling modules that
+    // this run did not touch are allowed to say exactly that — inventing their fields would be
+    // the lie, not the admission.
+    const healthCard = [...document.querySelectorAll('.vx-card')].find((card) => /Component-store health/.test(card.textContent));
+    assert.ok(healthCard, 'the component-store card must exist');
+    assert.ok(!/Not collected yet/.test(healthCard.textContent), 'a collected module must not claim nothing was collected');
+  } finally {
+    restore();
+  }
+});
+
+test('the contract declares scan:last, so the preload exposes it', async () => {
+  const { CHANNELS, bridgeSurface } = await import('../../src/app/ipc-contract.js');
+  assert.ok(CHANNELS['scan:last'], 'scan:last must be a declared channel');
+  assert.deepEqual(CHANNELS['scan:last'].args, [], 'it takes no arguments');
+  const surface = bridgeSurface();
+  assert.ok(surface.invoke.includes('scan:last'), 'the bridge surface must include scan:last');
+  assert.ok(surface.on.length > 0 && !surface.on.includes('scan:last'), 'it is a request, not an event');
+});

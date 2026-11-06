@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 523 · pass 523 · fail 0
+tests 526 · pass 526 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -79,7 +79,7 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/unit/ipc-arity.test.js` | 7 |
 | `tests/unit/health-cap.test.js` | 9 |
 | `tests/unit/windows-extended.test.js` | 22 |
-| `tests/integration/ui-features.test.js` | 10 |
+| `tests/integration/ui-features.test.js` | 16 |
 | `tests/integration/install-smoke-harness.test.js` | 9 |
 | `tests/unit/smoke-regressions.test.js` | 9 |
 | `tests/integration/provider-invocation.test.js` | 13 | CI workflows reference scripts that exist; tests gate publishing |
@@ -141,7 +141,7 @@ Stated plainly, because this is the section that matters:
 
 ## 5. Checks that found real defects
 
-Four checks were added specifically because their absence had hidden bugs:
+Six checks were added specifically because their absence had hidden bugs:
 
 1. **`providers.test.js`** — executes every registered provider. It found five providers
    returning an empty object instead of an explained status, and two `ReferenceError`s
@@ -160,7 +160,14 @@ Four checks were added specifically because their absence had hidden bugs:
    symptom was a list that stayed empty. The cause was a spread order in `add()`:
    `{ id: entry.id ?? makeId(), ...entry }` lets a caller's `id: undefined` overwrite
    the generated id.
-5. **`docs.test.js`** — verifies that paths named in documentation exist. It found 47
+5. **`ui-features.test.js`** (added during the interface audit) — drives the real controller
+   against a DOM. Writing it found that the renderer had **no channel to ask for the results of
+   a run**: `scan:finished` carried five summary numbers, `scan:state` carried three, and every
+   diagnostic page read `state.scan.modules`, which nothing ever assigned. A completed sweep
+   therefore left the whole application saying "Not collected yet". `scan:last` now returns the
+   projection the pages render, and the test asserts the score, the coverage, the warnings and a
+   module's fields all arrive.
+6. **`docs.test.js`** — verifies that paths named in documentation exist. It found 47
    entries in `requirements.json` citing files nobody had written, while the requirement
    auditor reported a clean bill of health. The auditor now validates implementation,
    documentation and test references for every status, not only for TS claims.

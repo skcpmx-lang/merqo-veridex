@@ -17,7 +17,7 @@
 import { createClient, PREVIEW_NOTE } from './bridge.js';
 import { themeTokens, statusPresentation } from './theme.js';
 import { SHORTCUTS, shortcutOf } from './shortcuts.js';
-import { el, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog } from './ui.js';
+import { el, statusBadge, formatValue, formatDuration, formatTimestamp, fieldRow, emptyState, coverageStrip, progressBar, callout, button, tabStrip, sortBySeverity, toast, dialog, scoreDial } from './ui.js';
 
 const client = createClient();
 
@@ -47,7 +47,21 @@ const state = {
   page: 'dashboard',
   info: null,
   settings: null,
-  scan: { running: false, done: 0, total: 0, taskId: null, finished: null, error: null },
+  // `finished` is the run summary; `assessment`, `coverage`, `issues` and `modules` are the
+  // projection from `scan:last`. They are declared here so a page reading them before the
+  // first scan gets null rather than undefined.
+  scan: {
+    running: false,
+    done: 0,
+    total: 0,
+    taskId: null,
+    finished: null,
+    error: null,
+    assessment: null,
+    coverage: null,
+    issues: null,
+    modules: null
+  },
   suites: null,
   manual: null,
   manualLoading: false,
@@ -199,6 +213,37 @@ function navigate(pageId) {
   render();
 }
 
+/**
+ * Adopt a completed scan into the interface state.
+ *
+ * Everything the pages read about a run is set here and nowhere else, so a page can never
+ * render a score from one scan beside fields from another. Called after a run finishes and
+ * again at boot, because a scan started before the window opened is still the last run.
+ *
+ * @param {any} payload the `scan:last` projection, or null when nothing has been collected
+ */
+function adoptScan(payload) {
+  if (!payload) return;
+  state.scan.finished = {
+    startedAt: payload.startedAt,
+    finishedAt: payload.finishedAt,
+    durationMs: payload.durationMs,
+    cancelled: Boolean(payload.cancelled),
+    taskCount: payload.taskCount ?? null,
+    providersAttempted: payload.providersAttempted ?? null
+  };
+  state.scan.assessment = payload.assessment ?? null;
+  state.scan.coverage = payload.coverage ?? null;
+  state.scan.issues = payload.issues ?? null;
+  state.scan.modules = payload.modules ?? null;
+}
+
+/** Fetch the last completed scan, if there is one, and adopt it. */
+async function loadLastScan() {
+  const result = await client.invoke('scan:last');
+  if (result.ok && result.data?.scan) adoptScan(result.data.scan);
+}
+
 /** Re-render the current page. */
 function render() {
   if (!contentHost) return;
@@ -284,8 +329,25 @@ pages.dashboard = () => {
   if (!assessment || assessment.score === null) {
     healthCard.append(
       el('div', {
-        class: 'vx-score vx-score--unrated',
-        children: [el('span', { class: 'vx-score__value', text: assessment?.gated ? 'Score withheld' : 'Unrated' })]
+        class: 'vx-hero',
+        children: [
+          scoreDial(null, { label: 'Device health' }),
+          el('div', {
+            children: [
+              el('div', {
+                class: 'vx-hero__headline',
+                children: [
+                  el('span', { class: 'vx-hero__rating', text: assessment?.gated ? 'Score withheld' : 'Unrated' }),
+                  statusBadge('UNRATED', { size: 'sm' })
+                ]
+              }),
+              el('p', {
+                class: 'vx-hero__meta',
+                text: assessment?.disclaimer ?? 'No assessment exists until a scan has collected evidence.'
+              })
+            ]
+          })
+        ].filter(Boolean)
       })
     );
     if (assessment?.gated) {
@@ -300,25 +362,29 @@ pages.dashboard = () => {
       })
     );
   } else {
-    healthCard.append(
+    // One hero, three readings of the same fact: the ring for the glance, the rating word for
+    // the judgement, and the coverage sentence for the caveat. The meter that used to sit
+    // under this repeated the ring and is gone rather than doubled up.
+    const heroCopy = el('div', { class: 'vx-hero__copy', style: { display: 'flex', 'flex-direction': 'column', gap: 'var(--vx-space-sm)' } });
+    heroCopy.append(
       el('div', {
-        class: 'vx-score',
+        class: 'vx-hero__headline',
         children: [
-          el('span', { class: 'vx-score__value', text: String(assessment.score) }),
-          el('span', { class: 'vx-score__max', text: '/ 100' }),
-          el('span', { class: 'vx-score__rating', text: assessment.rating })
-        ]
+          el('span', { class: 'vx-hero__rating', text: assessment.rating }),
+          statusBadge(assessment.status, { size: 'sm' })
+        ].filter(Boolean)
       })
     );
-    const meter = el('div', { class: 'vx-meter', attrs: { role: 'img', 'aria-label': `Health score ${assessment.score} of 100` } });
-    const fill = el('div', { class: 'vx-meter__fill' });
-    fill.style.width = `${assessment.score}%`;
-    meter.append(fill);
-    healthCard.append(meter);
-    healthCard.append(
+    heroCopy.append(
       el('p', {
-        class: 'vx-dim',
+        class: 'vx-hero__meta',
         text: `${assessment.ratedComponents} of ${assessment.totalComponents} components could be assessed (${assessment.coveragePercent}% coverage). Components without evidence are unrated, never counted as healthy.`
+      })
+    );
+    healthCard.append(
+      el('div', {
+        class: 'vx-hero',
+        children: [scoreDial(assessment.score, { status: assessment.status, rating: 'of 100' }), heroCopy]
       })
     );
     if (assessment.gatingNote) {
@@ -553,7 +619,10 @@ pages.manual = () => {
     suiteCard.append(el('p', { class: 'vx-dim', text: suite.summary }));
 
     const list = el('div', { class: 'vx-rows' });
-    for (const test of suite.tests) {
+    // A suite whose payload arrives without its tests must render an empty list rather than
+    // throw: an exception here blanks the whole page, which looks like the application is
+    // broken rather than like one malformed answer from the main process.
+    for (const test of suite.tests ?? []) {
       const result = state.manual?.results?.find((entry) => entry.id === test.id);
       const row = el('div', { class: 'vx-row' });
       row.append(el('div', { class: 'vx-row__label', text: test.title }));
@@ -1452,6 +1521,7 @@ async function refreshScanState() {
   }
   state.scan.running = Boolean(result.data.running);
   if (!state.scan.running && !state.scan.finished) {
+    await loadLastScan();
     // The scan finished while we were waiting; pull the summary.
     state.scan.finished = state.scan.finished ?? { durationMs: 0, cancelled: false };
   }
@@ -1543,10 +1613,11 @@ function subscribe() {
         : `Finished in ${formatDuration(payload?.durationMs ?? 0)}. Open Reports to export the evidence.`
     });
     void (async () => {
-      const full = await client.invoke('scan:state');
+      // Fill the pages with what the run actually collected. Without this the sweep finished
+      // and left every diagnostic page saying "Not collected yet".
+      await loadLastScan();
       await loadManual();
       render();
-      void full;
     })();
   });
 
@@ -1588,6 +1659,7 @@ async function boot() {
     if (infoResult.ok) state.info = infoResult.data;
     await loadSettings();
     await loadGuard();
+    await loadLastScan();
   }
 
   applyTheme(state.settings?.ui);

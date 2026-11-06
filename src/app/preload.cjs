@@ -28,6 +28,7 @@ const INVOKE = [
   'scan:start',
   'scan:cancel',
   'scan:state',
+  'scan:last',
   'report:build',
   'report:save',
   'manual:suites',

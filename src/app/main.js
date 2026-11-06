@@ -36,7 +36,7 @@ import {
 } from './ipc-contract.js';
 import { wireAll, uiPayload } from './settings-wiring.js';
 import { runScan, reportInputFromScan } from './scan.js';
-import { buildReport } from '../reporting/model.js';
+import { buildReport, computeCoverage, aggregateStatus } from '../reporting/model.js';
 import { renderPdf } from '../reporting/pdf.js';
 import { renderHtml } from '../reporting/html.js';
 import { renderCsv } from '../reporting/csv.js';
@@ -350,6 +350,54 @@ function registerHandlers() {
   handle('manual:record', ({ testId, verdict, detail }) => session.record(testId, verdict, detail));
 
   handle('manual:coverage', () => ({ coverage: session.coverage(), progress: session.progress(), issues: session.toIssues() }));
+
+  // What the interface renders after a run.
+  //
+  // The renderer previously had no channel to ask for the results: `scan:finished` carried
+  // five summary numbers, `scan:state` carried three, and the module pages read
+  // `state.scan.modules`, which nothing ever assigned. The result was an application that
+  // ran a full sweep and then showed "Not collected yet" on every diagnostic page. This
+  // channel exists so the pages have real data, and it is deliberately a projection: it
+  // carries fields, assessment, coverage and issues, and none of the internal attempt
+  // records or the manual session.
+  handle('scan:last', () => {
+    if (!lastScan) return { scan: null };
+
+    const modules = Object.fromEntries(
+      Object.entries(lastScan.modules ?? {}).map(([id, fields]) => {
+        const aggregated = aggregateStatus(fields);
+        return [
+          id,
+          {
+            title: lastScan.sectionTitles?.[id] ?? id,
+            status: aggregated.status,
+            note: aggregated.note,
+            fields: fields ?? {}
+          }
+        ];
+      })
+    );
+
+    // Coverage is computed with the same function the report uses. A second implementation
+    // here would eventually disagree with the PDF, and the disagreement would be invisible.
+    const sections = Object.values(lastScan.modules ?? {}).map((fields) => ({ rows: Object.values(fields ?? {}) }));
+
+    return {
+      scan: {
+        startedAt: lastScan.startedAt,
+        finishedAt: lastScan.finishedAt,
+        durationMs: lastScan.durationMs,
+        cancelled: lastScan.cancelled,
+        quick: lastScan.quick,
+        assessment: lastScan.assessment,
+        coverage: computeCoverage(sections, []),
+        issues: lastScan.issues,
+        taskCount: lastScan.taskCount,
+        providersAttempted: lastScan.providersAttempted,
+        modules
+      }
+    };
+  });
 
   handle('history:list', async () => {
     const store = new HistoryStore({ file: historyFile(), ...wireAll(settings).history.storeOptions, logger });

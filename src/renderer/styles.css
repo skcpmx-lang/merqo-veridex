@@ -146,9 +146,9 @@ body { overflow: hidden; }
 
 .vx-nav__item:hover { background: var(--vx-bg-card); color: var(--vx-ink); }
 .vx-nav__item.is-active {
-  background: color-mix(in srgb, var(--vx-accent) 16%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--vx-accent) 20%, transparent), color-mix(in srgb, var(--vx-accent) 4%, transparent));
   color: var(--vx-ink);
-  box-shadow: inset 2px 0 0 var(--vx-accent);
+  box-shadow: inset 2px 0 0 var(--vx-accent), 0 0 24px -12px var(--vx-accent);
 }
 .vx-nav__glyph { width: 16px; text-align: center; color: var(--vx-accent); flex: 0 0 auto; }
 .vx-nav__badge {
@@ -179,8 +179,12 @@ body { overflow: hidden; }
   gap: var(--vx-space-md);
   padding: var(--vx-space-md) var(--vx-space-xl);
   border-bottom: 1px solid var(--vx-line);
-  background: var(--vx-bg);
+  /* Translucent so the content scrolling underneath is faintly visible: it costs nothing and
+     it makes the bar feel like glass over a workspace rather than a stripe cut out of it. */
+  background: color-mix(in srgb, var(--vx-bg) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
   flex: 0 0 auto;
+  z-index: 5;
 }
 
 .vx-topbar__title { font-size: var(--vx-font-lg); font-weight: 600; margin: 0; }
@@ -202,24 +206,58 @@ body { overflow: hidden; }
 .vx-grid--2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 
 .vx-card {
-  background: var(--vx-bg-card);
+  /* Three stacked layers rather than one fill: a faint vertical gradient, a hairline of light
+     along the top edge, and a shadow below. That combination is what separates a panel from a
+     rectangle — a flat fill at one value reads as a table cell no matter how it is bordered. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--vx-ink) 3.5%, transparent) 0%, transparent 42%),
+    var(--vx-bg-card);
   border: 1px solid var(--vx-line);
-  border-radius: var(--vx-radius-md);
+  border-radius: var(--vx-radius-lg);
   padding: var(--vx-space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--vx-space-sm);
   min-width: 0;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--vx-ink) 6%, transparent),
+    0 1px 2px var(--vx-shadow);
+  transition: border-color var(--vx-motion), box-shadow var(--vx-motion), transform var(--vx-motion);
+}
+
+/* Only cards that respond to the pointer lift; a static card that moves under the cursor is a
+   lie about what is clickable. */
+.vx-card--interactive:hover {
+  border-color: color-mix(in srgb, var(--vx-accent) 45%, var(--vx-line));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--vx-ink) 8%, transparent),
+    0 10px 28px var(--vx-shadow);
+  transform: translateY(-1px);
 }
 
 .vx-card--flush { padding: 0; overflow: hidden; }
 .vx-card__title {
-  font-size: var(--vx-font-sm);
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--vx-ink-muted);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--vx-space-sm);
 }
+/* A short accent rule before each card title: the only ornament in the interface, repeated
+   once per card so it reads as a system rather than decoration. */
+.vx-card__title::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--vx-accent), transparent);
+  flex: 0 0 auto;
+}
+.vx-card__title:first-child { margin-top: calc(var(--vx-space-xs) * -1); }
 .vx-card__head { display: flex; align-items: center; gap: var(--vx-space-sm); }
 .vx-card__head .vx-card__title { flex: 1; }
 
@@ -345,10 +383,12 @@ body { overflow: hidden; }
 }
 .vx-button:hover:not(:disabled) { border-color: var(--vx-accent); color: var(--vx-accent-soft); }
 .vx-button--primary {
-  background: var(--vx-accent);
-  border-color: var(--vx-accent);
+  background: linear-gradient(180deg, var(--vx-accent-soft), var(--vx-accent) 62%, var(--vx-accent-strong));
+  border-color: var(--vx-accent-strong);
   color: var(--vx-accent-ink);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 35%, transparent) inset, 0 4px 14px color-mix(in srgb, var(--vx-accent) 22%, transparent);
 }
+.vx-button:active:not(:disabled) { transform: translateY(1px); }
 .vx-button--primary:hover:not(:disabled) { background: var(--vx-accent-soft); color: var(--vx-accent-ink); }
 .vx-button--danger { border-color: color-mix(in srgb, var(--vx-bad) 50%, transparent); color: var(--vx-bad); }
 .vx-button--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--vx-bad) 14%, transparent); color: var(--vx-bad); border-color: var(--vx-bad); }
@@ -471,6 +511,204 @@ body { overflow: hidden; }
 .vx-dim { color: var(--vx-ink-muted); }
 .vx-strong { font-weight: 650; }
 .vx-scroll { overflow: auto; max-height: 420px; }
+
+/* ── Health dial and page hero ───────────────────────────────────────────── */
+/*
+   The dashboard's one number deserves the one piece of visual emphasis in the interface.
+   A conic gradient ring reads at a glance and — unlike a needle or a gradient bar — shows both
+   the value and its remaining headroom without a second element to compare against.
+   The ring is decorative: the number, the rating word and the meter beneath it all carry the
+   same information in text, so nothing depends on the ring's colour.
+*/
+
+.vx-dial {
+  --dial-value: 0;
+  --dial-tone: var(--vx-accent);
+  position: relative;
+  width: 132px;
+  height: 132px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+/* The ring is its own element because a CSS mask on an ancestor masks the text inside it too;
+   the readout has to be a sibling, not a child, of the masked surface. */
+.vx-dial__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--dial-tone) calc(var(--dial-value) * 1%), color-mix(in srgb, var(--vx-ink) 9%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+}
+.vx-dial::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--dial-tone) 26%, transparent), transparent 68%);
+  opacity: 0.5;
+  z-index: -1;
+}
+.vx-dial__readout { text-align: center; display: grid; gap: 2px; }
+.vx-dial__value {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--vx-ink);
+}
+.vx-dial__unit { font-size: 10px; color: var(--vx-ink-muted); letter-spacing: 0.14em; text-transform: uppercase; }
+.vx-dial--unrated .vx-dial__value { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+
+.vx-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--vx-space-lg);
+  align-items: center;
+}
+@media (max-width: 720px) { .vx-hero { grid-template-columns: 1fr; justify-items: start; } }
+
+.vx-hero__headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--vx-space-sm);
+  flex-wrap: wrap;
+}
+.vx-hero__rating {
+  font-size: var(--vx-font-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.vx-hero__meta { font-size: var(--vx-font-sm); color: var(--vx-ink-muted); margin: 0; line-height: 1.55; }
+
+/* ── Section heading ─────────────────────────────────────────────────────── */
+
+.vx-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--vx-space-md);
+  padding-bottom: var(--vx-space-xs);
+  border-bottom: 1px solid var(--vx-line-soft);
+}
+.vx-section-head__eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vx-accent);
+  margin: 0 0 2px;
+}
+.vx-section-head__title { margin: 0; font-size: var(--vx-font-lg); font-weight: 650; letter-spacing: -0.01em; }
+
+/* ── Page transition ─────────────────────────────────────────────────────── */
+/* One short fade and a 4 px rise. Long enough to signal a change of place, short enough that a
+   user flipping through pages with Ctrl+1..9 is never waiting for the interface. */
+
+.vx-content > * { animation: vx-page-in 220ms ease-out backwards; }
+.vx-content > *:nth-child(2) { animation-delay: 24ms; }
+.vx-content > *:nth-child(3) { animation-delay: 48ms; }
+.vx-content > *:nth-child(n+4) { animation-delay: 64ms; }
+@keyframes vx-page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────── */
+/* A default scrollbar in a dark interface is a bright strip that reads as a bug. */
+
+* { scrollbar-width: thin; scrollbar-color: var(--vx-line) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--vx-ink) 14%, transparent);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--vx-ink) 26%, transparent); background-clip: content-box; }
+
+/* ── Form controls ───────────────────────────────────────────────────────── */
+/*
+   The settings page is the one screen built from native controls, and unstyled natives are the
+   fastest way to make a dark interface look unfinished: a white checkbox and a system-blue
+   select against #122032 look like a rendering failure. Every control also keeps a visible
+   label association and a focus ring, because these are switches that change real behaviour.
+*/
+
+.vx-input,
+select.vx-row__value,
+.vx-row__value select,
+.vx-row__value input[type="number"],
+.vx-row__value input[type="text"] {
+  font: inherit;
+  font-size: var(--vx-font-sm);
+  color: var(--vx-ink);
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius-sm);
+  padding: 6px 10px;
+  min-width: 120px;
+  transition: border-color var(--vx-motion), box-shadow var(--vx-motion);
+}
+select.vx-row__value:hover,
+.vx-row__value select:hover,
+.vx-row__value input:hover { border-color: color-mix(in srgb, var(--vx-accent) 45%, var(--vx-line)); }
+.vx-row__value select:focus-visible,
+.vx-row__value input:focus-visible {
+  outline: none;
+  border-color: var(--vx-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vx-accent) 22%, transparent);
+}
+.vx-row__value select {
+  appearance: none;
+  padding-right: 28px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--vx-ink-soft) 50%),
+    linear-gradient(135deg, var(--vx-ink-soft) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* A checkbox drawn as a switch. The native input stays in the accessibility tree; only its
+   appearance is replaced, so it is still operable by keyboard and still announced as a switch. */
+.vx-row__value input[type="checkbox"] {
+  appearance: none;
+  width: 38px;
+  height: 21px;
+  border-radius: 999px;
+  background: var(--vx-bg-input);
+  border: 1px solid var(--vx-line);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--vx-motion), border-color var(--vx-motion);
+  flex: 0 0 auto;
+}
+.vx-row__value input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--vx-ink-muted);
+  transition: transform var(--vx-motion), background var(--vx-motion);
+}
+.vx-row__value input[type="checkbox"]:checked {
+  background: color-mix(in srgb, var(--vx-accent) 30%, var(--vx-bg-input));
+  border-color: var(--vx-accent);
+}
+.vx-row__value input[type="checkbox"]:checked::after {
+  transform: translateX(17px);
+  background: var(--vx-accent);
+}
+.vx-row__value input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--vx-accent);
+  outline-offset: 2px;
+}
 
 /* ── Toasts ──────────────────────────────────────────────────────────────── */
 /*

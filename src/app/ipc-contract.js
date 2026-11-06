@@ -32,6 +32,7 @@ export const CHANNELS = Object.freeze({
   'scan:start': { args: ['options'], description: 'Start a diagnostic sweep. Progress arrives on the event channel.' },
   'scan:cancel': { args: [], description: 'Abort the running sweep.' },
   'scan:state': { args: [], description: 'Current scan state, for a window that opens mid-scan.' },
+  'scan:last': { args: [], description: 'The last completed scan as the interface renders it: per-module status and fields, the assessment, coverage and issues.' },
   'report:build': { args: ['format'], description: 'Build a report document and render one format to bytes.' },
   'report:save': { args: ['format'], description: 'Render and save via a native save dialog. Returns the chosen path.' },
   'manual:suites': { args: [], description: 'The manual test registry, with instructions and provenance labels.' },

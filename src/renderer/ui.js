@@ -253,6 +253,54 @@ export function sortBySeverity(rows) {
   });
 }
 
+/**
+ * The health dial: a ring gauge with the number inside it.
+ *
+ * The ring repeats information that is also printed as a number and a word, so it is marked
+ * decorative for assistive technology and carries the value in a text alternative. A gauge
+ * whose only encoding is colour and arc length is unreadable for some users and ambiguous for
+ * everyone once the screenshot is greyscale.
+ *
+ * @param {number|null} score 0–100, or null for an unrated machine
+ * @param {{status?: string, rating?: string, label?: string}} [options]
+ * @returns {HTMLElement}
+ */
+export function scoreDial(score, options = {}) {
+  const dial = el('div', { class: 'vx-dial' });
+  const label = options.label ?? 'Health score';
+
+  if (score === null || score === undefined) {
+    dial.classList.add('vx-dial--unrated');
+    dial.append(
+      el('div', {
+        class: 'vx-dial__ring',
+        style: { '--dial-tone': 'var(--vx-muted)' },
+        attrs: { 'aria-hidden': 'true' }
+      }),
+      el('div', { class: 'vx-dial__readout', children: [el('span', { class: 'vx-dial__value', text: 'Unrated' })] })
+    );
+    dial.setAttribute('role', 'img');
+    dial.setAttribute('aria-label', `${label}: not rated. This machine has not been measured.`);
+    return dial;
+  }
+
+  const tone = options.status ? statusPresentation(options.status).tone : 'info';
+  const toneToken = ['ok', 'warn', 'bad', 'info'].includes(tone) ? `var(--vx-${tone})` : 'var(--vx-accent)';
+  dial.append(
+    el('div', { class: 'vx-dial__ring', style: { '--dial-tone': toneToken, '--dial-value': String(score) }, attrs: { 'aria-hidden': 'true' } }),
+    el('div', {
+      class: 'vx-dial__readout',
+      children: [
+        el('span', { class: 'vx-dial__value', text: String(score) }),
+        el('span', { class: 'vx-dial__unit', text: options.rating ?? 'of 100' })
+      ]
+    })
+  );
+  dial.setAttribute('role', 'img');
+  dial.setAttribute('aria-label', `${label} ${score} of 100${options.rating ? `, ${options.rating}` : ''}`);
+  return dial;
+}
+
 // ── Transient feedback (R-20-02) ─────────────────────────────────────────────
 //
 // A diagnostic run takes minutes and can end in three very different ways. The topbar's
