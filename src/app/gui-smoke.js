@@ -351,6 +351,10 @@ async function main() {
     await clickPage('performance');
     await waitFor(`document.querySelector('#vx-memory-run') !== null`, { label: 'the memory stability card' });
 
+    // Anything sent to the renderer is a template literal, so a backtick or a lone backslash-n
+    // in here becomes JavaScript in the renderer rather than data. A newline was written that way
+    // once and Electron reported it as "Script failed to execute", which says nothing about the
+    // real cause: String.fromCharCode(10) keeps the newline out of the source text entirely.
     const facts = await evaluate(`(() => {
       const text = document.querySelector('.vx-content')?.innerText ?? '';
       const run = document.querySelector('#vx-memory-run');
@@ -363,7 +367,7 @@ async function main() {
         gpuCard: /GPU/.test(text) && /fill[- ]rate/i.test(text),
         responsiveness: /responsiveness/i.test(text),
         stressCard: /Stress testing/i.test(text),
-        crumb: document.querySelector('.vx-breadcrumb')?.innerText?.replace(/\n/g, ' ') ?? '',
+        crumb: (document.querySelector('.vx-breadcrumb')?.innerText ?? '').split(String.fromCharCode(10)).join(' '),
         recentButton: Boolean(document.querySelector('#vx-recent-pages'))
       };
     })()`);
