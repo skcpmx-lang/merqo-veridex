@@ -16,7 +16,7 @@ listed here as **NOT VERIFIED**.
 | | |
 | --- | --- |
 | Release candidate | `1.0.0`, built by CI — installed, launched and removed on a Windows runner |
-| Build produced | **Yes, twice.** Run 42160034210 built, installed, launched and removed the build whose hashes are quoted below. Run **42198220081** built the same two targets from the current tree (`1b7ab4e`) and passed artifact verification, package validation, the unpacked GUI smoke test, the portable launch check and the installer's install/launch/uninstall |
+| Build produced | **Yes, twice.** Run 42160034210 built, installed, launched and removed the build whose hashes are quoted below. Run **42205312147** built the same two targets from the current head of `main` (`3e1ac35`) and passed artifact verification, package validation, the unpacked GUI smoke test, the portable launch check and the installer's install/launch/uninstall |
 | Hashes quoted below belong to | **the 42160034210 build, not the current tree.** The current tree's bytes could not be fetched into the environment that wrote this document: `gh run download` reaches `*.blob.core.windows.net`, which is outside its network egress (`EOF`), so no hash is claimed for them. A hash nobody computed is not a hash |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
@@ -32,14 +32,14 @@ an SSD and a discrete GPU in it.
 
 ## The artifacts of the current tree, and what can and cannot be said about them
 
-The packaging job of run **42198220081** (source commit `1b7ab4e`, `windows-latest`) built the
+The packaging job of run **42205312147** (source commit `3e1ac35`, `windows-latest`) built the
 installer, the portable executable, the build manifest and `dist/SHA256SUMS.txt`, and passed
 artifact verification, package validation and the unpacked GUI smoke test. GitHub's REST API reports
 these artifacts for that run, and this section was written from its answer, not from memory:
 
 | Artifact | Size (bytes) | GitHub's archive digest | What it is |
 | --- | --- | --- | --- |
-| `veridex-windows` | 235,014,547 | `sha256:19020f6286012426288cac10d5c9f6dc62792a9fa7e0043d02c06b309f81fe62` | the zip containing the NSIS installer, the portable executable, the build manifest and `SHA256SUMS.txt` |
+| `veridex-windows` | 235,014,649 | `sha256:e895e0267fa3e60b3203775d3fbd428c262b703ae7a615f07d669326afc704f0` | the zip containing the NSIS installer, the portable executable, the build manifest and `SHA256SUMS.txt` |
 | `veridex-gui-evidence` | 3,821,895 | `sha256:bd2e0c188f58296263371d74da2b607bcab928189bca201cc9702f798ec286af` | the GUI harness report and screenshots |
 | `test-results-windows-latest` | 35,702 | `sha256:32a8d1924eb68942274c8c2fb7990550c90a68b1b40338802699527e24501793` | the Windows test run |
 | `test-results-ubuntu-latest` | 34,892 | `sha256:986545f914e2f059361952bcb924c52724b3e00668fbff9907e42bd074c73529` | the Linux test run |
@@ -54,6 +54,7 @@ reachable from here. Two builds, both read back through the API, both from the s
 | --- | --- | --- |
 | commit `4e1ffc3`, package job 127835905991 | 117.5 MiB · `41b4b524f727e59b162563abc5082e08c80416e824cf56b15f47a8307720953c` | 106.6 MiB · `283650eed786b53e66c184e88f4813e796571133352380f37cb5a1c832cae4d8` |
 | commit `2b71668` (the merge to `main`), package job 127841241342 | 117.5 MiB · `870e5b8b222576c1c74772f799bbcfcd132d682e1d104b7f3919cf975280b2c6` | 106.6 MiB · `ae0980e76e9fc377d6b6bc9463d4fb4fcfd159900df3e7618ccfbf18134e78b5` |
+| **`main` at `3e1ac35`, package job 127852599550 — the current head** | 117.5 MiB · `3408c5fa500b990c74d549076c9abda34a6079869dfbc82fd10b7d7aa7578ee8` | 106.6 MiB · `8beec32cbb6119f889f48c178007090896667022cde7194abf493f92f318f16a` |
 
 Two hashes for two builds of the same source is the point, not an error: an unsigned
 electron-builder output is not reproducible, so **every build has its own SHA-256**. Read the
@@ -69,11 +70,18 @@ workflow builds again from whatever commit it is dispatched on and attaches its 
 release itself; a person downloads the installer, hashes it, and compares with the attached file.
 An owner who wants the release hashes in *this* document copies them from that run.
 
-The same API response carries the smoke results for the merged tree: `install-smoke: 18 check(s)
-passed · 0 problem(s)` and `portable-smoke: 10 check(s) passed · 0 problem(s)`, with the installed
-build rendering all 18 pages, exposing 44 invoke channels, and the startup log quoting the window
-placement decision (`window opened at 1024x720 at 0,0 under the pointer, inside "HyperVMonitor" at
-100 % (1024x720 work area)`).
+The same API response carries the smoke results: `install-smoke: 18 check(s) passed · 0
+problem(s)` and `portable-smoke: 10 check(s) passed · 0 problem(s)` for the merge commit, and 17
+of 17 for the head of `main` — the install count moves between 17 and 18 with what the runner
+allows, which is recorded rather than smoothed. The installed build rendered all 18 pages, exposed
+44 invoke channels, and its startup log quotes the placement decision:
+`window opened at 1024x720 at 0,0 under the pointer, inside "HyperVMonitor" at 100 % (1024x720
+work area)`.
+
+Read the third row as "the artefact that exists for the current head of `main`", not as "the
+release's hashes". The release workflow rebuilds from the commit it is dispatched on; if that is
+`3e1ac35`, its bytes will differ from all three rows again, and its own attached `SHA256SUMS.txt`
+is the file a downloader compares against.
 
 **Those digests are GitHub's SHA-256 of the artifact _archives_, not of the executables inside
 them.** They prove the archive that holds the build, and they would let you confirm a download is
@@ -83,7 +91,7 @@ installer and portable hashes are **not recorded here**, because the bytes could
 into the environment that wrote this file:
 
 ```
-$ gh run download 42198220081 -R skcpmx-lang/merqo-veridex -D dist-ci
+$ gh run download 42205312147 -R skcpmx-lang/merqo-veridex -D dist-ci
 error downloading test-results-windows-latest: Get "https://productionresultssa18.blob.core.windows.net/...": EOF
 ```
 
@@ -98,16 +106,16 @@ Either path works; the first needs a browser and no token.
 
 **Through the web UI**
 
-1. Open <https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42198220081>.
-2. Scroll to **Artifacts** and download `veridex-windows` (235,014,547 bytes).
-3. Confirm the downloaded zip's own SHA-256 is `19020f62…fe62` before opening it:
+1. Open <https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42205312147>.
+2. Scroll to **Artifacts** and download `veridex-windows` (235,014,649 bytes).
+3. Confirm the downloaded zip's own SHA-256 is `e895e026…04f0` before opening it:
    - Windows: `Get-FileHash .\veridex-windows.zip -Algorithm SHA256`
    - macOS/Linux: `shasum -a 256 veridex-windows.zip`
 
 **Through the CLI (needs `gh auth login` on a machine with unrestricted network access)**
 
 ```bash
-gh run download 42198220081 -R skcpmx-lang/merqo-veridex -n veridex-windows -D dist-ci
+gh run download 42205312147 -R skcpmx-lang/merqo-veridex -n veridex-windows -D dist-ci
 cd dist-ci
 sha256sum VERIDEX-Setup-1.0.0-x64.exe VERIDEX-1.0.0-portable-x64.exe   # or Get-FileHash on Windows
 cat SHA256SUMS.txt                                                    # CI's own record, compare it
@@ -152,8 +160,8 @@ can be completed without a physical machine — see §2 and §7.
 - **the portable executable launched** from its extraction directory and reported a working
   interface: 10 checks, no problems, 15 seconds end to end;
 **Established for the current tree** (same runner, CI run
-[42198220081](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42198220081), source
-commit `1b7ab4e`): the installer and portable were built; artifact verification and package
+[42205312147](https://github.com/skcpmx-lang/merqo-veridex/actions/runs/42205312147), source
+commit `3e1ac35`): the installer and portable were built; artifact verification and package
 validation passed; the unpacked build was driven through the GUI smoke test; the portable
 executable launched from its extraction directory; and the installer installed silently,
 launched the installed application and uninstalled it. The *hashes* above are still the ones
