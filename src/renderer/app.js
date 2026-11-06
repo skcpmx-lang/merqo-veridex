@@ -416,7 +416,9 @@ pages.dashboard = () => {
               }),
               el('p', {
                 class: 'vx-hero__meta',
-                text: assessment?.disclaimer ?? 'No assessment exists until a scan has collected evidence.'
+                text:
+                  assessment?.disclaimer ??
+                  'No assessment exists until a scan has collected evidence. An unrated machine is not a healthy one; it is a machine VERIDEX has not measured.'
               })
             ]
           })
@@ -428,12 +430,8 @@ pages.dashboard = () => {
       // whether the machine is fine; the reason is the whole point.
       healthCard.append(callout({ tone: 'warn', title: 'Not enough of the machine could be measured', body: assessment.gatingNote }));
     }
-    healthCard.append(
-      el('p', {
-        class: 'vx-dim',
-        text: assessment?.disclaimer ?? 'No assessment exists until a scan has collected evidence. An unrated machine is not a healthy one; it is a machine VERIDEX has not measured.'
-      })
-    );
+    // The disclaimer is already the hero's meta line above. Printing it again under the warning
+    // made the card say the same sentence twice, which reads as a rendering fault.
   } else {
     // One hero, three readings of the same fact: the ring for the glance, the rating word for
     // the judgement, and the coverage sentence for the caveat. The meter that used to sit
