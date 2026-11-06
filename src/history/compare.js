@@ -178,8 +178,11 @@ export function compareEntries(before, after) {
   if (!before || !after) throw new Error('compareEntries requires two history entries');
   const result = compareSnapshots(before.snapshot ?? {}, after.snapshot ?? {});
   return {
-    before: { id: before.id, kind: before.kind, finishedAt: before.finishedAt, score: before.summary?.overallScore ?? null },
-    after: { id: after.id, kind: after.kind, finishedAt: after.finishedAt, score: after.summary?.overallScore ?? null },
+    // `summary` and `assessment` are both real: entries written before the snapshot fix carry
+    // only `assessment`, and reading one shape meant every score in the comparison read as
+    // unrated even when the list beside it showed the number.
+    before: { id: before.id, kind: before.kind, finishedAt: before.finishedAt, score: before.summary?.overallScore ?? before.assessment?.score ?? null },
+    after: { id: after.id, kind: after.kind, finishedAt: after.finishedAt, score: after.summary?.overallScore ?? after.assessment?.score ?? null },
     ...result
   };
 }

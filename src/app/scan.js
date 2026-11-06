@@ -14,6 +14,7 @@ import { assessFromDiagnostics } from '../engine/health.js';
 import { detectPermissionState, capabilityMatrix } from '../platform/permissions.js';
 import { CommandRunner, NoopRunner } from '../platform/runner.js';
 import { HistoryStore } from '../history/store.js';
+import { buildSnapshot } from '../history/compare.js';
 import { guardFromSettings } from '../security/guard.js';
 import { Status } from '../core/status.js';
 import { InspectionSession } from '../manual/session.js';
@@ -42,6 +43,7 @@ import { registerSecurity } from '../diagnostics/security.js';
  * @property {ProviderRegistry} [registry]
  * @property {string[]|null} [tasks]        Null means every registered task.
  * @property {boolean} [quick]              Run only tasks marked `quick`.
+ * @property {string} [appVersion]           Recorded in the history entry, not guessed from the host.
  * @property {(progress:object) => void} [onProgress]
  * @property {AbortSignal} [signal]
  * @property {InspectionSession|null} [session]
@@ -166,12 +168,38 @@ export async function runScan(options = {}) {
     try {
       const store = new HistoryStore({ file: options.historyFile ?? null, ...history.storeOptions, logger });
       if (options.historyFile) await store.load();
+      // The entry has to carry what comparison and the history list read. It did not:
+      // `summary` and `snapshot` were documented on HistoryEntry and never written, so
+      // comparing two runs flattened `{}` against `{}` and reported that nothing had changed,
+      // and every score in the comparison read as unrated. A comparison feature that always
+      // says "no differences" is worse than no comparison feature.
       scan.historyEntry = await store.add?.({
+        kind: scan.quick ? 'quick-scan' : 'full-scan',
         startedAt,
         finishedAt,
+        durationMs: scan.durationMs,
+        appVersion: options.appVersion ?? null,
         assessment,
-        coverage: { fields: Object.keys(modules).length },
+        summary: {
+          overallScore: assessment.score ?? null,
+          rating: assessment.rating ?? null,
+          coveragePercent: assessment.coveragePercent ?? null,
+          modules: Object.keys(modules).length,
+          warnings: scan.issues.warnings.length,
+          errors: scan.issues.errors.length
+        },
+        // `modules` is a map of module id -> {field: FieldValue}, not a list of sections.
+        snapshot: buildSnapshot(
+          Object.fromEntries(
+            Object.entries(modules).flatMap(([moduleId, fields]) =>
+              Object.entries(fields ?? {}).map(([key, value]) => [`${moduleId}.${key}`, value?.value ?? null])
+            )
+          )
+        ),
+        coverage: { fields: Object.values(modules).reduce((total, fields) => total + Object.keys(fields ?? {}).length, 0) },
         issues: scan.issues,
+        warnings: scan.issues.warnings,
+        errors: scan.issues.errors,
         platform: process.platform
       });
     } catch (error) {

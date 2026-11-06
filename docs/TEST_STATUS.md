@@ -35,7 +35,7 @@ Generated from `docs/requirements.json` by `npm run audit:requirements`:
 Run with `npm test`. As of the last full run:
 
 ```
-tests 715 · pass 715 · fail 0
+tests 716 · pass 716 · fail 0
 ```
 
 Every test passes. The two documentation checks that previously failed (missing documents
@@ -94,11 +94,11 @@ and unreferenced documents) now pass, and the paths they guard are valid.
 | `tests/integration/renderer.test.js` | 17 | all 18 pages render under jsdom; live-mode pages with a fake bridge |
 | `tests/integration/report-consistency.test.js` | 14 | one scan, four formats, compared field by field |
 | `tests/integration/scan-path.test.js` | 12 | the twelve scan:last data-flow checks from engine to report |
-| `tests/integration/scan.test.js` | 11 | registry construction, scan orchestration |
+| `tests/integration/scan.test.js` | 12 | registry construction, scan orchestration |
 | `tests/integration/settings-wiring.test.js` | 16 | settings read/write, privacy defaults, engine-side coverage |
 | `tests/integration/ui-features.test.js` | 16 | keyboard, focus, empty states and the shell controls |
 | `tests/integration/workflow.test.js` | 12 | CI configuration, permissions and release gating |
-| **Total** | **715** | |
+| **Total** | **716** | |
 
 Run on **both Linux and Windows** (`ubuntu-latest` and `windows-latest` in
 `.github/workflows/build.yml`). The suite passes on both, which proves the logic is

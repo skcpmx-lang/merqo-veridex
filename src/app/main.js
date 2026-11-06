@@ -275,6 +275,7 @@ function registerHandlers() {
         tasks: tasks.length > 0 ? tasks : null,
         session,
         historyFile: settings.get('diagnostics.persistHistory') ? historyFile() : null,
+        appVersion: app.getVersion(),
         signal: scanController.signal,
         onProgress: (progress) => emit('scan:progress', {
           done: progress.done,

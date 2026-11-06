@@ -209,3 +209,52 @@ test('a scan on a host with no diagnostics produces an unrated assessment, never
   assert.equal(scan.assessment.score, null);
   assert.equal(scan.assessment.rating, 'Unrated');
 });
+
+test('two scans write history a comparison can actually read', async () => {
+  // The comparison feature was hollow: runScan stored `assessment` but never the documented
+  // `summary` or `snapshot`, so history:compare flattened {} against {} and told the user
+  // nothing had changed between two runs, with both scores shown as unrated. This drives two
+  // real scans through the same code path that writes history, then compares the stored entries.
+  const { HistoryStore } = await import('../../src/history/store.js');
+  const { compareEntries } = await import('../../src/history/compare.js');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'veridex-history-'));
+  const file = path.join(dir, 'history.json');
+
+  const makeRegistry = (cores) => {
+    const registry = new ProviderRegistry();
+    registry.registerProvider({ id: 'fake-cpu', title: 'CPU (test double)', async collect() { return { physicalCores: available(cores, 'fake-cpu') }; } });
+    registry.registerTask({ id: 'cpu.info', module: 'cpu', title: 'Processor', providers: ['fake-cpu'] });
+    return registry;
+  };
+
+  try {
+    await runScan({ registry: makeRegistry(6), logger: new NullLogger(), settings: {}, permissions: STANDARD_SESSION, historyFile: file, appVersion: '1.0.0' });
+    await runScan({ registry: makeRegistry(4), logger: new NullLogger(), settings: {}, permissions: STANDARD_SESSION, historyFile: file, appVersion: '1.0.0' });
+
+    const store = new HistoryStore({ file });
+    await store.load();
+    assert.equal(store.entries.length, 2, 'both runs must be in the history');
+    for (const entry of store.entries) {
+      assert.ok(entry.snapshot && Object.keys(entry.snapshot).length > 0, 'a stored run must carry a field snapshot');
+      assert.equal(entry.summary.modules, 1);
+      assert.equal(entry.appVersion, '1.0.0');
+      assert.equal(entry.kind, 'full-scan');
+      assert.equal(typeof entry.durationMs, 'number');
+    }
+
+    const [after, before] = store.entries;
+    const comparison = compareEntries(before, after);
+    const cores = comparison.differences.find((diff) => /cpu\.physicalCores$/.test(diff.path));
+    assert.ok(cores, `the change in physical cores must appear in the comparison: ${comparison.differences.map((d) => d.path).join(', ')}`);
+    assert.equal(cores.before, 6);
+    assert.equal(cores.after, 4);
+    assert.equal(cores.kind, 'changed');
+    // This fixture runs one provider, so the honest assessment is UNRATED: the score is null
+    // and the comparison must report null rather than invent one. What matters is that the
+    // entry carries the field, so a rated run shows its number in the same place.
+    assert.equal(comparison.before.score, null);
+    assert.ok(Object.prototype.hasOwnProperty.call(store.entries[0].summary, 'overallScore'), 'the summary must carry the score field even when unrated');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
