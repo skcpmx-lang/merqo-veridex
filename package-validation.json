@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-11-06T05:03:53.481Z",
+  "packageDir": "D:\\a\\merqo-veridex\\merqo-veridex\\dist\\win-unpacked",
+  "findings": [
+    {
+      "level": "ok",
+      "message": "VERIDEX.exe: x64 PE32+, 249831936 bytes"
+    },
+    {
+      "level": "info",
+      "message": "version metadata: {\"productName\":\"\\\\\\\\.\\\\pipe\\\\chrome.sync.%u.%u.%lu\",\"productVersion\":\"1.0.0.0\",\"fileVersion\":\"1.0.0\",\"fileDescription\":\"\\\\StringFileInfo\\\\%04x%04x\\\\%ls\",\"companyName\":\"CompanyShortName\",\"originalFilename\":\"\\\\StringFileInfo\\\\%04x%04x\\\\%ls\"}"
+    },
+    {
+      "level": "warn",
+      "message": "ProductName is \"\\\\.\\pipe\\chrome.sync.%u.%u.%lu\""
+    },
+    {
+      "level": "ok",
+      "message": "resources/app.asar: 11.9 MiB, sha256 df2486d97ade860d…"
+    },
+    {
+      "level": "info",
+      "message": "asar contains 886 files"
+    },
+    {
+      "level": "ok",
+      "message": "main process, preload and renderer are all present in the archive"
+    },
+    {
+      "level": "ok",
+      "message": "app.asar.unpacked present; systeminformation unpacked = true"
+    },
+    {
+      "level": "ok",
+      "message": "LICENSE.electron.txt: present"
+    },
+    {
+      "level": "ok",
+      "message": "LICENSES.chromium.html: present"
+    },
+    {
+      "level": "info",
+      "message": "package contents: chrome_100_percent.pak, chrome_200_percent.pak, d3dcompiler_47.dll, dxcompiler.dll, electron_wer.dll, ffmpeg.dll, icudtl.dat, LICENSE.electron.txt, LICENSES.chromium.html, locales, resources, resources.pak, snapshot_blob.bin, v8_context_snapshot.bin, VERIDEX.exe, vk_swiftshader.dll, vk_swiftshader_icd.json, vulkan-1.dll"
+    },
+    {
+      "level": "info",
+      "message": "unpacked size: 369.4 MiB"
+    }
+  ],
+  "problems": []
+}

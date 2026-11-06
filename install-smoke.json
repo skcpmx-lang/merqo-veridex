@@ -1,0 +1,178 @@
+{
+  "kind": "install-smoke-launcher",
+  "platform": "win32",
+  "installer": "D:\\a\\merqo-veridex\\merqo-veridex\\dist\\VERIDEX-Setup-1.0.0-x64.exe",
+  "installedDir": "C:\\Users\\runneradmin\\AppData\\Local\\Programs\\VERIDEX",
+  "complete": true,
+  "findings": [
+    {
+      "level": "info",
+      "message": "installer: D:\\a\\merqo-veridex\\merqo-veridex\\dist\\VERIDEX-Setup-1.0.0-x64.exe (123186814 bytes)"
+    },
+    {
+      "level": "info",
+      "message": "expected install directory: C:\\Users\\runneradmin\\AppData\\Local\\Programs\\VERIDEX"
+    },
+    {
+      "level": "info",
+      "message": "installer exited 0 after 13843ms"
+    },
+    {
+      "level": "ok",
+      "message": "installed: C:\\Users\\runneradmin\\AppData\\Local\\Programs\\VERIDEX\\VERIDEX.exe (249831936 bytes, 20 file(s) alongside)"
+    },
+    {
+      "level": "ok",
+      "message": "the uninstaller was installed"
+    },
+    {
+      "level": "ok",
+      "message": "desktop shortcut: present"
+    },
+    {
+      "level": "ok",
+      "message": "start menu shortcut: present"
+    },
+    {
+      "level": "info",
+      "message": "installed application exited 0 after 1569ms"
+    },
+    {
+      "level": "info",
+      "message": "application log veridex.log: 15 lines, 5 from this launch"
+    },
+    {
+      "level": "info",
+      "message": "installed build reported 27 finding(s), 0 problem(s)"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → installed application smoke test"
+    },
+    {
+      "level": "info",
+      "message": "[installed] executable: C:\\Users\\runneradmin\\AppData\\Local\\Programs\\VERIDEX\\VERIDEX.exe"
+    },
+    {
+      "level": "info",
+      "message": "[installed] install directory: C:\\Users\\runneradmin\\AppData\\Local\\Programs\\VERIDEX"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → inspecting the installed files"
+    },
+    {
+      "level": "warn",
+      "message": "[installed] resources/app.asar exists but its size could not be read"
+    },
+    {
+      "level": "info",
+      "message": "[installed] unpacked resources: present"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → reading the install directory"
+    },
+    {
+      "level": "info",
+      "message": "[installed] install directory contains 20 entries, e.g. chrome_100_percent.pak, chrome_200_percent.pak, d3dcompiler_47.dll, dxcompiler.dll, electron_wer.dll, ffmpeg.dll"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] VERIDEX.exe is present beside the running executable"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → inspecting the uninstaller"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] uninstaller present: Uninstall VERIDEX.exe (185167 bytes)"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → checking the data directory"
+    },
+    {
+      "level": "info",
+      "message": "[installed] userData: C:\\Users\\runneradmin\\AppData\\Roaming\\VERIDEX"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] the temp directory is writable, so the application can write reports and logs"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → waiting for the window"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → the interface is up"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] window created (1 window(s))"
+    },
+    {
+      "level": "info",
+      "message": "[installed] renderer event: dom-ready"
+    },
+    {
+      "level": "info",
+      "message": "[installed] renderer event: did-finish-load"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] window visible after 1001ms: 1024×720"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] renderer loaded from renderer/index.html"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] document title: VERIDEX — Advanced All-in-One Windows PC & Laptop Diagnostics"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] preload bridge loaded: 32 invoke channel(s), events: true"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] app:info replied: {\"ok\":true,\"data\":{\"product\":\"VERIDEX\",\"brand\":\"MERQO\",\"version\":\"1.0.0\",\"founder\":\"Shohan Khan\",\"contact\":\"merqoonline@gmail.com\",\"platform\":\"win32\",\"electron\""
+    },
+    {
+      "level": "ok",
+      "message": "[installed] 18 navigable page(s) rendered from the installed build"
+    },
+    {
+      "level": "ok",
+      "message": "[installed] installed application is usable after 1248ms"
+    },
+    {
+      "level": "info",
+      "message": "[installed] → verdict"
+    },
+    {
+      "level": "info",
+      "message": "uninstaller exited 0"
+    },
+    {
+      "level": "ok",
+      "message": "the installed application was removed"
+    },
+    {
+      "level": "ok",
+      "message": "the install directory was removed entirely"
+    },
+    {
+      "level": "warn",
+      "message": "shortcuts left behind: desktop, start menu"
+    },
+    {
+      "level": "info",
+      "message": "user data kept at C:\\Users\\runneradmin\\AppData\\Roaming\\VERIDEX (deleteAppDataOnUninstall is false)"
+    }
+  ],
+  "problems": []
+}

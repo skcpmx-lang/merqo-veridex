@@ -1,0 +1,12 @@
+{
+  "kind": "portable-smoke",
+  "platform": "win32",
+  "exe": "D:\\a\\merqo-veridex\\merqo-veridex\\dist\\VERIDEX-1.0.0-portable-x64.exe",
+  "complete": true,
+  "passed": 10,
+  "problems": [],
+  "exitCode": {
+    "code": 0,
+    "output": ""
+  }
+}
