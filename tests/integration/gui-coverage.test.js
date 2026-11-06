@@ -125,6 +125,10 @@ test('screenshots can leave the runner, not just the artifact store', async () =
   assert.match(workflow, /inputs\.capture_evidence/, 'the dispatch input must gate it');
   assert.match(workflow, /contains\(github\.event\.head_commit\.message, '\[evidence\]'\)/, 'a commit marker must be able to request it');
   assert.match(workflow, /head_commit/, 'it must never fire for a commit that did not ask');
+  // The package job is skipped for ordinary pushes, so an evidence push has to make it build:
+  // the first attempt requested publication from a push run that had produced no screenshots.
+  const pkg = workflow.slice(workflow.indexOf('  package:'), workflow.indexOf('    steps:', workflow.indexOf('  package:')));
+  assert.match(pkg, /contains\(github\.event\.head_commit\.message, '\[evidence\]'\)/, 'an evidence push must also run the packaging job');
   assert.match(workflow, /ci\/evidence-\$\{GITHUB_RUN_ID\}/, 'it must publish to a per-run branch');
   assert.match(workflow, /contents: write/, 'it needs write access to publish a branch');
 });
