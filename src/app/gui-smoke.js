@@ -342,6 +342,81 @@ async function main() {
     return { visited };
   }, 180_000);
 
+  // ── 1d. The surfaces the 40-section audit added ───────────────────────────
+  // The audit is only worth reading if the things it claims exist are visible in a real window.
+  // This step photographs them: the GPU, memory-stability and responsiveness cards on the
+  // Performance page (which sit below the fold of the page screenshot), the consent gate that
+  // guards the memory check, the breadcrumb trail, and the dashboard arrangement editor.
+  const auditSurfaces = await step('the surfaces the audit added are visible and gated in the real window', async () => {
+    await clickPage('performance');
+    await waitFor(`document.querySelector('#vx-memory-run') !== null`, { label: 'the memory stability card' });
+
+    const facts = await evaluate(`(() => {
+      const text = document.querySelector('.vx-content')?.innerText ?? '';
+      const run = document.querySelector('#vx-memory-run');
+      const consent = document.querySelector('#vx-memory-consent');
+      return {
+        memoryCard: Boolean(run),
+        consentBox: Boolean(consent),
+        runDisabled: run ? run.disabled : null,
+        consentChecked: consent ? consent.checked : null,
+        gpuCard: /GPU/.test(text) && /fill[- ]rate/i.test(text),
+        responsiveness: /responsiveness/i.test(text),
+        stressCard: /Stress testing/i.test(text),
+        crumb: document.querySelector('.vx-breadcrumb')?.innerText?.replace(/\n/g, ' ') ?? '',
+        recentButton: Boolean(document.querySelector('#vx-recent-pages'))
+      };
+    })()`);
+
+    record('info', `audit surfaces: memory=${facts.memoryCard} consent=${facts.consentBox} runDisabled=${facts.runDisabled} gpu=${facts.gpuCard} responsiveness=${facts.responsiveness} stress=${facts.stressCard}`);
+    if (!facts.memoryCard) record('fail', 'the Performance page has no memory stability card');
+    if (!facts.consentBox) record('fail', 'the memory check has no consent box');
+    if (facts.runDisabled !== true) record('fail', 'the memory check can be started before consent is given');
+    if (facts.gpuCard !== true) record('fail', 'the Performance page does not mention the GPU fill-rate workload');
+    if (facts.responsiveness !== true) record('fail', 'the Performance page does not show the responsiveness composite');
+    if (!/VERIDEX/.test(facts.crumb) || !/Performance/.test(facts.crumb)) record('fail', `the breadcrumb does not describe the page: ${JSON.stringify(facts.crumb)}`);
+    if (!facts.recentButton) record('fail', 'the quick-access menu is missing from the toolbar');
+
+    // Scroll to the cards below the fold, so the evidence shows them rather than the CPU card
+    // they sit under.
+    const scrolled = await evaluate(`(() => {
+      // The page scrolls inside the content region, not the window; scrolling the window body
+      // would move nothing and the screenshot would show the same top-of-page frame twice.
+      const candidates = [document.querySelector('.vx-content'), document.querySelector('#vx-main'), document.scrollingElement];
+      for (const node of candidates) {
+        if (!node) continue;
+        if (node.scrollHeight > node.clientHeight + 40) {
+          node.scrollTop = node.scrollHeight;
+          return { scrolled: node.className || node.tagName, top: Math.round(node.scrollTop) };
+        }
+      }
+      return { scrolled: null, top: 0 };
+    })()`);
+    record('info', `scrolled to the lower cards: ${JSON.stringify(scrolled)}`);
+    if (!scrolled.scrolled) record('warn', 'nothing on the Performance page scrolled, so the lower cards may not be in the screenshot');
+    await screenshot('performance-cards');
+
+    // The arrangement editor, entered and left again so the later dashboard shots are the
+    // dashboard a user sees rather than the editor.
+    await clickPage('dashboard');
+    await waitFor(`document.querySelector('#vx-arrange-toggle') !== null`, { label: 'the arrangement toggle' });
+    await evaluate(`document.querySelector('#vx-arrange-toggle').click()`);
+    await waitFor(`document.querySelectorAll('.vx-arrange__item').length > 0`, { label: 'arrangement mode' });
+    const arranged = await evaluate(`({
+      items: document.querySelectorAll('.vx-arrange__item').length,
+      controls: document.querySelectorAll('.vx-arrange__controls .vx-button').length,
+      hidden: document.querySelectorAll('.vx-arrange__show').length
+    })`);
+    record('info', `arrangement mode: ${arranged.items} widget(s), ${arranged.controls} control(s), ${arranged.hidden} hidden`);
+    if (arranged.items < 1) record('fail', 'arrangement mode rendered no widget shells');
+    if (arranged.controls < 3) record('fail', 'arrangement mode rendered no move/remove controls');
+    await screenshot('dashboard-arranging');
+    await evaluate(`document.querySelector('#vx-arrange-toggle').click()`);
+    await waitFor(`document.querySelectorAll('.vx-arrange__item').length === 0`, { label: 'arrangement mode to close' });
+
+    return facts;
+  }, 90_000);
+
   // Security posture of the real window: these are the properties that make the app
   // defensible if the renderer is compromised. They are set in code and have never been
   // observed at runtime before now.
