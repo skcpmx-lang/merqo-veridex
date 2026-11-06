@@ -20,8 +20,8 @@ listed here as **NOT VERIFIED**.
 | Hashes quoted below belong to | **the 42160034210 build, not the current tree.** The current tree's bytes could not be fetched into the environment that wrote this document: `gh run download` reaches `*.blob.core.windows.net`, which is outside its network egress (`EOF`), so no hash is claimed for them. A hash nobody computed is not a hash |
 | Verified on | **Windows Server 2025, `windows-latest` virtual machine** (GitHub Actions) |
 | Verified by | automated harnesses (`npm run smoke:gui`, `smoke:portable`, `smoke:install`) |
-| Published | **No**, for two separate reasons that are both fixable by the owner and neither of them by me — see below |
-| Release workflow | **Not registered.** It has never existed on `main`, and GitHub only registers a `workflow_dispatch` workflow that is present on the default branch, so the endpoint answers `404`. Dispatching *any* workflow would also fail: this session's GitHub App installation token gets `403 Resource not accessible by integration` on `/actions/workflows/<id>/dispatches`, which is the `Actions: write` permission it does not have |
+| Published | **No.** The first blocker is gone: `release.yml` is on `main` and registered, after this branch was merged (`2b71668`). The second is a permission this session does not have — `Actions: write` — so the dispatch answers `403`. See below |
+| Release workflow | **Registered, dispatch refused.** The workflow now exists on `main` (`409192902`), so the endpoint resolves; the call is answered `403 Resource not accessible by integration`, which is the `Actions: write` permission this session's GitHub App installation does not hold. Read the row above for the history: it used to be `404` as well |
 | Result | **Installed, launched, uninstalled on a VM. Still never run on physical hardware.** |
 
 Every item below is unchecked except the build checks in §1 and the machine checks that
@@ -43,6 +43,37 @@ these artifacts for that run, and this section was written from its answer, not 
 | `veridex-gui-evidence` | 3,821,895 | `sha256:bd2e0c188f58296263371d74da2b607bcab928189bca201cc9702f798ec286af` | the GUI harness report and screenshots |
 | `test-results-windows-latest` | 35,702 | `sha256:32a8d1924eb68942274c8c2fb7990550c90a68b1b40338802699527e24501793` | the Windows test run |
 | `test-results-ubuntu-latest` | 34,892 | `sha256:986545f914e2f059361952bcb924c52724b3e00668fbff9907e42bd074c73529` | the Linux test run |
+
+### The two executables, hashed by the job that built them
+
+GitHub's artifact digest covers the archive. The executables inside it have their own hashes, and
+the packaging job computes them with `Get-FileHash` and prints them into the checks API, which is
+reachable from here. Two builds, both read back through the API, both from the same source tree:
+
+| Build | `VERIDEX-Setup-1.0.0-x64.exe` | `VERIDEX-1.0.0-portable-x64.exe` |
+| --- | --- | --- |
+| commit `4e1ffc3`, package job 127835905991 | 117.5 MiB · `41b4b524f727e59b162563abc5082e08c80416e824cf56b15f47a8307720953c` | 106.6 MiB · `283650eed786b53e66c184e88f4813e796571133352380f37cb5a1c832cae4d8` |
+| commit `2b71668` (the merge to `main`), package job 127841241342 | 117.5 MiB · `870e5b8b222576c1c74772f799bbcfcd132d682e1d104b7f3919cf975280b2c6` | 106.6 MiB · `ae0980e76e9fc377d6b6bc9463d4fb4fcfd159900df3e7618ccfbf18134e78b5` |
+
+Two hashes for two builds of the same source is the point, not an error: an unsigned
+electron-builder output is not reproducible, so **every build has its own SHA-256**. Read the
+sizes as the job reported them (one decimal place, in MiB); the exact byte counts are in the
+`SHA256SUMS.txt` and `BUILD-MANIFEST.txt` inside the artifact, which is what a person downloads.
+
+**What this does and does not establish.** The values above were computed by the packaging job
+from the exact files it built, and were read back through the authenticated API rather than
+transcribed from memory or invented — that is the same provenance as any CI-produced checksum.
+They are **not** hashes of the artifact that the release workflow will attach, because that
+workflow builds again from whatever commit it is dispatched on and attaches its own
+`SHA256SUMS.txt` beside the binaries. At release time the authoritative file is the one in the
+release itself; a person downloads the installer, hashes it, and compares with the attached file.
+An owner who wants the release hashes in *this* document copies them from that run.
+
+The same API response carries the smoke results for the merged tree: `install-smoke: 18 check(s)
+passed · 0 problem(s)` and `portable-smoke: 10 check(s) passed · 0 problem(s)`, with the installed
+build rendering all 18 pages, exposing 44 invoke channels, and the startup log quoting the window
+placement decision (`window opened at 1024x720 at 0,0 under the pointer, inside "HyperVMonitor" at
+100 % (1024x720 work area)`).
 
 **Those digests are GitHub's SHA-256 of the artifact _archives_, not of the executables inside
 them.** They prove the archive that holds the build, and they would let you confirm a download is

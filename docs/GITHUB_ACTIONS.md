@@ -44,6 +44,24 @@ Recorded runs:
 
 ---
 
+## State after the merge
+
+Pull request #1 was merged into `main` on 2026-11-06 (`2b71668`, the merge commit of `4e1ffc3`).
+That closed the first of the two release blockers: the **Release** workflow is now registered
+(`409192902`), because a `workflow_dispatch` workflow only becomes dispatchable once it exists on
+the default branch. Its package job then ran on `main` and reported
+`install-smoke: 18 check(s) passed · 0 problem(s)` and
+`portable-smoke: 10 check(s) passed · 0 problem(s)`, with the installed build rendering all 18
+pages and logging its window placement.
+
+The second blocker remains and it is a permission, not a bug: this session's GitHub App
+installation can read Actions and cannot write to them, so
+`POST /repos/…/actions/workflows/409192902/dispatches` answers
+`403 Resource not accessible by integration`. Everything the workflow does after that point —
+build, test, verify, tag, publish — uses the repository's own `GITHUB_TOKEN`, so a single
+human click on *Run workflow* is the whole remaining gate.
+
+---
 ## Why `release.yml` cannot be dispatched from an agent session
 
 Two independent causes, both verified on 2026-11-06 rather than assumed:

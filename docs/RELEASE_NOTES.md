@@ -4,6 +4,13 @@
 
 ## No release has been published
 
+**The one remaining gate.** Everything on this page is built, tested and documented. The release
+workflow exists on `main` and needs one thing this environment cannot provide: `Actions: write` on
+the repository, so that it can be dispatched. A person with write access clicks *Actions → Release
+→ Run workflow*, enters `1.0.0`, and the workflow builds, tests, verifies, tags `v1.0.0` and
+publishes the artifacts with their checksums. Nothing else is outstanding.
+
+
 `package.json` says `1.0.0`, and CI **builds** a Windows x64 installer and portable
 executable on every pull request — and now **runs them**: the installer is installed silently
 and per-user, the installed application is launched and its interface driven, the uninstaller
